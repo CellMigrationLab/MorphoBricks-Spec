@@ -15,6 +15,15 @@
   is a reviewed change.
 - Fixtures change first: any normative change lands here as text + fixtures + a new
   `schema_version` when required, then preprocessing updates its pin and code in one PR.
+- **Pin integrity.** The vendored fixture tree MUST hash to the pinned SHA: the git tree-object ID
+  of the vendored `fixtures/` directory (computed with git's tree algorithm, for example
+  `git hash-object`-compatible code or a scratch `git write-tree`) MUST equal
+  `git rev-parse <pinned-sha>:fixtures`. A test fails if one byte of a vendored fixture differs, is
+  added or is missing, so a local edit of a fixture cannot make a reader pass. A test-time checkout
+  of the pinned SHA needs no copy but runs the same check.
+- **No second copy of the rules.** Preprocessing MUST NOT carry a fallback, older or lenient copy
+  of the rules, schema or enumerations; the fixtures and the normative text are the only source
+  (experiment-v1 §2.7).
 - A skipped fixture test is a failure in the release gate (no silent skips).
 - Other bricks do not parse `morphobricks.toml`; they are tested through `RunInputs` (Stage 2).
 
@@ -33,11 +42,19 @@ One parametrised test per fixture file, discovered from `fixtures/valid/*.toml` 
 | Exact types | `i14` (`true` as `schema_version`) passes only if the reader checks `type(x) is int` |
 | Round trip | For every valid file: `parse(write(parse(f))) == parse(f)`; `write` is idempotent; `write(parse(v18)) == write(parse(v01))` byte for byte |
 | Canonical bytes | `write` output is UTF-8, LF, no BOM, final newline, ordered per experiment-v1 §9.1 |
-| Section digests | `v01` and `v21` have equal `channels`, `repeats` and `masks` digests and a different `conditions` digest; `v01` and `v16` have all four digests equal (`display_name` omitted) |
-| Transitions | Each `fixtures/transitions/t*.toml` is valid on its own; checked against its named predecessor without a recorded re-confirmation it is refused with `R_CONFIRMED_ID_CHANGED`, and accepted with one |
+| Section digests | `v01`, `v16` and `v21` have all four digests equal (`display_name`, `target` and `treatment_key` omitted; `used_ids` is not a section); editing only `target`, `treatment_key` or `display_name` fields of a copy of `v01` (as `v27` varies them) leaves all four digests unchanged, while editing a `reference` changes the `conditions` digest |
+| Transitions | Each `fixtures/transitions/t*.toml` is valid on its own; checked against its named predecessor it is refused with the code in its `Expected` line (`t01`, `t02`: `R_CONFIRMED_ID_CHANGED`, accepted only with a recorded re-confirmation; `t03`: `R_USED_ID_REUSED`; `t04`: `R_USED_ID_DROPPED`; `t05`: `R_CONFIRMED_ON_CHANGED`) |
+| Identity never repaired | `v26` is read and written back unchanged in every ID (`cl001`, `CL1000`, `R999`, `R1000`: no padding, re-casing or renumbering); `i78`, `i83`-`i85` are refused with `E_ID_NOT_NFC` and the reader output contains no normalized copy |
+| Display names | `v24` round-trips with every display name byte-identical; `i86`-`i88` are `E_DISPLAY_NAME_COLLISION`; `i89`-`i91` give the unknown-ID codes, never a match through a display name |
+| `used_ids` | `v25` is valid; `i92`-`i97` give their listed codes; a writer given a model whose `used_ids` lacks a declared ID refuses to write |
+| Descriptive keys | `v27` is valid with no warning and no grouping: a grouping, join or cache key built on `target` or `treatment_key` fails a test that edits only those fields and expects every digest unchanged |
+| `confirmed_on` | `i98` is `E_MISSING_FIELD`; a writer test with a frozen clock moved by a day writes identical bytes for an unchanged model (no clock read) |
+| Provenance | `i99` is `E_FORBIDDEN_FIELD`; a run manifest test records lab-tool links and a changed link leaves every digest and cache key unchanged |
 | Derived CSV | For each valid file the derived `experiment_design.csv` matches a golden file to be added under `fixtures/expected/` in Stage 1 (byte comparison); for `v13` the golden file is produced by today's preprocessing from the equivalent legacy answers |
 | Migration | Legacy CSV with 0, 1 and ≥ 2 controls: 0/1 give deterministic references, ≥ 2 give an unpublishable draft; lenient values (`yes`, empty) are refused |
-| Version policy | `i09`, `i10` refused with a message naming supported version 1 |
+| Version policy | `i09`, `i10` refused with a message naming supported version 1. The supported set is a code constant; the test runs with the network blocked (no socket may be opened) and passes; `i11` (missing version) is `E_SCHEMA_VERSION_MISSING` and no code path maps it to a default version |
+| Pin integrity | The vendored tree's git tree-object ID equals `git rev-parse <pinned-sha>:fixtures`; a test mutates one byte of a copy and expects the check to fail |
+| No fallback rules | A test scans the reader for a bundled copy of the rules (a second table of codes, enumerations or schema data not loaded from the pinned fixtures and text) and an import-time test confirms that removing the vendored tree makes the suite fail, not pass with defaults |
 
 ## 3. Physical scenarios (preprocessing-owned)
 
@@ -54,7 +71,7 @@ reported first (intra-unit discrepancies are detected before channel identity, r
 | P04 | `v04`, `v05`, `v06`, `v17` | Units matching the declared lists | Stage 1-2: `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` naming the units; nothing processed |
 | P05 | `v08` | `TumorRegion` mask with values 0-5 | `R_MASK_CONTRADICTS_REPRESENTATION`; an `instances` mask with values 0/1 is accepted (pixels cannot prove instance semantics) |
 | P06 | `v12` | Two unnamed, identical-shape units with fluorophores physically swapped | No refusal: documented limit; preview + confirmation only |
-| P07 | `v13` | A new technical repeat appears in `DrugA/rep2` | Reconciliation: unit **new**, repeat `rep2` reopened (`confirmed = false` in the draft), nothing published until confirmed |
+| P07 | `v13` | A new technical repeat appears in `DrugA/rep2` | Reconciliation: unit **new**, repeat `rep2` reopened (`confirmed = false` in the draft), nothing published until confirmed; `confirmed_on` of every repeat that is not reopened is byte-identical in the draft |
 | P08 | `v03` | Folder `DrugA/experiment_23` renamed to `DrugA/experiment_23b` | Removed + new pending member, never auto-paired; publishing requires the user to assign it; `Day1` unchanged |
 | P09 | `v01` | `morphobricks.toml` is a symlink | `R_FILE_SYMLINK` |
 | P10 | `v07` | Masks folder holds an undeclared type `membrane` | `R_MASK_TYPE_NOT_DECLARED` |
@@ -62,8 +79,14 @@ reported first (intra-unit discrepancies are detected before channel identity, r
 | P12 | `v01` | A declared unit `DrugA/rep2/single` with every image excluded | `R_UNIT_NOT_FOUND` |
 | P13 | `v01` | An RGB (interleaved colour) TIFF in `CTRL/rep1` | `R_RGB_NOT_SUPPORTED` |
 | P14 | `v01` | `RunInputs` given a draft (reconciliation proposal, or a file with `confirmed = false`) | `A_DRAFT_REFUSED`; only the published `morphobricks.toml` is read |
-| P15 | `v13` | 5 FOVs added to an existing unit, same ordered channels and headers | Confirmation kept (not reopened), change reported and recorded; a changed channel list would reopen it |
+| P15 | `v13` | 5 FOVs added to an existing unit, same ordered channels and headers | Confirmation kept (not reopened) with `confirmed_on` byte-identical, change reported and recorded; a changed channel list would reopen it |
 | P16 | `v01` | `v01` published; `t01`/`t02` candidate offered | `R_CONFIRMED_ID_CHANGED`; accepted only with a recorded re-confirmation; `v16` accepted with no invalidation |
+| P17 | `v01` (base), `v21`, `v16` | Two drafts derived from the same published `v01` (draft A = `v21` bytes, draft B = `v16` bytes); A published first | A accepted; B refused with `R_PUBLISHED_FILE_CHANGED` and not merged; the published bytes remain A's; re-deriving B from A's file is accepted |
+| P18 | `v01` | A draft with base `absent`, then another `morphobricks.toml` appears before publication; also a draft with no recorded base | `R_PUBLISHED_FILE_CHANGED`; `R_DRAFT_BASE_MISSING` respectively; nothing published |
+| P19 | `v25` (base), `t03` | Candidate `t03` offered over published `v25` | `R_USED_ID_REUSED`; also refused when the returning source folder is the one the removed DrugA had |
+| P20 | `v25` (base), `t04` | Candidate `t04` offered over published `v25`; also a user removing the last member of a condition | `R_USED_ID_DROPPED`; the removal itself is accepted and the ID stays in `used_ids` |
+| P21 | `v01` | Two folders `Cafe\u0301` and `Caf\u00e9` (or one decomposed folder) under a condition on a file system that allows both | `R_FOLDER_NOT_NFC`; nothing renamed or normalized |
+| P22 | `v01` (base), `t05` | Reconciliation after new FOVs in an existing unit (P15) and a run on a later date | Published `confirmed_on` stays `2026-11-06` byte for byte; `t05` offered over `v01`: `R_CONFIRMED_ON_CHANGED`; after a reopening (changed channel list) and a new user confirmation the new date is accepted |
 
 ## 4. Later stages (obligations recorded, not planned in detail)
 

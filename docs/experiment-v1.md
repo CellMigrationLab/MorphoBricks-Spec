@@ -40,6 +40,10 @@ v1 analyses 2-D planes only. A Z stack is projected by a recorded preprocessing 
 5. Comments are allowed and carry no meaning. Writers do not preserve them (§9).
 6. The SHA-256 of the exact bytes read is the file's provenance identity (run manifest). It is not
    a cache key (§9.3).
+7. A reader has no source of rules other than the normative text and fixtures of the Spec commit it
+   pins. It MUST NOT carry a fallback copy or older variant of the rules, and MUST NOT obtain any
+   enumeration (in v1 only `representation`, §4.5) or vocabulary from outside the reader at run
+   time. An enumeration it cannot resolve is a refusal, never free text.
 
 ## 3. Identities
 
@@ -59,7 +63,7 @@ v1 analyses 2-D planes only. A Z stack is projected by a recorded preprocessing 
 ### 3.2 Rule sets
 
 - **Label** (preprocessing decision D-e, `check_identity_text`, preprocessing `a786290b`): text;
-  no leading or trailing whitespace; not `""`, `NA`, `nan`, `none`, `null`, `n/a` or `<NA>` in any
+  no leading or trailing whitespace (nothing is trimmed: refused as written); not `""`, `NA`, `nan`, `none`, `null`, `n/a` or `<NA>` in any
   case (`E_ID_TEXT`).
 - **Token** (MorphoFeature `naming.py`, `803e617a`): the Label rules, plus the regular expression
   `^[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*$` (`E_ID_SYNTAX`; this also excludes the feature-column
@@ -77,14 +81,19 @@ v1 analyses 2-D planes only. A Z stack is projected by a recorded preprocessing 
 
 ### 3.3 Normalization, uniqueness and case
 
-- **NFC.** Identities (the keys and identity fields of §3.1) are Unicode NFC. A reader MUST
-  normalize every identity it reads to NFC before applying any rule, including reference
-  resolution; a writer MUST emit NFC. This is the only transformation an identity ever undergoes:
-  no trimming, case folding, parsing or other normalization. (Folder names read from disk are
-  compared after NFC; the on-disk spelling is not stored.)
-- After NFC, identities are compared exactly, code point by code point. Two distinct keys or
-  values of one scope that are equal after NFC are `E_ID_NFC_COLLISION` (not also reported as a
-  case collision).
+- **NFC.** Identities (the keys and identity fields of §3.1, and every entry of `used_ids`) are
+  Unicode NFC. A writer MUST emit NFC. A reader MUST refuse an identity that is not NFC
+  (`E_ID_NOT_NFC`, reported for every such identity, including `reference` values and members'
+  keys). A reader never transforms an identity: no normalization, trimming, case folding, parsing
+  or repair of any kind, and so it never resolves a reference through a transformed spelling.
+  Display names are not identities and are not checked (§4.8). A folder label read from disk that
+  is not NFC is refused by preprocessing (`R_FOLDER_NOT_NFC`), never normalized and never renamed;
+  two folders equal after NFC are therefore also refused, because one of them is not NFC.
+- Identities are compared exactly, code point by code point.
+- **No repair.** No reader or writer ever repairs, re-cases, pads, trims or renumbers an
+  identity. A malformed, colliding or non-NFC ID is refused with its code and left as written.
+  There is no ID allocator: IDs have no width, prefix or number rule (`R999`, `R1000` and `cl001`
+  are valid and stay as they are).
 - Within each of these scopes, two identities that differ after NFC but whose `str.casefold()`
   forms are equal are `E_ID_CASE_COLLISION`: condition IDs; repeat IDs; source repeats over the
   whole file; technical repeats over the whole file; channel IDs; mask IDs; mask source types.
@@ -92,8 +101,9 @@ v1 analyses 2-D planes only. A Z stack is projected by a recorded preprocessing 
   is never applied when resolving a reference (`ctrl` does not resolve to `CTRL`).
 - Identities are never parsed. `rep1`, `2026-01-01`, `012` and `acquisition_2` are opaque text;
   no number, date, order or meaning is derived from them.
-- **Immutability.** Once a repeat, condition or channel is confirmed, its ID never changes (§4.6).
-  Only `display_name` may change, at any time.
+- **Immutability and no reuse.** Once a repeat, condition or channel is confirmed, its ID never
+  changes (§4.6) and is never reused after removal (§4.9). Only `display_name` may change, at any
+  time.
 
 ## 4. Tables and fields
 
@@ -112,6 +122,7 @@ real calendar day (`E_DATE_FORMAT`); a TOML date literal is `E_TYPE`. "Non-empty
 | `channels` | table of channel | yes | ≥ 1 entry |
 | `repeats` | table of repeat | yes | ≥ 1 entry |
 | `masks` | table of mask | no | May be absent or empty |
+| `used_ids` | table of ID lists | yes | Append-only registry of every ID ever confirmed, per kind (§4.9) |
 
 ### 4.2 `conditions.<condition ID>`
 
@@ -119,10 +130,17 @@ real calendar day (`E_DATE_FORMAT`); a TOML date literal is `E_TYPE`. "Non-empty
 |---|---|---|---|
 | `display_name` | non-empty text | no | Display only (§4.8) |
 | `reference` | text | no | One condition ID: the primary reference (§5) |
-| `target` | non-empty text | no | Declarative plain string, e.g. `SRC`; no runtime use before Stage 2 and never part of identity |
-| `treatment_key` | non-empty text | no | Declarative plain string: same perturbation under different backgrounds; no runtime use before Stage 2 |
+| `target` | non-empty text | no | Descriptive plain string, e.g. `SRC` (§4.2a) |
+| `treatment_key` | non-empty text | no | Descriptive plain string, e.g. the same perturbation under different backgrounds (§4.2a) |
 
 Every condition MUST be the condition of at least one member (`E_CONDITION_WITHOUT_MEMBERS`).
+
+**§4.2a Descriptive only.** `target` and `treatment_key` are descriptive free text, written and
+shown as typed. They are not identities: no Label or Token rule, no case-collision scope, no
+uniqueness (two conditions may carry the same value, or values differing only in case). A consumer
+MUST NOT use either for grouping, pairing, joins, contrasts, family definitions or any cache key
+(§9.3 omits them from every digest). A future use as a grouping key needs a new `schema_version`
+that makes it an identity.
 
 ### 4.3 `channels.<channel ID>`
 
@@ -148,7 +166,7 @@ name MAY be evidence for different channels (fluorophores are reused across acqu
 |---|---|---|---|
 | `display_name` | non-empty text | no | Display only (§4.8) |
 | `confirmed` | boolean | yes | MUST be `true` in a published file (`E_REPEAT_UNCONFIRMED`): the N35 answer "prepared and acquired under the same circumstances" |
-| `confirmed_on` | date | yes | Date of that confirmation |
+| `confirmed_on` | date | yes | Date of the user's confirmation (§4.4a) |
 | `members` | table of member | yes | ≥ 1 entry |
 
 `repeats.<R>.members.<condition ID>` (one member = one source biological-repeat folder of one
@@ -165,6 +183,13 @@ condition; at most one per condition per repeat, guaranteed by TOML key uniquene
 | Key | Type | Req | Rule |
 |---|---|---|---|
 | `channels` | array of channel IDs | yes | ≥ 1 entry; ordered: entry *i* is source channel C*i*; every entry declared (`E_UNKNOWN_CHANNEL`); no repeats (`E_DUPLICATE_CHANNEL_IN_UNIT`) |
+
+**§4.4a `confirmed_on` is a user fact.** It is the calendar date of the user's confirmation
+action. A writer MUST NOT default, infer or refresh it (not from the write time, the read time,
+file times, another repeat or a template); a reader supplies no default (absent is
+`E_MISSING_FIELD`). A reconciliation that does not reopen the N35 confirmation (§10) MUST keep
+`confirmed_on` of every unchanged repeat byte-identical; a candidate that changes it without a
+reopening and a new user confirmation is refused (`R_CONFIRMED_ON_CHANGED`).
 
 Repeat rules:
 
@@ -195,10 +220,11 @@ files for none, some or all FOVs is valid (progressive segmentation, 0/1000 → 
 - Once confirmed, the ID of a repeat, condition or channel MUST NOT change. There is no rename
   and no retired-ID table. A rename in the file would be a different ID for the same data.
 - Preprocessing MUST refuse, as `R_CONFIRMED_ID_CHANGED`, a candidate file (compared with the
-  last published file and the manifest history) in which (a) a repeat with the same member folders
+  published file it was drafted from, §10) in which (a) a repeat with the same member folders
   `(condition, source_repeat)` carries another ID, (b) a channel's ID is replaced by another ID at
-  every unit position it held with the same header evidence, or (c) an ID that was confirmed for
-  some entity now names a different one (reuse). A condition ID is its folder label, so a renamed
+  every unit position it held with the same header evidence, or (c) an ID that is declared in both files now names a different entity (other member
+  folders for a repeat or condition, other positions or evidence for a channel). An ID that was
+  removed and comes back is `R_USED_ID_REUSED` (§4.9). A condition ID is its folder label, so a renamed
   folder is a removed member plus a new pending one (§7).
 - A mistyped ID is fixed only by an explicit, recorded re-confirmation: a user action that
   writes a new file and records old ID, new ID, date and both file SHA-256 in the run manifest.
@@ -209,13 +235,22 @@ files for none, some or all FOVs is valid (progressive segmentation, 0/1000 → 
 
 `display_name` (conditions, repeats, channels, masks) is for display only (reports, notebooks,
 plots). It MUST NOT be used for identity, joins, pairing, references or cache keys, and changing
-or adding it invalidates nothing (§9.3). Within one kind, two display names equal after NFC are
-`E_DISPLAY_NAME_COLLISION`. Uniqueness does not make a display name an identity.
+or adding it invalidates nothing (§9.3). A consumer MUST NOT accept a display name where an ID is
+expected, even when the two strings are equal and even when the display name is unique: a
+`reference`, member key or unit channel entry that names a display name is refused with the code
+of an unknown ID (`E_REFERENCE_UNKNOWN`, `E_UNKNOWN_CONDITION`, `E_UNKNOWN_CHANNEL`).
+
+Display names are kept exactly as typed: never normalized, trimmed or case-changed on read or
+write. They are unique within one kind (conditions, repeats, channels, masks; the same string may
+appear in two kinds): two display names of one kind whose keys are equal are
+`E_DISPLAY_NAME_COLLISION`, where the key of a name *x* is `NFC(casefold(NFC(x)))` with
+`str.casefold()` (so `Control` and `control`, `Straße` and `STRASSE`, decomposed and composed
+`Café` collide). The key is used for the comparison only and is never stored or used for lookup.
 
 ### 4.7 Forbidden fields
 
 These names are refused as `E_FORBIDDEN_FIELD` in **any** table, with a message naming where the
-information belongs:
+information belongs. A forbidden field is reported once, at its name; its value is not examined:
 
 | Field | Belongs to |
 |---|---|
@@ -225,8 +260,37 @@ information belongs:
 | `bricks`, `routes`, `features`, `normalization`, `statistics`, `contrasts` | Analysis requests / brick and MorphoCoverage configuration |
 | `control`, `roles`, `experiment` | Derived from `reference` / analysis requests / MorphoCoverage FDR families |
 | `source_index`, `channel_count` | Implied by the order and length of `channels` |
-| `retired_repeats`, `replaced_by` | None: IDs are immutable (§4.6) |
+| `retired_repeats`, `replaced_by` | None: IDs are immutable (§4.6); the only registry is `used_ids` (§4.9), IDs only and never a mapping |
+| `labchronicle`, `provenance`, `source_database` | Run manifest provenance (preprocessing, §9.3): lab-tool links are never part of this file |
 
+
+### 4.9 Used IDs
+
+`used_ids` is an append-only registry of IDs, per kind. It holds IDs only: never a mapping, a
+date or a reason.
+
+| Key | Type | Req | Rule |
+|---|---|---|---|
+| `conditions` | array of text | yes | Every condition ID ever confirmed |
+| `channels` | array of text | yes | Every channel ID ever confirmed |
+| `repeats` | array of text | yes | Every canonical repeat ID ever confirmed |
+
+- Entries follow the identity rules of their kind (Label for conditions and repeats, Token for
+  channels; NFC, §3.3), have no duplicates (`E_DUPLICATE_VALUE`), and share the case-collision
+  scope of the kind's declared IDs (`E_ID_CASE_COLLISION`): a retired `ctrl` cannot come back as
+  `CTRL`. At least one entry per kind (`E_EMPTY`).
+- Every declared ID of a kind MUST be listed (`E_USED_ID_MISSING`). A listed ID that is not
+  declared is a **retired** ID: its entity was removed.
+- Publication MUST refuse a candidate that (a) omits an ID listed in the published file it was
+  drafted from (`R_USED_ID_DROPPED`: removing an entity keeps its ID listed), or (b) declares as
+  an entity an ID that is listed but not declared there (`R_USED_ID_REUSED`). Rule (b) applies
+  even when the same source folder returns: it needs a new ID. The registry carries no mapping,
+  so it cannot say which entity an ID once named.
+- Scope of the guarantee: the published file's lineage inside one output folder (§10 compares each
+  publication with the file it replaces). A new output folder starts a new lineage and the
+  registry cannot see across it; the run manifest history is the only cross-folder record
+  (ADR 0001, decision Q1).
+- `used_ids` is not part of any section digest (§9.3).
 
 ## 5. Reference graph
 
@@ -271,19 +335,20 @@ compares the **set of codes** of the reported phase ([fixtures](../fixtures/READ
 | 4 Identity | `E_ID_TEXT` | Label rule violated |
 | 4 | `E_ID_SYNTAX` | Token regular expression violated |
 | 4 | `E_ID_RESERVED` | Reserved compartment / object-set name (channel IDs: §3.2 list) |
-| 4 | `E_ID_NFC_COLLISION` | Two identities of one scope equal after NFC |
-| 4 | `E_ID_CASE_COLLISION` | Two identities of one scope equal ignoring case |
+| 4 | `E_ID_NOT_NFC` | An identity (key, reference, source repeat, `used_ids` entry) is not Unicode NFC; never normalized |
+| 4 | `E_ID_CASE_COLLISION` | Two identities of one scope equal ignoring case (`used_ids` entries share the scope of their kind) |
 | 4 | `E_SINGLE_MISUSE` | `single` in another case or not alone |
-| 5 Semantics | `E_UNKNOWN_CONDITION` | Member key is not a declared condition |
-| 5 | `E_UNKNOWN_CHANNEL` | Unit or `source_channels` names an undeclared channel |
+| 5 Semantics | `E_UNKNOWN_CONDITION` | Member key is not a declared condition ID |
+| 5 | `E_UNKNOWN_CHANNEL` | Unit or `source_channels` names an undeclared channel ID |
 | 5 | `E_DUPLICATE_CHANNEL_IN_UNIT` | A channel twice in one unit |
-| 5 | `E_DUPLICATE_VALUE` | Duplicate in `header_names` or `source_channels` |
-| 5 | `E_DISPLAY_NAME_COLLISION` | Two display names of one kind equal after NFC |
+| 5 | `E_DUPLICATE_VALUE` | Duplicate in `header_names`, `source_channels` or a `used_ids` list |
+| 5 | `E_DISPLAY_NAME_COLLISION` | Two display names of one kind equal after NFC and case folding (§4.8) |
+| 5 | `E_USED_ID_MISSING` | A declared condition, channel or repeat ID is not in `used_ids` (§4.9) |
 | 5 | `E_CONDITION_WITHOUT_MEMBERS` | Declared condition in no repeat |
 | 5 | `E_SOURCE_REPEAT_REUSED` | One source folder in two repeats |
 | 5 | `E_REPEAT_ID_SHADOWS_SOURCE` | Repeat ID equal to the source folder name of another repeat's member |
 | 5 | `E_MASK_SOURCE_TYPE_REUSED` | Two masks with one `source_type` |
-| 5 | `E_REFERENCE_UNKNOWN` | `reference` names no declared condition |
+| 5 | `E_REFERENCE_UNKNOWN` | `reference` names no declared condition ID (a display name is not an ID) |
 | 5 | `E_REFERENCE_SELF` | `reference` names its own condition |
 | 5 | `E_REFERENCE_CYCLE` | The reference graph has a cycle |
 | warn | `W_UNUSED_CHANNEL` | A declared channel is in no unit |
@@ -298,10 +363,15 @@ validation: a reader MUST NOT try to interpret fields of a version it does not s
 - `schema_version` is an integer. Any change to fields, types, rules or meanings requires a new
   version. Readers MUST refuse any version they do not implement (`E_SCHEMA_VERSION_UNSUPPORTED`)
   with a message naming the supported versions; they MUST NOT read a newer file "best effort".
+  The supported set is a constant of the reader (in v1: `{1}`). It is checked without network
+  access, against nothing fetched. A missing version is `E_SCHEMA_VERSION_MISSING` and is never
+  mapped to a default version.
 - A migration between versions MUST be an explicit, recorded operation that writes a new file and
   never changes canonical identities silently.
-- **Repeat, condition and channel IDs are immutable** (§4.6). There is no rename migration; a
-  friendlier name is `display_name`. A mistyped ID is corrected only by a recorded re-confirmation.
+- **Repeat, condition and channel IDs are immutable** (§4.6) and never reused (§4.9). There is no
+  rename migration; a friendlier name is `display_name`. A mistyped ID is corrected only by a
+  recorded re-confirmation, which retires the old ID in `used_ids`. No reader or writer repairs,
+  re-cases or renumbers an ID (§3.3).
 - **Source folder renamed or moved:** a removed member plus a new, unpaired, pending member. It is
   never auto-paired with the removed one; the user may assign it to the existing canonical repeat
   (the canonical ID does not change).
@@ -326,7 +396,13 @@ Required preprocessing refusals (`R_*`):
 | Code | Meaning |
 |---|---|
 | `R_FILE_SYMLINK` | `morphobricks.toml` is a symlink |
-| `R_CONFIRMED_ID_CHANGED` | A confirmed ID was changed or reused (§4.6) without a recorded re-confirmation |
+| `R_CONFIRMED_ID_CHANGED` | A confirmed ID was changed, or a declared ID now names another entity (§4.6), without a recorded re-confirmation |
+| `R_USED_ID_REUSED` | A candidate declares an ID that `used_ids` lists as retired (§4.9) |
+| `R_USED_ID_DROPPED` | A candidate omits an ID listed in `used_ids` of the file it replaces (§4.9) |
+| `R_CONFIRMED_ON_CHANGED` | `confirmed_on` of a repeat whose confirmation was not reopened differs from the published file (§4.4a) |
+| `R_PUBLISHED_FILE_CHANGED` | The SHA-256 of the published file at publication differs from the draft's recorded base (§10) |
+| `R_DRAFT_BASE_MISSING` | A draft has no recorded base SHA-256 (§10) |
+| `R_FOLDER_NOT_NFC` | A folder label read from disk is not NFC (§3.3) |
 | `R_UNIT_NOT_FOUND` | A declared imaging unit has no included image |
 | `R_UNIT_NOT_DECLARED` | A discovered imaging unit is not in the file (reconciliation draft required) |
 | `R_CHANNEL_COUNT_MISMATCH` | An image's channel count differs from its unit's list length |
@@ -358,9 +434,10 @@ index alone, and group by canonical repeat ID.
 
 Writers MUST produce deterministic bytes: UTF-8, no BOM, LF, a final newline, no comments.
 Order: `schema`, `schema_version`, then `conditions`, `channels`, `repeats`, `masks` (an empty
-optional table is omitted); identities are NFC. Entries of each table sorted by key in code
+optional table is omitted), `used_ids` (kinds in the order `conditions`, `channels`, `repeats`;
+each array sorted in code point order, inline); identities are NFC. Entries of each table sorted by key in code
 point order; fields in the order of §4; each table as a standard `[header]`; arrays inline;
-`header_names` and `source_channels` sorted, unit `channels` in declared order; keys bare when
+`header_names`, `source_channels` and `used_ids` arrays sorted, unit `channels` in declared order; keys bare when
 they match `[A-Za-z0-9_-]+`, else basic quoted strings; strings as TOML basic strings with the
 minimal escapes.
 
@@ -375,10 +452,18 @@ standard/inline/dotted tables, never changes meaning.
 
 The whole-file SHA-256 is provenance. Preprocessing SHOULD also record per-section digests (SHA-256
 of the canonical serialization of `conditions`, `channels`, `repeats`, `masks`) so that consumers
-key derived products only on the sections they use. Digests are computed with every `display_name`
-omitted: a change to `display_name` MUST NOT change any digest, a change to `reference` MUST NOT
+key derived products only on the sections they use. Digests are computed with every `display_name`,
+`target` and `treatment_key` omitted (descriptive fields are never cache keys, §4.2a), and
+`used_ids` is not a section: a change to any of them MUST NOT change any digest, a change to `reference` MUST NOT
 invalidate pixel-derived products; a change to a unit's channel list MUST invalidate the products
 that depend on that unit's channels.
+
+Provenance from lab tools (for example LabChronicle: repository URL, commit SHA, experiment path
+and per-repeat lab-tool repeat codes) is an optional, user-supplied preprocessing input recorded
+**only in the run manifest**, never in `morphobricks.toml` (`labchronicle`, `provenance` and
+`source_database` are `E_FORBIDDEN_FIELD`). It is excluded from every identity, pairing and cache
+key. A mapping from a lab-tool code such as `R001` to a canonical repeat ID MUST be confirmed by
+the user: equal strings are not evidence, because the namespaces are unrelated.
 
 ## 10. Reconciliation and confirmation (preprocessing behaviour)
 
@@ -386,13 +471,24 @@ On every run, preprocessing compares fresh discovery with the published file and
 unit **unchanged**, **new**, **removed** or **conflicting**. It never rewrites confirmed semantics
 silently; edits go to a separate draft and are published atomically after validation.
 
+- **Publish only from the current base.** Every draft records the SHA-256 of the exact bytes of
+  the published `morphobricks.toml` it was derived from, or the explicit value `absent` when none
+  existed (a draft without it: `R_DRAFT_BASE_MISSING`). Under the output folder's lock, at the
+  moment of publication, preprocessing MUST compute the SHA-256 of the file currently published
+  (or find none) and refuse with `R_PUBLISHED_FILE_CHANGED` unless it equals the recorded base.
+  The lock prevents concurrent writes; the base check prevents a stale draft from replacing a newer
+  published file. The refused draft is never merged automatically: it is re-derived from the
+  current file.
+- **`confirmed_on` is kept** byte-identical for every repeat whose confirmation is not reopened
+  (§4.4a); the draft copies it from the published file, never from the clock.
+
 - **N35 reopening.** The confirmation of a repeat is reopened (draft `confirmed = false`) only when
   channels, layout or grouping change: a new or removed unit or member, a unit's ordered channel
   list, or the pairing of folders into repeats. New FOVs (or removed ones) inside an existing unit
   whose confirmed layout still holds do **not** reopen it; they are reported and recorded.
 - A removed member is reported and removed only on user confirmation; a repeat left without
-  members is removed from the file, and its ID stays in the manifest history and is never reused
-  for other members (`R_CONFIRMED_ID_CHANGED`).
+  members is removed from the file, and its ID stays in `used_ids` and is never reused
+  (`R_USED_ID_REUSED`, `R_USED_ID_DROPPED`; §4.9).
 - A new folder whose label equals an existing repeat ID is proposed for that repeat but stays
   pending until confirmed.
 - A conflicting unit (`R_*`) blocks publication; no per-FOV exception is created.
@@ -426,7 +522,7 @@ only the derivation rules above.
 ## 12. Drafts
 
 A draft (reconciliation proposal, unconfirmed repeats, unresolved legacy references) is internal
-to preprocessing. It is never named `morphobricks.toml`. Downstream consumers (`RunInputs`) read
+to preprocessing and records its base SHA-256 (§10). It is never named `morphobricks.toml`. Downstream consumers (`RunInputs`) read
 only the confirmed, published `morphobricks.toml` and MUST refuse a draft or any file with an
 unconfirmed repeat (`A_DRAFT_REFUSED`; a published-path file with `confirmed = false` is also
 `E_REPEAT_UNCONFIRMED`).
