@@ -1,0 +1,58 @@
+# Fixture v21_metadata_only_edit
+# Expected: PASS
+# Source: Adversarial 10
+# v01 with only the conditions section edited (labels, target, treatment_key). The channels, repeats and masks section digests equal v01's, so no pixel-derived product may be invalidated.
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions.CTRL]
+label = "Vehicle (DMSO 0.1%)"
+
+[conditions.DrugA]
+label = "Drug A"
+reference = "CTRL"
+treatment_key = "AZD0530"
+
+[channels.DNA]
+label = "DAPI"
+header_names = ["DAPI"]
+
+[channels.ACTIN]
+label = "F-actin"
+header_names = ["Phalloidin-488"]
+
+[repeats.rep1]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep1.members.CTRL]
+source_repeat = "rep1"
+image_count = 12
+
+[repeats.rep1.members.CTRL.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.rep1.members.DrugA]
+source_repeat = "rep1"
+image_count = 11
+
+[repeats.rep1.members.DrugA.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.rep2]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep2.members.CTRL]
+source_repeat = "rep2"
+image_count = 10
+
+[repeats.rep2.members.CTRL.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.rep2.members.DrugA]
+source_repeat = "rep2"
+image_count = 10
+
+[repeats.rep2.members.DrugA.technical_repeats.single]
+channels = ["DNA", "ACTIN"]

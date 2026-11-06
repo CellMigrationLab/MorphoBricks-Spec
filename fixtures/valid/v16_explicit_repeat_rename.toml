@@ -1,0 +1,42 @@
+# Fixture v16_explicit_repeat_rename
+# Expected: PASS
+# Source: Extra: renames
+# The user explicitly renamed canonical repeat rep1 to Day1 and removed repeat rep9; both are recorded in retired_repeats, so neither ID can be reused. Source labels are unchanged.
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions.CTRL]
+
+[conditions.DrugA]
+reference = "CTRL"
+
+[channels.DNA]
+label = "DAPI"
+
+[channels.ACTIN]
+label = "F-actin"
+
+[repeats.Day1]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.Day1.members.CTRL]
+source_repeat = "rep1"
+image_count = 9
+
+[repeats.Day1.members.CTRL.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.Day1.members.DrugA]
+source_repeat = "rep1"
+image_count = 7
+
+[repeats.Day1.members.DrugA.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[retired_repeats.rep1]
+retired_on = "2026-11-06"
+replaced_by = "Day1"
+
+[retired_repeats.rep9]
+retired_on = "2026-11-02"

@@ -1,0 +1,43 @@
+# Fixture i59_mask_id_reserved
+# Expected: E_ID_RESERVED
+# Source: Extra: MorphoFeature object-set rule
+# Mask ID `Nucleus` (reserved compartment, any case).
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions.CTRL]
+label = "Control"
+
+[conditions.DrugA]
+label = "Drug A"
+reference = "CTRL"
+
+[channels.DNA]
+label = "DAPI"
+header_names = ["DAPI"]
+
+[channels.ACTIN]
+label = "F-actin"
+
+[repeats.rep1]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep1.members.CTRL]
+source_repeat = "rep1"
+image_count = 12
+
+[repeats.rep1.members.CTRL.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.rep1.members.DrugA]
+source_repeat = "rep1"
+image_count = 10
+
+[repeats.rep1.members.DrugA.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[masks.Nucleus]
+source_type = "nuclei"
+representation = "instances"
+source_channels = ["DNA"]

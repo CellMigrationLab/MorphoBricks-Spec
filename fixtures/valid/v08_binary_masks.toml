@@ -1,0 +1,34 @@
+# Fixture v08_binary_masks
+# Expected: PASS
+# Source: RFC case 9; adversarial 6
+# A binary region mask beside an instance mask. Valid; an analysis request using TumorRegion as an object set must refuse (A_MASK_NOT_INSTANCES).
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions.CTRL]
+
+[channels.DNA]
+label = "DAPI"
+
+[channels.ACTIN]
+label = "F-actin"
+
+[repeats.rep1]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep1.members.CTRL]
+source_repeat = "rep1"
+image_count = 4
+
+[repeats.rep1.members.CTRL.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[masks.Nuclei]
+source_type = "nuclei"
+representation = "instances"
+source_channels = ["DNA"]
+
+[masks.TumorRegion]
+source_type = "tumor_region"
+representation = "binary"

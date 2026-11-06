@@ -1,0 +1,54 @@
+# Fixture i75_repeat_id_swap
+# Expected: E_REPEAT_ID_SHADOWS_SOURCE
+# Source: Extra: renames
+# Repeat rep1 holds folder rep2 and repeat rep2 holds folder rep1 for CTRL.
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions.CTRL]
+label = "Control"
+
+[conditions.DrugA]
+label = "Drug A"
+reference = "CTRL"
+
+[channels.DNA]
+label = "DAPI"
+header_names = ["DAPI"]
+
+[channels.ACTIN]
+label = "F-actin"
+
+[repeats.rep1]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep1.members.CTRL]
+source_repeat = "rep2"
+image_count = 12
+
+[repeats.rep1.members.CTRL.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.rep1.members.DrugA]
+source_repeat = "rep1"
+image_count = 10
+
+[repeats.rep1.members.DrugA.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[masks.Nuclei]
+source_type = "nuclei"
+representation = "instances"
+source_channels = ["DNA"]
+
+[repeats.rep2]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep2.members.CTRL]
+source_repeat = "rep1"
+image_count = 7
+
+[repeats.rep2.members.CTRL.technical_repeats.single]
+channels = ["DNA", "ACTIN"]

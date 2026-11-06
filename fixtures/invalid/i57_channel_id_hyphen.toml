@@ -1,0 +1,43 @@
+# Fixture i57_channel_id_hyphen
+# Expected: E_ID_SYNTAX
+# Source: Extra: identities (token rule)
+# Channel ID F-actin.
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions.CTRL]
+label = "Control"
+
+[conditions.DrugA]
+label = "Drug A"
+reference = "CTRL"
+
+[channels.DNA]
+label = "DAPI"
+header_names = ["DAPI"]
+
+[channels.F-actin]
+label = "F-actin"
+
+[repeats.rep1]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep1.members.CTRL]
+source_repeat = "rep1"
+image_count = 12
+
+[repeats.rep1.members.CTRL.technical_repeats.single]
+channels = ["DNA", "F-actin"]
+
+[repeats.rep1.members.DrugA]
+source_repeat = "rep1"
+image_count = 10
+
+[repeats.rep1.members.DrugA.technical_repeats.single]
+channels = ["DNA", "F-actin"]
+
+[masks.Nuclei]
+source_type = "nuclei"
+representation = "instances"
+source_channels = ["DNA"]

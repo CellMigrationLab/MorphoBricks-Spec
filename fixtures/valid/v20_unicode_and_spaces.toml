@@ -1,0 +1,36 @@
+# Fixture v20_unicode_and_spaces
+# Expected: PASS
+# Source: Extra: identities
+# Condition folder labels with spaces and non-ASCII text are valid labels (quoted keys); channel and mask IDs stay tokens.
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions."Wild type"]
+label = "Wild type (WT)"
+
+[conditions."Knock-out β1"]
+reference = "Wild type"
+
+[channels.DNA]
+label = "DAPI"
+
+[channels.ACTIN]
+label = "F-actin"
+
+[repeats."Réplica_1"]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats."Réplica_1".members."Wild type"]
+source_repeat = "Réplica_1"
+image_count = 4
+
+[repeats."Réplica_1".members."Wild type".technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats."Réplica_1".members."Knock-out β1"]
+source_repeat = "Réplica_1"
+image_count = 4
+
+[repeats."Réplica_1".members."Knock-out β1".technical_repeats.single]
+channels = ["DNA", "ACTIN"]

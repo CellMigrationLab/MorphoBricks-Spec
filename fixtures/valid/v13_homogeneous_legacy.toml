@@ -1,0 +1,95 @@
+# Fixture v13_homogeneous_legacy
+# Expected: PASS
+# Source: Adversarial 4
+# A legacy homogeneous dataset: folder-name repeat IDs, one control, same layout everywhere. The derived experiment_design.csv must be byte-identical to today's; numerical outputs must keep parity.
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions.CTRL]
+
+[conditions.DrugA]
+reference = "CTRL"
+
+[conditions.DrugB]
+reference = "CTRL"
+
+[channels.DNA]
+label = "DAPI"
+
+[channels.ACTIN]
+label = "F-actin"
+
+[repeats.rep1]
+confirmed = true
+confirmed_on = "2026-10-30"
+
+[repeats.rep1.members.CTRL]
+source_repeat = "rep1"
+image_count = 10
+
+[repeats.rep1.members.CTRL.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.rep1.members.DrugA]
+source_repeat = "rep1"
+image_count = 10
+
+[repeats.rep1.members.DrugA.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.rep1.members.DrugB]
+source_repeat = "rep1"
+image_count = 10
+
+[repeats.rep1.members.DrugB.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.rep2]
+confirmed = true
+confirmed_on = "2026-10-30"
+
+[repeats.rep2.members.CTRL]
+source_repeat = "rep2"
+image_count = 10
+
+[repeats.rep2.members.CTRL.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.rep2.members.DrugA]
+source_repeat = "rep2"
+image_count = 10
+
+[repeats.rep2.members.DrugA.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.rep2.members.DrugB]
+source_repeat = "rep2"
+image_count = 10
+
+[repeats.rep2.members.DrugB.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.rep3]
+confirmed = true
+confirmed_on = "2026-10-30"
+
+[repeats.rep3.members.CTRL]
+source_repeat = "rep3"
+image_count = 10
+
+[repeats.rep3.members.CTRL.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.rep3.members.DrugA]
+source_repeat = "rep3"
+image_count = 10
+
+[repeats.rep3.members.DrugA.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.rep3.members.DrugB]
+source_repeat = "rep3"
+image_count = 10
+
+[repeats.rep3.members.DrugB.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
