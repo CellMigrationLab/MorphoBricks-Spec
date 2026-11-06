@@ -6,9 +6,11 @@ schema = "morphobricks-experiment"
 schema_version = 1
 
 [conditions.cl001]
+source_folder = "cl001"
 display_name = "Control"
 
 [conditions.CL1000]
+source_folder = "CL1000"
 display_name = "Drug A"
 reference = "cl001"
 target = "SRC"
@@ -31,6 +33,7 @@ source_repeat = "rep1"
 image_count = 12
 
 [repeats.R999.members.cl001.technical_repeats.single]
+source_folder = "single"
 channels = ["DNA", "ACTIN"]
 
 [repeats.R999.members.CL1000]
@@ -38,6 +41,7 @@ source_repeat = "rep1"
 image_count = 11
 
 [repeats.R999.members.CL1000.technical_repeats.single]
+source_folder = "single"
 channels = ["DNA", "ACTIN"]
 
 [repeats.R1000]
@@ -49,6 +53,7 @@ source_repeat = "rep2"
 image_count = 10
 
 [repeats.R1000.members.cl001.technical_repeats.single]
+source_folder = "single"
 channels = ["DNA", "ACTIN"]
 
 [repeats.R1000.members.CL1000]
@@ -56,9 +61,11 @@ source_repeat = "rep2"
 image_count = 10
 
 [repeats.R1000.members.CL1000.technical_repeats.single]
+source_folder = "single"
 channels = ["DNA", "ACTIN"]
 
 [used_ids]
 conditions = ["CL1000", "cl001"]
 channels = ["ACTIN", "DNA"]
 repeats = ["R1000", "R999"]
+technical_repeats = ["single"]

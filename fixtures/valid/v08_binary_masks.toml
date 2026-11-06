@@ -6,6 +6,7 @@ schema = "morphobricks-experiment"
 schema_version = 1
 
 [conditions.CTRL]
+source_folder = "CTRL"
 
 [channels.DNA]
 display_name = "DAPI"
@@ -22,6 +23,7 @@ source_repeat = "rep1"
 image_count = 4
 
 [repeats.rep1.members.CTRL.technical_repeats.single]
+source_folder = "single"
 channels = ["DNA", "ACTIN"]
 
 [masks.Nuclei]
@@ -37,3 +39,4 @@ representation = "binary"
 conditions = ["CTRL"]
 channels = ["ACTIN", "DNA"]
 repeats = ["rep1"]
+technical_repeats = ["single"]

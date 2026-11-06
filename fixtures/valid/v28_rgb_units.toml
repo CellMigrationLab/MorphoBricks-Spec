@@ -6,9 +6,11 @@ schema = "morphobricks-experiment"
 schema_version = 1
 
 [conditions.CTRL]
+source_folder = "CTRL"
 display_name = "Control"
 
 [conditions.DrugA]
+source_folder = "DrugA"
 display_name = "Drug A"
 reference = "CTRL"
 
@@ -30,6 +32,7 @@ source_repeat = "rep1"
 image_count = 8
 
 [repeats.rep1.members.CTRL.technical_repeats.single]
+source_folder = "single"
 channels = ["R", "G", "B"]
 image_type = "rgb"
 
@@ -38,6 +41,7 @@ source_repeat = "rep1"
 image_count = 8
 
 [repeats.rep1.members.DrugA.technical_repeats.single]
+source_folder = "single"
 channels = ["R", "G", "B"]
 image_type = "rgb"
 
@@ -50,6 +54,7 @@ source_repeat = "rep2"
 image_count = 8
 
 [repeats.rep2.members.CTRL.technical_repeats.single]
+source_folder = "single"
 channels = ["R", "G", "B"]
 image_type = "rgb"
 
@@ -58,6 +63,7 @@ source_repeat = "rep2"
 image_count = 8
 
 [repeats.rep2.members.DrugA.technical_repeats.single]
+source_folder = "single"
 channels = ["R", "G", "B"]
 image_type = "rgb"
 
@@ -69,3 +75,4 @@ representation = "instances"
 conditions = ["CTRL", "DrugA"]
 channels = ["B", "G", "R"]
 repeats = ["rep1", "rep2"]
+technical_repeats = ["single"]

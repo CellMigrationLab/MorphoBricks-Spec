@@ -16,39 +16,43 @@ is executed by this repository.
   `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` (lifted at Stage 3).
 - Physical cases that need images (within-unit divergence, header contradictions, mask pixel
   contradictions, reconciliation) cannot be expressed by a TOML file alone; they are listed as
-  scenarios P01-P31 in the [conformance plan](../docs/conformance-plan.md#3-physical-scenarios-preprocessing-owned),
+  scenarios P01-P33 in the [conformance plan](../docs/conformance-plan.md#3-physical-scenarios-preprocessing-owned),
   built on the valid files below.
 - `v18` MUST parse to the same model as `v01` (round trip); `v21` differs from `v01` only in
   `display_name`, `target` and `treatment_key` values and `v16` only in `display_name` values, so
   for both all four section digests equal `v01`'s (experiment-v1 §9.3).
 - Every file carries the required `used_ids` table (experiment-v1 §4.9) listing at least all of its
-  declared condition, channel and repeat IDs; `i92` is the file without it. The eight undecodable
+  declared condition, channel, repeat and technical repeat IDs; `i92` is the file without it.
+- Every condition and every technical repeat carries the required `source_folder` (experiment-v1
+  §4.6a): the exact folder label, never restricted by the reserved or forbidden names. In
+  fixtures that do not exercise the rule it equals the ID (the key), `single` for `single`;
+  `v33`, `v34` and `t10`-`t12` separate the two. The eight undecodable
   or unparsable phase-1 fixtures (`i01`-`i08`) are unchanged and fail before it matters.
-- `transitions/` holds nine files that are valid alone and are checked against a named published
+- `transitions/` holds twelve files that are valid alone and are checked against a named published
   predecessor: refused with an exact set of publication codes (`R_CONFIRMED_ID_CHANGED`,
   `R_USED_ID_REUSED`, `R_USED_ID_DROPPED`, `R_CONFIRMED_ON_CHANGED`; experiment-v1 §4.4a, §4.6,
-  §4.9) or, for `t06`, **accepted** (adding members is not a changed entity, §4.6). They need the
+  §4.9; a changed or reassigned `source_folder` counts, §4.6a) or, for `t06`, **accepted** (adding members is not a changed entity, §4.6). They need the
   predecessor file and are not part of the single-file valid/invalid rules. Publication-base and
   folder-name rules need no TOML of their own: they run on named fixtures in scenarios P17-P22.
 - Rules that need images, a run or a consumer (header matching, image type against the header,
   mask checks and conversions, mask type names, the FOV key, the `target` prefill, legacy
-  migration dates) have no single-file TOML form: each is a scenario P23-P31 of the conformance
+  migration dates) have no single-file TOML form: each is a scenario P23-P33 of the conformance
   plan on a named fixture, listed in the coverage tables below.
 - A copy of this tree vendored by a reader MUST hash to the pinned SHA's `fixtures` tree
   (conformance plan §1).
 - Expected `experiment_design.csv` outputs (golden files) are deferred to Stage 1. The fixed-SHA
   consumer audit (roadmap S0.1) is done (PR #5); its questions are answered by the third round of
   owner decisions (ADR 0001) and the fixtures `v28`-`v32`, `t06`-`t09`, `i100`-`i119` follow from
-  them.
+  them; the fourth round (FR1, FR2) adds `v33`, `v34`, `t10`-`t12` and `i120`-`i127`.
 
 ## Syntax check (6 November 2026)
 
 Checked with Python 3.13 `tomllib` (`tomllib.loads` on the UTF-8 decoded bytes), after the third
-round of owner decisions:
+round of owner decisions and again after the fourth (folder labels, `source_folder`):
 
-- `valid/`: 32 of 32 parse.
-- `transitions/`: 9 of 9 parse.
-- `invalid/`: 111 of 119 parse as TOML and are invalid only by the v1 rules. The 8 phase-1 fixtures
+- `valid/`: 34 of 34 parse.
+- `transitions/`: 12 of 12 parse.
+- `invalid/`: 119 of 127 parse as TOML and are invalid only by the v1 rules. The 8 phase-1 fixtures
   fail deliberately: `i01_bom` (`TOMLDecodeError`, BOM read as an invalid statement),
   `i02_invalid_utf8` (`UnicodeDecodeError`), `i03`-`i06` (`TOMLDecodeError`, "Cannot declare ...
   twice" / "Cannot overwrite a value"), `i07`, `i08` (`TOMLDecodeError`, "Invalid value" /
@@ -59,17 +63,19 @@ round of owner decisions:
 A throw-away reference validator (Python 3.13, not committed: this repository holds no runtime
 code) implementing experiment-v1 §2-§6 phase by phase, plus the predecessor checks of §4.6,
 §4.4a and §4.9 expressible from two files, was run on every fixture after the third round of
-owner decisions. The validator implements the text as written, including the new rules (one code
-per broken rule, forbidden names on ID keys, the extended reserved list, NFC of channel
-references, `image_type` and the RGB rules, "changed entity" as removal or reassignment). Results:
+owner decisions and run again after the fourth (folder labels, `source_folder`). The validator
+implements the text as written, including the new rules (`source_folder`, one folder one ID,
+`used_ids.technical_repeats`, one code per broken rule, forbidden names on ID keys, the extended
+reserved list, NFC of channel references, `image_type` and the RGB rules, "changed entity" as
+removal or reassignment, a changed `source_folder` included). Results:
 
-- `valid/`: 32 of 32 accepted with exactly the listed warnings.
-- `invalid/`: 119 of 119 refused with exactly the listed code set, from the listed phase only.
-- `transitions/`: 9 of 9 valid alone (`t03`, `t06`, `t07`, `t08` with
+- `valid/`: 34 of 34 accepted with exactly the listed warnings.
+- `invalid/`: 127 of 127 refused with exactly the listed code set, from the listed phase only.
+- `transitions/`: 12 of 12 valid alone (`t03`, `t06`, `t07`, `t08` with
   `W_REPEAT_MISSING_CONDITIONS`); against their predecessors each gives exactly its listed set:
   `t01` `R_CONFIRMED_ID_CHANGED`; `t02` `R_CONFIRMED_ID_CHANGED` and `R_USED_ID_DROPPED`; `t03`
   `R_USED_ID_REUSED` only; `t04` `R_USED_ID_DROPPED`; `t05` `R_CONFIRMED_ON_CHANGED`; `t06` no
-  code (accepted); `t07`, `t08`, `t09` `R_CONFIRMED_ID_CHANGED`.
+  code (accepted); `t07`, `t08`, `t09`, `t10`, `t11`, `t12` `R_CONFIRMED_ID_CHANGED`.
 - `v18` parses to the same model as `v01`; `v16` and `v21` have the same four sections as `v01`
   once `display_name`, `target` and `treatment_key` are omitted.
 
@@ -140,11 +146,15 @@ This is a check of the fixtures against the text, not a conformance claim for an
 | RGB images (declared type, fixed tokens, no aliases) | `v28`, `v29`, `i100`-`i106`, `i119`; P13, P23, P24 |
 | Reserved names (one list for channel and mask IDs) | `i59`, `i61`, `i107`-`i109`, `v32` |
 | Forbidden names apply to ID keys | `i113`-`i115` |
+| Folder labels never restricted: condition and technical-repeat IDs separate from `source_folder` | `v33`, `v34`, `i113`, `i115`, `i120`-`i127`, `t10`-`t12`; P32, P33 |
+| One folder, one ID; `single` iff no folder level | `i122`-`i125` |
+| Folder change for an existing ID is a reassignment | `t10`-`t12`; P33 |
 | One code per broken rule; NFC of channel references | `i116`-`i118` |
 | FOV key keeps the source label, `repeat_group` added | `v03`, `v30`; P25 |
 | Mask checks: when, unchecked masks, type names | `v09`; P05, P28, P29 |
 | Descriptive keys prefill only | `v27`; P31 |
-| Legacy migration dates | `v13`; P30 |
+| Legacy migration dates (byte-identity only for a single `confirmed_on`) | `v13`; P30 |
+| Derived CSV keeps the source folder labels | `v13`, `v33`; P32 |
 | Aliases (header evidence) | `v11`, `v12`, `v31`, `i46`, `i81`, `i110`; P03, P26 |
 | Versioning (offline constant, no default) | `i09`-`i15` |
 | Identities | `v14`, `v15`, `v20`, `v23`, `v26`, `i54`-`i63`, `i78` |
@@ -189,8 +199,10 @@ This is a check of the fixtures against the text, not a conformance claim for an
 | AQ11 | A discovered mask type breaking the Label rules: `R_MASK_TYPE_NAME_INVALID` | P29 |
 | AQ12 | Legacy groups with different `confirmed_on` take the latest date, with a note | `v13`; P30 |
 | AQ13 | Forbidden names apply to ID keys; NFC of channel references; one code per broken rule | `i113`-`i118` |
+| FR1 | Folder labels are never restricted by the reserved or forbidden names: conditions and technical repeats have a canonical ID separate from the required `source_folder`; one folder, one ID; a folder change for an existing ID is a reassignment; the derived CSV keeps the folder labels | `v33`, `v34`, `i113`, `i115`, `i120`-`i127`, `t10`-`t12`; P32, P33 |
+| FR2 | Derived CSV byte-identity is guaranteed only for repeat groups with a single `confirmed_on`; a legacy group with several dates gets the latest, the migration note keeps the per-row dates | `v13`; P30 |
 
-## Valid fixtures (32)
+## Valid fixtures (34)
 
 | Fixture | Source | Expected | Homogeneous | Case |
 |---|---|---|---|---|
@@ -206,7 +218,7 @@ This is a check of the fixtures against the text, not a conformance claim for an
 | [`v10_reference_chain`](valid/v10_reference_chain.toml) | RFC case 11 | pass | yes | Reference chains VEC_SiCol6a1 -> VEC_SiNC -> VEC and THBS5_SiCol6a1 -> THBS5_SiNC -> THBS5; shared treatment_key across backgrounds. |
 | [`v11_header_aliases`](valid/v11_header_aliases.toml) | Adversarial 5 | pass | yes | Canonical DNA confirmed with header evidence DAPI and Hoechst 33342; canonical ACTIN with an exact-match header name that still had to be confirmed. A header name outside these lists is R_HEADER_CONTRADICTION. |
 | [`v12_unnamed_headers`](valid/v12_unnamed_headers.toml) | Extra: aliases | pass | yes | No header evidence at all (ImageJ TIFFs carry no channel names); the user's confirmation is the only guard. Undetectable physical swaps are a documented limit. |
-| [`v13_homogeneous_legacy`](valid/v13_homogeneous_legacy.toml) | Adversarial 4 | pass | yes | A legacy homogeneous dataset: folder-name repeat IDs, one control, same layout everywhere. The derived experiment_design.csv must be byte-identical to today's; numerical outputs must keep parity. |
+| [`v13_homogeneous_legacy`](valid/v13_homogeneous_legacy.toml) | Adversarial 4 | pass | yes | A legacy homogeneous dataset: folder-name repeat IDs, one control, same layout everywhere (IDs proposed equal to the folder labels). The derived experiment_design.csv, which carries the `source_folder` labels, must be byte-identical to today's; numerical outputs must keep parity. |
 | [`v14_no_repeat_folders`](valid/v14_no_repeat_folders.toml) | Extra: single convention | pass | yes | No biological-repeat or technical-repeat folders: the source label is `single` (N31, one group for the whole experiment). |
 | [`v15_toml_keys_are_text`](valid/v15_toml_keys_are_text.toml) | Extra: implicit-conversion traps (valid side) | pass | yes | Folder labels that YAML would retype (2026-01-01, 012, NO, 1.0, off) stay exact text in TOML keys and strings. The quoted key "1.0" is needed: a bare 1.0 would be a dotted key. |
 | [`v16_display_name_change`](valid/v16_display_name_change.toml) | Owner refinement: immutable IDs | pass | yes | v01 with every `display_name` changed or added (conditions, channels, repeats). Identity is identical: all four section digests equal v01's, nothing may be invalidated. |
@@ -226,8 +238,10 @@ This is a check of the fixtures against the text, not a conformance claim for an
 | [`v30_same_source_label_different_repeats`](valid/v30_same_source_label_different_repeats.toml) | Owner decision AQ5; S0.1 audit section 5 | pass | yes | Source folder label rep1 is in canonical repeat Day1 for CTRL and in Day2 for DrugA (and rep2 the other way round). Valid: no repeat ID equals another repeat's source label. The FOV key keeps the source label in `biological_repeat` and stays unique through the condition; the added `repeat_group` is Day1 or Day2, and grouping and pairing use it (experiment-v1 3.4, P25). |
 | [`v31_header_alias_whitespace_and_decomposed`](valid/v31_header_alias_whitespace_and_decomposed.toml) | Owner decision AQ7 | pass | yes | Header evidence is compared exactly after NFC of both sides, with no trimming. DNA lists the aliases "DAPI", " DAPI" (leading space) and "DAPI " (trailing space): outer whitespace needs its own confirmed alias, each is a distinct entry. ACTIN lists a decomposed alias (written with a TOML escape and stored as typed), which matches the header name "Caf\u00e9 488" after NFC of both sides (P26). header_names are not identities and are not NFC-checked. |
 | [`v32_reserved_name_near_misses`](valid/v32_reserved_name_near_misses.toml) | Owner decision AQ4 | pass | yes | Names next to the reserved list (experiment-v1 3.2) are valid: channels c1, t0, z2 and label, masks Patches and Labels. Only the exact names, compared case-folded, are reserved (t, z0, label_id, patch_id, ...). |
+| [`v33_condition_folder_on_forbidden_list`](valid/v33_condition_folder_on_forbidden_list.toml) | Owner decision FR1 | pass | yes | The condition folder on disk is `control`, a forbidden name (experiment-v1 4.7), so it cannot be the ID. It is recorded as `source_folder` (never restricted) and the user confirmed the ID `ctrl`, with `display_name` `control`. DrugA references `ctrl`, the ID. The derived experiment_design.csv still has `control` in the `condition` column (experiment-v1 11). |
+| [`v34_technical_repeat_folder_on_forbidden_list`](valid/v34_technical_repeat_folder_on_forbidden_list.toml) | Owner decision FR1 | pass | yes | Repeat rep1 has two technical-repeat folders, `files` and `overrides`, both forbidden names (experiment-v1 4.7). They are the `source_folder` values; the confirmed IDs are `acq1` and `acq2`, and the same ID carries the same folder in both members. rep2 has no technical-repeat folder level (`single`). Homogeneous. |
 
-## Transition fixtures (9)
+## Transition fixtures (12)
 
 Valid alone; checked against the named published predecessor (refused with the listed set, or accepted).
 
@@ -242,8 +256,11 @@ Valid alone; checked against the named published predecessor (refused with the l
 | [`t07_member_removed`](transitions/t07_member_removed.toml) | `valid/v01` | R_CONFIRMED_ID_CHANGED (against predecessor valid/v01, without a recorded removal confirmation) | Removing is a change of entity. The member DrugA/rep2 of repeat rep2 is gone (rep2 reopened and re-confirmed on 2026-11-07). The removal is accepted only with the recorded user confirmation of experiment-v1 4.6 and 10; without it the candidate is refused. All IDs stay listed in `used_ids`. Valid alone with W_REPEAT_MISSING_CONDITIONS. |
 | [`t08_member_reassigned`](transitions/t08_member_reassigned.toml) | `valid/v03` | R_CONFIRMED_ID_CHANGED (against predecessor valid/v03, without a recorded confirmation) | Reassigning is a change of entity. DrugA/experiment_23 was a member of Day1 in v03 and is now the member of a new repeat Day3, so Day1 lost a member it held. Accepted only with the recorded user confirmation of experiment-v1 4.6. Day3 is a new ID listed in `used_ids`. Valid alone with W_REPEAT_MISSING_CONDITIONS. |
 | [`t09_case_correction_new_id`](transitions/t09_case_correction_new_id.toml) | `valid/v01` | R_CONFIRMED_ID_CHANGED (against predecessor valid/v01, accepted only with a recorded re-confirmation) | How a case-only mistake is corrected. v01's channel ACTIN was meant to be Actin; the corrected spelling cannot be used (it collides with the retired ACTIN, see t02 and i95), so the channel gets the new, non-colliding ID ActinStain at the same positions with the same header evidence, and `display_name` "Actin" carries the appearance. ACTIN stays listed in `used_ids`. The set is exactly {R_CONFIRMED_ID_CHANGED}: no R_USED_ID_DROPPED, no R_USED_ID_REUSED, no E_* code. |
+| [`t10_condition_id_changed_same_folder`](transitions/t10_condition_id_changed_same_folder.toml) | `valid/v33` | R_CONFIRMED_ID_CHANGED (against predecessor valid/v33, without a recorded re-confirmation) | The folder `control` was confirmed as condition `ctrl` in v33 and now carries the ID `control_cells`. A confirmed ID never changes in place, also when the folder is the same (experiment-v1 4.6, 4.6a). `ctrl` stays listed in used_ids, so only the changed ID is refused. Valid alone. |
+| [`t11_technical_repeat_id_changed_same_folder`](transitions/t11_technical_repeat_id_changed_same_folder.toml) | `valid/v34` | R_CONFIRMED_ID_CHANGED (against predecessor valid/v34, without a recorded re-confirmation) | The folder `files` was confirmed as technical repeat `acq1` in v34 and now carries the ID `acqA` in both members. A confirmed technical repeat ID never changes in place (experiment-v1 4.6, 4.6a). `acq1` stays listed in used_ids. Valid alone. |
+| [`t12_condition_folder_reassigned`](transitions/t12_condition_folder_reassigned.toml) | `valid/v33` | R_CONFIRMED_ID_CHANGED (against predecessor valid/v33, without a recorded confirmation) | The ID `ctrl` held the folder `control` in v33 and now holds the folder `ctl` (a folder renamed on disk and attached to the same ID without a recorded confirmation). A folder change for an existing ID is a reassignment, so a changed entity (experiment-v1 4.6, 7). Valid alone. |
 
-## Invalid fixtures (119)
+## Invalid fixtures (127)
 
 | Fixture | Source | Expected code(s) | Phase | Case |
 |---|---|---|---|---|
@@ -359,10 +376,18 @@ Valid alone; checked against the named published predecessor (refused with the l
 | [`i110_header_names_duplicate_after_nfc`](invalid/i110_header_names_duplicate_after_nfc.toml) | Owner decision AQ7 | `E_DUPLICATE_VALUE` | 5 | `header_names` = ["Caf\u00e9", "Cafe\u0301"]: header names are compared after NFC, so these are the same alias twice. |
 | [`i111_mask_representation_parent_labels`](invalid/i111_mask_representation_parent_labels.toml) | Owner decision AQ8 | `E_ENUM` | 3 | `representation = "parent_labels"` (MorphoRelate's grouped masks): out of scope in v1. |
 | [`i112_mask_conversion_field_forbidden`](invalid/i112_mask_conversion_field_forbidden.toml) | Owner decision AQ9 | `E_FORBIDDEN_FIELD` | 3 | `binary_mask_policy = "connected_components"` in a mask table: a binary-to-instances conversion is a per-request, recorded choice of the analysis request, never part of the file. |
-| [`i113_forbidden_name_condition_key`](invalid/i113_forbidden_name_condition_key.toml) | Owner decision AQ13a | `E_FORBIDDEN_FIELD` | 3 | A condition (folder) named `control`: forbidden names apply to ID keys as well as fields (reported at the condition and at its member keys). |
+| [`i113_forbidden_name_condition_key`](invalid/i113_forbidden_name_condition_key.toml) | Owner decision AQ13a | `E_FORBIDDEN_FIELD` | 3 | A condition ID `control`: forbidden names apply to ID keys as well as fields (reported at the condition and at its member keys). The folder `control` itself is describable under another ID (`v33`); only the key is refused. |
 | [`i114_forbidden_name_channel_key`](invalid/i114_forbidden_name_channel_key.toml) | Owner decision AQ13a | `E_FORBIDDEN_FIELD` | 3 | A channel ID `files`: a forbidden name used as a channel key. |
-| [`i115_forbidden_name_technical_repeat_key`](invalid/i115_forbidden_name_technical_repeat_key.toml) | Owner decision AQ13a | `E_FORBIDDEN_FIELD` | 3 | A technical repeat (folder) named `overrides`: a forbidden name used as a technical-repeat key. |
+| [`i115_forbidden_name_technical_repeat_key`](invalid/i115_forbidden_name_technical_repeat_key.toml) | Owner decision AQ13a | `E_FORBIDDEN_FIELD` | 3 | A technical repeat ID `overrides`: a forbidden name used as a technical-repeat key. The folder `overrides` is describable under another ID (`v34`). |
 | [`i116_non_nfc_unit_channel`](invalid/i116_non_nfc_unit_channel.toml) | Owner decision AQ13b | `E_ID_NOT_NFC` | 4 | A unit lists "ACTIN\u0301" (decomposed). The reference is checked for NFC in phase 4 and is not reported as E_UNKNOWN_CHANNEL (phase 5). |
 | [`i117_non_nfc_source_channel`](invalid/i117_non_nfc_source_channel.toml) | Owner decision AQ13b | `E_ID_NOT_NFC` | 4 | A mask's `source_channels` lists "DNA\u0301" (decomposed): NFC before resolution, so not E_UNKNOWN_CHANNEL. |
 | [`i118_channel_id_whitespace_and_syntax`](invalid/i118_channel_id_whitespace_and_syntax.toml) | Owner decision AQ13c | `E_ID_TEXT`, `E_ID_SYNTAX` | 4 | Channel ID " DNA" (leading space): it breaks two rules, the Label rule (outer whitespace) and the Token expression, and gets both codes (one code per broken rule). |
 | [`i119_rgb_unit_two_channels`](invalid/i119_rgb_unit_two_channels.toml) | Owner decision AQ6 | `E_RGB_UNIT_CHANNELS` | 5 | An RGB unit lists only R and G: exactly three channels are required. |
+| [`i120_condition_missing_source_folder`](invalid/i120_condition_missing_source_folder.toml) | Owner decision FR1 | `E_MISSING_FIELD` | 3 | Condition DrugA has no `source_folder`: it is required, with no default (experiment-v1 4.2). |
+| [`i121_technical_repeat_missing_source_folder`](invalid/i121_technical_repeat_missing_source_folder.toml) | Owner decision FR1 | `E_MISSING_FIELD` | 3 | The unit rep2/DrugA/single has no `source_folder`: required for every technical repeat, `single` included (experiment-v1 4.4). |
+| [`i122_two_condition_ids_one_folder`](invalid/i122_two_condition_ids_one_folder.toml) | Owner decision FR1 | `E_SOURCE_FOLDER_REUSED` | 5 | Condition IDs CTRL and DrugA both name the folder `control`: one folder, one ID (experiment-v1 4.6a). |
+| [`i123_two_technical_repeat_ids_one_folder`](invalid/i123_two_technical_repeat_ids_one_folder.toml) | Owner decision FR1 | `E_SOURCE_FOLDER_REUSED` | 5 | Technical repeat IDs acq1 and acq2 of one member both name the folder `acquisition_1` (experiment-v1 4.6a). |
+| [`i124_one_technical_repeat_id_two_folders`](invalid/i124_one_technical_repeat_id_two_folders.toml) | Owner decision FR1 | `E_SOURCE_FOLDER_CONFLICT` | 5 | The technical repeat ID acq1 is declared with the folder `acquisition_1` in CTRL and `acq_1` in DrugA: one ID, one folder over the whole file (experiment-v1 4.6a). |
+| [`i125_single_id_with_real_folder`](invalid/i125_single_id_with_real_folder.toml) | Owner decision FR1 | `E_SINGLE_MISUSE` | 4 | The technical repeat ID `single` names the folder `acquisition_1`: `single` means no technical-repeat folder level and is the ID of `source_folder = "single"` only (experiment-v1 3.2). |
+| [`i126_used_ids_technical_repeats_missing`](invalid/i126_used_ids_technical_repeats_missing.toml) | Owner decision FR1 | `E_MISSING_FIELD` | 3 | `used_ids` has no `technical_repeats` list: required, like the other three kinds (experiment-v1 4.9). |
+| [`i127_technical_repeat_id_not_in_used_ids`](invalid/i127_technical_repeat_id_not_in_used_ids.toml) | Owner decision FR1 | `E_USED_ID_MISSING` | 5 | The declared technical repeat ID `single` is not listed in `used_ids.technical_repeats` (experiment-v1 4.9). |

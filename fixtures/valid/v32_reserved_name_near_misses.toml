@@ -6,6 +6,7 @@ schema = "morphobricks-experiment"
 schema_version = 1
 
 [conditions.CTRL]
+source_folder = "CTRL"
 
 [channels.c1]
 
@@ -24,6 +25,7 @@ source_repeat = "rep1"
 image_count = 4
 
 [repeats.rep1.members.CTRL.technical_repeats.single]
+source_folder = "single"
 channels = ["c1", "t0", "z2", "label"]
 
 [masks.Patches]
@@ -38,3 +40,4 @@ representation = "binary"
 conditions = ["CTRL"]
 channels = ["c1", "label", "t0", "z2"]
 repeats = ["rep1"]
+technical_repeats = ["single"]

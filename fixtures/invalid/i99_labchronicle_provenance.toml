@@ -10,9 +10,11 @@ repository = "https://example.org/lab/database"
 repeat_code = "R001"
 
 [conditions.CTRL]
+source_folder = "CTRL"
 display_name = "Control"
 
 [conditions.DrugA]
+source_folder = "DrugA"
 display_name = "Drug A"
 reference = "CTRL"
 target = "SRC"
@@ -35,6 +37,7 @@ source_repeat = "rep1"
 image_count = 12
 
 [repeats.rep1.members.CTRL.technical_repeats.single]
+source_folder = "single"
 channels = ["DNA", "ACTIN"]
 
 [repeats.rep1.members.DrugA]
@@ -42,6 +45,7 @@ source_repeat = "rep1"
 image_count = 11
 
 [repeats.rep1.members.DrugA.technical_repeats.single]
+source_folder = "single"
 channels = ["DNA", "ACTIN"]
 
 [repeats.rep2]
@@ -53,6 +57,7 @@ source_repeat = "rep2"
 image_count = 10
 
 [repeats.rep2.members.CTRL.technical_repeats.single]
+source_folder = "single"
 channels = ["DNA", "ACTIN"]
 
 [repeats.rep2.members.DrugA]
@@ -60,9 +65,11 @@ source_repeat = "rep2"
 image_count = 10
 
 [repeats.rep2.members.DrugA.technical_repeats.single]
+source_folder = "single"
 channels = ["DNA", "ACTIN"]
 
 [used_ids]
 conditions = ["CTRL", "DrugA"]
 channels = ["ACTIN", "DNA"]
 repeats = ["rep1", "rep2"]
+technical_repeats = ["single"]

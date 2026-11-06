@@ -6,9 +6,11 @@ schema = "morphobricks-experiment"
 schema_version = 1
 
 [conditions.CTRL]
+source_folder = "CTRL"
 display_name = "Control"
 
 [conditions.DrugA]
+source_folder = "DrugA"
 display_name = "Drug A"
 reference = "CTRL"
 
@@ -28,6 +30,7 @@ source_repeat = "rep1"
 image_count = 12
 
 [repeats.rep1.members.CTRL.technical_repeats.single]
+source_folder = "single"
 channels = ["DNA", "ACTIN"]
 
 [repeats.rep1.members.DrugA]
@@ -35,12 +38,16 @@ source_repeat = "rep1"
 image_count = 10
 
 [repeats.rep1.members.DrugA.technical_repeats.single]
+source_folder = "single"
 channels = ["DNA", "ACTIN"]
 
 [masks.Nuclei]
 source_type = "nuclei"
 representation = "instances"
 source_channels = ["DNA"]
+
+[conditions.1]
+source_folder = "1"
 
 [conditions.1.0]
 display_name = "one point zero"
@@ -49,3 +56,4 @@ display_name = "one point zero"
 conditions = ["1", "CTRL", "DrugA"]
 channels = ["ACTIN", "DNA"]
 repeats = ["rep1"]
+technical_repeats = ["single"]

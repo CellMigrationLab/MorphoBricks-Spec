@@ -6,15 +6,18 @@ schema = "morphobricks-experiment"
 schema_version = 1
 
 [conditions.CTRL]
+source_folder = "CTRL"
 display_name = "Control"
 
 [conditions.DrugA]
+source_folder = "DrugA"
 display_name = "Drug A"
 reference = "CTRL"
 target = "SRC"
 treatment_key = "saracatinib"
 
 [conditions.DrugB]
+source_folder = "DrugB"
 display_name = "Drug B"
 reference = "CTRL"
 
@@ -35,6 +38,7 @@ source_repeat = "rep1"
 image_count = 12
 
 [repeats.rep1.members.CTRL.technical_repeats.single]
+source_folder = "single"
 channels = ["DNA", "ACTIN"]
 
 [repeats.rep1.members.DrugA]
@@ -42,6 +46,7 @@ source_repeat = "rep1"
 image_count = 11
 
 [repeats.rep1.members.DrugA.technical_repeats.single]
+source_folder = "single"
 channels = ["DNA", "ACTIN"]
 
 [repeats.rep1.members.DrugB]
@@ -49,6 +54,7 @@ source_repeat = "rep1_b"
 image_count = 9
 
 [repeats.rep1.members.DrugB.technical_repeats.single]
+source_folder = "single"
 channels = ["DNA", "ACTIN"]
 
 [repeats.rep2]
@@ -60,6 +66,7 @@ source_repeat = "rep2"
 image_count = 10
 
 [repeats.rep2.members.CTRL.technical_repeats.single]
+source_folder = "single"
 channels = ["DNA", "ACTIN"]
 
 [repeats.rep2.members.DrugA]
@@ -67,6 +74,7 @@ source_repeat = "rep2"
 image_count = 10
 
 [repeats.rep2.members.DrugA.technical_repeats.single]
+source_folder = "single"
 channels = ["DNA", "ACTIN"]
 
 [repeats.rep2.members.DrugB]
@@ -74,6 +82,7 @@ source_repeat = "rep2_b"
 image_count = 8
 
 [repeats.rep2.members.DrugB.technical_repeats.single]
+source_folder = "single"
 channels = ["DNA", "ACTIN"]
 
 [repeats.rep3]
@@ -85,9 +94,11 @@ source_repeat = "rep3"
 image_count = 10
 
 [repeats.rep3.members.CTRL.technical_repeats.single]
+source_folder = "single"
 channels = ["DNA", "ACTIN"]
 
 [used_ids]
 conditions = ["CTRL", "DrugA", "DrugB"]
 channels = ["ACTIN", "DNA"]
 repeats = ["rep1", "rep2", "rep3"]
+technical_repeats = ["single"]

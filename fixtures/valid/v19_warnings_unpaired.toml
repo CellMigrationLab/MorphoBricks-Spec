@@ -6,8 +6,10 @@ schema = "morphobricks-experiment"
 schema_version = 1
 
 [conditions.CTRL]
+source_folder = "CTRL"
 
 [conditions.DrugA]
+source_folder = "DrugA"
 reference = "CTRL"
 
 [channels.DNA]
@@ -25,6 +27,7 @@ source_repeat = "rep1"
 image_count = 5
 
 [repeats.rep1.members.CTRL.technical_repeats.single]
+source_folder = "single"
 channels = ["DNA", "ACTIN"]
 
 [repeats.rep2]
@@ -36,9 +39,11 @@ source_repeat = "rep2"
 image_count = 5
 
 [repeats.rep2.members.DrugA.technical_repeats.single]
+source_folder = "single"
 channels = ["DNA", "ACTIN"]
 
 [used_ids]
 conditions = ["CTRL", "DrugA"]
 channels = ["ACTIN", "DNA"]
 repeats = ["rep1", "rep2"]
+technical_repeats = ["single"]
