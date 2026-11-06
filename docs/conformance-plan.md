@@ -33,7 +33,8 @@ One parametrised test per fixture file, discovered from `fixtures/valid/*.toml` 
 | Exact types | `i14` (`true` as `schema_version`) passes only if the reader checks `type(x) is int` |
 | Round trip | For every valid file: `parse(write(parse(f))) == parse(f)`; `write` is idempotent; `write(parse(v18)) == write(parse(v01))` byte for byte |
 | Canonical bytes | `write` output is UTF-8, LF, no BOM, final newline, ordered per experiment-v1 §9.1 |
-| Section digests | `v01` and `v21` have equal `channels`, `repeats` and `masks` digests and a different `conditions` digest |
+| Section digests | `v01` and `v21` have equal `channels`, `repeats` and `masks` digests and a different `conditions` digest; `v01` and `v16` have all four digests equal (`display_name` omitted) |
+| Transitions | Each `fixtures/transitions/t*.toml` is valid on its own; checked against its named predecessor without a recorded re-confirmation it is refused with `R_CONFIRMED_ID_CHANGED`, and accepted with one |
 | Derived CSV | For each valid file the derived `experiment_design.csv` matches a golden file to be added under `fixtures/expected/` in Stage 1 (byte comparison); for `v13` the golden file is produced by today's preprocessing from the equivalent legacy answers |
 | Migration | Legacy CSV with 0, 1 and ≥ 2 controls: 0/1 give deterministic references, ≥ 2 give an unpublishable draft; lenient values (`yes`, empty) are refused |
 | Version policy | `i09`, `i10` refused with a message naming supported version 1 |
@@ -53,12 +54,16 @@ reported first (intra-unit discrepancies are detected before channel identity, r
 | P04 | `v04`, `v05`, `v06`, `v17` | Units matching the declared lists | Stage 1-2: `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` naming the units; nothing processed |
 | P05 | `v08` | `TumorRegion` mask with values 0-5 | `R_MASK_CONTRADICTS_REPRESENTATION`; an `instances` mask with values 0/1 is accepted (pixels cannot prove instance semantics) |
 | P06 | `v12` | Two unnamed, identical-shape units with fluorophores physically swapped | No refusal: documented limit; preview + confirmation only |
-| P07 | `v13` | A new technical repeat appears in `DrugA/rep2` | Reconciliation: unit **new**, repeat `rep2` reopened (`confirmed = false` in the draft), nothing published until confirmed; images added inside an existing unit keep the confirmation |
-| P08 | `v16` | Folder `DrugA/rep1` renamed to `DrugA/rep1b` | Removed + new pending member, never auto-paired; publishing requires the user to assign it; `Day1` unchanged |
+| P07 | `v13` | A new technical repeat appears in `DrugA/rep2` | Reconciliation: unit **new**, repeat `rep2` reopened (`confirmed = false` in the draft), nothing published until confirmed |
+| P08 | `v03` | Folder `DrugA/experiment_23` renamed to `DrugA/experiment_23b` | Removed + new pending member, never auto-paired; publishing requires the user to assign it; `Day1` unchanged |
 | P09 | `v01` | `morphobricks.toml` is a symlink | `R_FILE_SYMLINK` |
 | P10 | `v07` | Masks folder holds an undeclared type `membrane` | `R_MASK_TYPE_NOT_DECLARED` |
 | P11 | `v09` | `Nuclei` masks for 0, then 300, then all FOVs | Valid at every step; completeness recorded in the manifest |
 | P12 | `v01` | A declared unit `DrugA/rep2/single` with every image excluded | `R_UNIT_NOT_FOUND` |
+| P13 | `v01` | An RGB (interleaved colour) TIFF in `CTRL/rep1` | `R_RGB_NOT_SUPPORTED` |
+| P14 | `v01` | `RunInputs` given a draft (reconciliation proposal, or a file with `confirmed = false`) | `A_DRAFT_REFUSED`; only the published `morphobricks.toml` is read |
+| P15 | `v13` | 5 FOVs added to an existing unit, same ordered channels and headers | Confirmation kept (not reopened), change reported and recorded; a changed channel list would reopen it |
+| P16 | `v01` | `v01` published; `t01`/`t02` candidate offered | `R_CONFIRMED_ID_CHANGED`; accepted only with a recorded re-confirmation; `v16` accepted with no invalidation |
 
 ## 4. Later stages (obligations recorded, not planned in detail)
 

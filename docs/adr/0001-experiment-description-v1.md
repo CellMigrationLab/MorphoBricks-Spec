@@ -1,7 +1,8 @@
 # ADR 0001: experiment description v1 (`morphobricks.toml`)
 
-- **Status:** Accepted (owner decisions of 6 November 2026). Specification only; nothing is
-  implemented.
+- **Status:** Accepted (owner decisions of 6 November 2026, including the later refinement
+  D5). Specification only; nothing is implemented. **TODO before Gate G0:** the fixed-SHA
+  consumer audit (roadmap S0.1) is not done.
 - **Tracking:** [RFC #1](https://github.com/CellMigrationLab/MorphoBricks-Spec/issues/1);
   [roadmap §2 and §5 Stage 0](../roadmap.md);
   [feasibility audit](../audits/rfc1-feasibility-2026-11-05.md);
@@ -25,8 +26,8 @@ Stage 0 freezes the decisions, the normative schema and the fixtures before any 
 1. **Format: TOML** (`morphobricks.toml`), strict parser + semantic validator: duplicate keys,
    unknown fields and implicit conversions refuse.
 2. **Biological-repeat identity: stable, user-confirmed canonical ID** (default the source folder
-   name when pairing is trivial); never changes automatically on rename/reorder; renames are
-   explicit recorded migrations.
+   name when pairing is trivial); never changes automatically on rename/reorder. (The clause
+   "renames are explicit recorded migrations" is superseded by D5: IDs never change.)
 3. **Channel aliases: user-confirmed only**; canonical token + optional display label + confirmed
    header evidence; never inferred from pixels or name similarity.
 4. **Scope: reduced v1**: conditions, canonical channels, repeat pairing, technical-repeat
@@ -38,7 +39,7 @@ Stage 0 freezes the decisions, the normative schema and the fixtures before any 
 
 5. Calibration stays in `calibration.csv` (not copied).
 6. `experiment_design.csv` stays a deterministic derived compatibility output.
-7. N35 comparability confirmation kept and reopened when discovery/grouping changes.
+7. N35 comparability confirmation kept; reopening is narrowed by D6.
 8. 2-D planes only in v1 (Z projection is a recorded preprocessing step, preprocessing #176).
 9. No per-FOV overrides.
 10. No brick routing.
@@ -56,14 +57,33 @@ Stage 0 freezes the decisions, the normative schema and the fixtures before any 
   `6e740196`, refuses shared 2-D masks and Z > 1); a mask has its image's axes.
 - `experiment`, `roles` and the boolean `control` are not v1 fields: `experiment` would be an FDR
   family declaration (MorphoCoverage configuration); "is a control" is derived from `reference`.
-- Retired canonical repeat IDs are kept in the file (`retired_repeats`) so that renames are
-  recorded and an ID is never reused for different data.
+- Confirmed IDs are immutable (D5). Friendly names are `display_name`; a mistyped ID is fixed
+  only by a recorded re-confirmation in the run manifest, not in the file.
 - Validation is split into three boundaries with distinct error namespaces: the spec (syntax and
   semantics, `E_*`), preprocessing (physical files, `R_*`) and the analysis layer (applicability,
   `A_*`).
 - No machine schema (JSON Schema) in Stage 0: cross-references, case rules and graph rules are
   not expressible in it, and TOML has no standard schema language. The normative prose and the
   fixtures with exact codes are the contract.
+
+### Owner decisions on the Stage 0 open questions (6 November 2026, all accepted)
+
+| # | Accepted decision | Rejected alternative | Spec | Fixtures |
+|---|---|---|---|---|
+| D1 | Keep optional `target` and `treatment_key` on conditions: plain strings, no runtime use until Stage 2 | Drop them until a consumer exists | §4.2 | `v01`, `v10`, `v21`, `i71` |
+| D2 | Refuse channel IDs equal to a MorphoRelate compartment name (list in §3.2, `E_ID_RESERVED`) | Allow them and rely on a column-prefix convention | §3.2 | `i61` |
+| D3 | A declared but unused channel is the warning `W_UNUSED_CHANNEL`; the file is valid | Error `E_UNUSED_CHANNEL` | §4.3 | `v22` |
+| D4 | Refuse a repeat ID equal to another repeat's source folder name (`E_REPEAT_ID_SHADOWS_SOURCE`) | Allow it and resolve by context | §4.4 | `i75` |
+| D5 | **Replaces** the earlier "recorded renames" decision: IDs of repeats, conditions and channels are immutable once confirmed; each has a mutable `display_name` used only for display (never identity, joins, pairing or cache keys; changing it invalidates nothing); display names are unique per kind (`E_DISPLAY_NAME_COLLISION`); an attempted ID change is `R_CONFIRMED_ID_CHANGED`; a mistyped ID is fixed only by a recorded re-confirmation | Renamable IDs with a `retired_repeats` table (old ID → new ID): it keeps identity mutable, needs tombstones, chain and reuse rules, and churns `biological_repeat`, FOV identities and caches | §4.6, §4.8 | `v16`, `i53`, `i76`, `i77`, `i82`, `t01`, `t02` |
+| D6 | N35 is reopened only when channels, layout or grouping change; new FOVs with the same confirmed layout do not reopen it (recorded, reported) | Reopen on any new image | §10 | P07, P15 |
+| D7 | Identities are stored and compared in Unicode NFC; equal after NFC is `E_ID_NFC_COLLISION`; IDs are never otherwise transformed | Compare raw code points (look-alike duplicates); or NFKC / case folding (changes meaning) | §3.3 | `v23`, `i78` |
+| D8 | Refuse RGB (interleaved colour) images in v1 (`R_RGB_NOT_SUPPORTED`) | Treat RGB as three channels | §8 | P13 |
+| D9 | Header names match exactly and case-sensitively; anything else needs a user-confirmed alias | Case-insensitive or similarity matching | §4.3 | `v11`, P03 |
+| D10 | Refuse a mask declared `binary` with more than two distinct values (`R_MASK_CONTRADICTS_REPRESENTATION`); declare `instances` instead | Accept and threshold | §4.5 | P05 |
+| D11 | Drafts are internal to preprocessing; `RunInputs` reads only confirmed, published files and refuses drafts (`A_DRAFT_REFUSED`) | Let consumers read drafts | §12 | `i37`, P14 |
+
+Also stated: expected `experiment_design.csv` outputs are deferred to Stage 1 (golden files); the
+fixed-SHA consumer audit (roadmap S0.1) remains TODO before Gate G0.
 
 ### Histogram representation: candidates and criteria only (not decided)
 
