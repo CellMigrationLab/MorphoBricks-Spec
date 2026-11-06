@@ -16,7 +16,7 @@ is executed by this repository.
   `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` (lifted at Stage 3).
 - Physical cases that need images (within-unit divergence, header contradictions, mask pixel
   contradictions, reconciliation) cannot be expressed by a TOML file alone; they are listed as
-  scenarios P01-P16 in the [conformance plan](../docs/conformance-plan.md#3-physical-scenarios-preprocessing-owned),
+  scenarios P01-P22 in the [conformance plan](../docs/conformance-plan.md#3-physical-scenarios-preprocessing-owned),
   built on the valid files below.
 - `v18` MUST parse to the same model as `v01` (round trip); `v21` differs from `v01` only in
   `display_name`, `target` and `treatment_key` values and `v16` only in `display_name` values, so
@@ -50,9 +50,27 @@ round of owner decisions:
 For the valid and transition files, a throw-away script (not committed) also checked that every
 declared ID is listed in `used_ids`, that every identity and `used_ids` entry is NFC, and that no
 display names collide within a kind after NFC and case folding; for `i86`-`i88` it confirmed the
-collision. The earlier full cross-check of every expected code (first round) was **not repeated**
-after the second round: the expected codes of the new and rewritten fixtures are by construction,
-not by execution. This is not a conformance claim for any brick.
+collision.
+
+## Reference-validator cross-check (6 November 2026, roadmap S0.1)
+
+A throw-away reference validator (Python 3.13, not committed: this repository holds no runtime
+code) implementing experiment-v1 §2-§6 phase by phase, plus the predecessor checks of §4.6,
+§4.4a and §4.9 expressible from two files, was run on every fixture. Results after this commit:
+
+- `valid/`: 27 of 27 accepted with exactly the listed warnings.
+- `invalid/`: 99 of 99 refused with exactly the listed code set, from the listed phase only.
+- `transitions/`: 5 of 5 valid alone (`t03` with `W_REPEAT_MISSING_CONDITIONS`); against their
+  predecessors `t01`, `t02`, `t04`, `t05` give exactly their listed codes. `t03` gives
+  `R_USED_ID_REUSED`, and also `R_CONFIRMED_ID_CHANGED` under a literal reading of §4.6 (c),
+  because repeat `rep1` gains a member folder; whether adding a member to a repeat is "another
+  entity" is an open owner question (S0.1 audit), so `t03` is unchanged.
+- `v18` parses to the same model as `v01`; `v16` and `v21` have the same four sections as `v01`
+  once `display_name`, `target` and `treatment_key` are omitted.
+
+The run found two transition fixtures inconsistent with §4.9 (`t01`, `t02` dropped the old IDs
+from `used_ids`); they are corrected above. This is a check of the fixtures against the text,
+not a conformance claim for any brick.
 
 ## Coverage of RFC #1 and its discussion
 
@@ -184,8 +202,8 @@ Valid alone; refused against the named published predecessor.
 
 | Fixture | Predecessor | Expected | Case |
 |---|---|---|---|
-| [`t01_repeat_id_changed`](transitions/t01_repeat_id_changed.toml) | `valid/v01` | `R_CONFIRMED_ID_CHANGED` unless re-confirmation is recorded | Repeats rep1/rep2 (same member folders) are now Day1/Day2. |
-| [`t02_channel_id_changed`](transitions/t02_channel_id_changed.toml) | `valid/v01` | `R_CONFIRMED_ID_CHANGED` unless re-confirmation is recorded | Channel ACTIN (same header evidence and positions) is now Actin. |
+| [`t01_repeat_id_changed`](transitions/t01_repeat_id_changed.toml) | `valid/v01` | `R_CONFIRMED_ID_CHANGED` unless re-confirmation is recorded | Repeats rep1/rep2 (same member folders) are now Day1/Day2; rep1, rep2 stay listed in `used_ids`. |
+| [`t02_channel_id_changed`](transitions/t02_channel_id_changed.toml) | `valid/v01` | `R_CONFIRMED_ID_CHANGED`, `R_USED_ID_DROPPED` | Channel ACTIN (same header evidence and positions) is now Actin, and ACTIN is no longer listed in `used_ids`. Listing it beside `Actin` would be `E_ID_CASE_COLLISION`, so a case-only ID change cannot be published even with a re-confirmation (owner question, S0.1 audit). |
 | [`t03_used_id_reused`](transitions/t03_used_id_reused.toml) | `valid/v25` | `R_USED_ID_REUSED` | DrugA (retired in v25) is declared again for a new source folder. Valid alone, with `W_REPEAT_MISSING_CONDITIONS` (rep2 has no DrugA member). |
 | [`t04_used_id_dropped`](transitions/t04_used_id_dropped.toml) | `valid/v25` | `R_USED_ID_DROPPED` | DrugA is no longer listed in `used_ids.conditions`. |
 | [`t05_confirmed_on_changed`](transitions/t05_confirmed_on_changed.toml) | `valid/v01` | `R_CONFIRMED_ON_CHANGED` (N35 not reopened) | rep1 unchanged except `confirmed_on` 2026-11-07. |
@@ -198,7 +216,7 @@ Valid alone; refused against the named published predecessor.
 | [`i02_invalid_utf8`](invalid/i02_invalid_utf8.toml) | Extra: encoding | `E_FILE_ENCODING` | 1 | A label contains the byte 0xFF (not UTF-8). |
 | [`i03_duplicate_condition_table`](invalid/i03_duplicate_condition_table.toml) | Extra: duplicate keys; audit §3.12 | `E_DUPLICATE_KEY` | 1 | [conditions.CTRL] declared twice (YAML would keep the second silently). |
 | [`i04_duplicate_key_quoted_vs_bare`](invalid/i04_duplicate_key_quoted_vs_bare.toml) | Extra: duplicate keys | `E_DUPLICATE_KEY` | 1 | [conditions."CTRL"] is the same key as [conditions.CTRL]. |
-| [`i05_duplicate_field`](invalid/i05_duplicate_field.toml) | Extra: duplicate keys | `E_DUPLICATE_KEY` | 1 | `label` written twice in one condition. |
+| [`i05_duplicate_field`](invalid/i05_duplicate_field.toml) | Extra: duplicate keys | `E_DUPLICATE_KEY` | 1 | `display_name` written twice in one condition. |
 | [`i06_duplicate_member_dotted_vs_table`](invalid/i06_duplicate_member_dotted_vs_table.toml) | Extra: duplicate keys | `E_DUPLICATE_KEY` | 1 | A member declared as a table and again by a dotted key (two members of one condition in one repeat). |
 | [`i07_unquoted_bareword`](invalid/i07_unquoted_bareword.toml) | Extra: implicit conversion (YAML `NO` -> False) | `E_TOML_SYNTAX` | 1 | source_repeat = NO, unquoted. |
 | [`i08_leading_zero_integer`](invalid/i08_leading_zero_integer.toml) | Extra: implicit conversion (YAML `012` -> 10) | `E_TOML_SYNTAX` | 1 | source_repeat = 012, unquoted. |
@@ -222,7 +240,7 @@ Valid alone; refused against the named published predecessor.
 | [`i26_source_index_field`](invalid/i26_source_index_field.toml) | Extra: RFC (order is the mapping) | `E_FORBIDDEN_FIELD` | 3 | A unit states `source_index` beside its ordered list. |
 | [`i27_toml_date_source_repeat`](invalid/i27_toml_date_source_repeat.toml) | Extra: implicit conversion (YAML date) | `E_TYPE` | 3 | source_repeat = 2026-01-01 is a TOML date, not text. |
 | [`i28_integer_source_repeat`](invalid/i28_integer_source_repeat.toml) | Extra: implicit conversion | `E_TYPE` | 3 | source_repeat = 12 (integer). |
-| [`i29_bool_label`](invalid/i29_bool_label.toml) | Extra: implicit conversion (YAML `off`) | `E_TYPE` | 3 | label = false. |
+| [`i29_bool_label`](invalid/i29_bool_label.toml) | Extra: implicit conversion (YAML `off`) | `E_TYPE` | 3 | display_name = false. |
 | [`i30_confirmed_on_toml_date`](invalid/i30_confirmed_on_toml_date.toml) | Extra: implicit conversion | `E_TYPE` | 3 | confirmed_on = 2026-11-06 (TOML date literal, not a string). |
 | [`i31_confirmed_on_bad_format`](invalid/i31_confirmed_on_bad_format.toml) | Extra: preprocessing contract §12 (spreadsheet dates) | `E_DATE_FORMAT` | 3 | confirmed_on = "06/11/2026". |
 | [`i32_confirmed_on_impossible_date`](invalid/i32_confirmed_on_impossible_date.toml) | Extra | `E_DATE_FORMAT` | 3 | confirmed_on = "2026-02-30". |
@@ -240,7 +258,7 @@ Valid alone; refused against the named published predecessor.
 | [`i44_missing_channels_table`](invalid/i44_missing_channels_table.toml) | Extra | `E_MISSING_FIELD` | 3 | No [channels] at all. |
 | [`i45_member_without_technical_repeats`](invalid/i45_member_without_technical_repeats.toml) | Extra | `E_MISSING_FIELD` | 3 | A member with no technical_repeats. |
 | [`i46_header_name_empty`](invalid/i46_header_name_empty.toml) | Extra: aliases | `E_TEXT_EMPTY` | 3 | header_names = [""]. |
-| [`i47_label_whitespace_only`](invalid/i47_label_whitespace_only.toml) | Extra | `E_TEXT_EMPTY` | 3 | label = "  ". |
+| [`i47_label_whitespace_only`](invalid/i47_label_whitespace_only.toml) | Extra | `E_TEXT_EMPTY` | 3 | display_name = "  ". |
 | [`i48_case_collision_conditions`](invalid/i48_case_collision_conditions.toml) | Extra: case collisions | `E_ID_CASE_COLLISION` | 4 | Conditions CTRL and ctrl. |
 | [`i49_case_collision_channels`](invalid/i49_case_collision_channels.toml) | Extra: case collisions | `E_ID_CASE_COLLISION` | 4 | Channels DNA and dna. |
 | [`i50_case_collision_source_repeats`](invalid/i50_case_collision_source_repeats.toml) | Extra: case collisions; preprocessing check_identity_case | `E_ID_CASE_COLLISION` | 4 | Source folders Rep1 (CTRL) and rep1 (DrugA): a label is spelled one way in the whole run. |

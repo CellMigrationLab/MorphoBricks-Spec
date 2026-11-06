@@ -231,22 +231,6 @@ files for none, some or all FOVs is valid (progressive segmentation, 0/1000 → 
   Products keyed on that ID are invalidated. Nothing about it is stored in the file.
 - The friendly name of any entity is `display_name` (§4.8), not the ID.
 
-### 4.8 Display names
-
-`display_name` (conditions, repeats, channels, masks) is for display only (reports, notebooks,
-plots). It MUST NOT be used for identity, joins, pairing, references or cache keys, and changing
-or adding it invalidates nothing (§9.3). A consumer MUST NOT accept a display name where an ID is
-expected, even when the two strings are equal and even when the display name is unique: a
-`reference`, member key or unit channel entry that names a display name is refused with the code
-of an unknown ID (`E_REFERENCE_UNKNOWN`, `E_UNKNOWN_CONDITION`, `E_UNKNOWN_CHANNEL`).
-
-Display names are kept exactly as typed: never normalized, trimmed or case-changed on read or
-write. They are unique within one kind (conditions, repeats, channels, masks; the same string may
-appear in two kinds): two display names of one kind whose keys are equal are
-`E_DISPLAY_NAME_COLLISION`, where the key of a name *x* is `NFC(casefold(NFC(x)))` with
-`str.casefold()` (so `Control` and `control`, `Straße` and `STRASSE`, decomposed and composed
-`Café` collide). The key is used for the comparison only and is never stored or used for lookup.
-
 ### 4.7 Forbidden fields
 
 These names are refused as `E_FORBIDDEN_FIELD` in **any** table, with a message naming where the
@@ -263,6 +247,21 @@ information belongs. A forbidden field is reported once, at its name; its value 
 | `retired_repeats`, `replaced_by` | None: IDs are immutable (§4.6); the only registry is `used_ids` (§4.9), IDs only and never a mapping |
 | `labchronicle`, `provenance`, `source_database` | Run manifest provenance (preprocessing, §9.3): lab-tool links are never part of this file |
 
+### 4.8 Display names
+
+`display_name` (conditions, repeats, channels, masks) is for display only (reports, notebooks,
+plots). It MUST NOT be used for identity, joins, pairing, references or cache keys, and changing
+or adding it invalidates nothing (§9.3). A consumer MUST NOT accept a display name where an ID is
+expected, even when the two strings are equal and even when the display name is unique: a
+`reference`, member key or unit channel entry that names a display name is refused with the code
+of an unknown ID (`E_REFERENCE_UNKNOWN`, `E_UNKNOWN_CONDITION`, `E_UNKNOWN_CHANNEL`).
+
+Display names are kept exactly as typed: never normalized, trimmed or case-changed on read or
+write. They are unique within one kind (conditions, repeats, channels, masks; the same string may
+appear in two kinds): two display names of one kind whose keys are equal are
+`E_DISPLAY_NAME_COLLISION`, where the key of a name *x* is `NFC(casefold(NFC(x)))` with
+`str.casefold()` (so `Control` and `control`, `Straße` and `STRASSE`, decomposed and composed
+`Café` collide). The key is used for the comparison only and is never stored or used for lookup.
 
 ### 4.9 Used IDs
 

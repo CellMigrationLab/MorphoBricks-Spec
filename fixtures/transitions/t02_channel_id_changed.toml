@@ -1,7 +1,7 @@
 # Fixture t02_channel_id_changed
-# Expected: R_CONFIRMED_ID_CHANGED (against predecessor valid/v01, without a recorded re-confirmation)
+# Expected: R_CONFIRMED_ID_CHANGED, R_USED_ID_DROPPED (against predecessor valid/v01, without a recorded re-confirmation)
 # Source: Owner refinement (6 Nov 2026)
-# Valid on its own, but channel ACTIN of v01 (same header evidence, same unit positions) is now `Actin`. Confirmed channel IDs are immutable; only display_name may change.
+# Valid on its own, but channel ACTIN of v01 (same header evidence, same unit positions) is now `Actin`. Confirmed channel IDs are immutable; only display_name may change. ACTIN is also no longer listed in used_ids (R_USED_ID_DROPPED); keeping it listed beside `Actin` would make the file itself invalid (E_ID_CASE_COLLISION, experiment-v1 4.9), so a case-only change of a confirmed ID can never be published.
 schema = "morphobricks-experiment"
 schema_version = 1
 

@@ -1,7 +1,7 @@
 # Fixture i29_bool_label
 # Expected: E_TYPE
 # Source: Extra: implicit conversion (YAML `off`)
-# label = false.
+# display_name = false.
 schema = "morphobricks-experiment"
 schema_version = 1
 
