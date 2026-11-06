@@ -26,10 +26,10 @@ target = "COL6A1"
 treatment_key = "siCol6a1"
 
 [channels.DNA]
-label = "DAPI"
+display_name = "DAPI"
 
 [channels.ACTIN]
-label = "F-actin"
+display_name = "F-actin"
 
 [repeats.rep1]
 confirmed = true

@@ -6,10 +6,10 @@ schema = "morphobricks-experiment"
 schema_version = 1
 
 [conditions.CTRL]
-label = "Control"
+display_name = "Control"
 
 [conditions.DrugA]
-label = "Drug A"
+display_name = "Drug A"
 reference = "CTRL"
 
 [repeats.rep1]

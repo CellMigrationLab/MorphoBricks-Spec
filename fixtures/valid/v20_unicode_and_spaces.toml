@@ -6,16 +6,16 @@ schema = "morphobricks-experiment"
 schema_version = 1
 
 [conditions."Wild type"]
-label = "Wild type (WT)"
+display_name = "Wild type (WT)"
 
 [conditions."Knock-out β1"]
 reference = "Wild type"
 
 [channels.DNA]
-label = "DAPI"
+display_name = "DAPI"
 
 [channels.ACTIN]
-label = "F-actin"
+display_name = "F-actin"
 
 [repeats."Réplica_1"]
 confirmed = true

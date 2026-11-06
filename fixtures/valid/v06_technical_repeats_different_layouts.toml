@@ -11,16 +11,16 @@ schema_version = 1
 reference = "CTRL"
 
 [channels.DNA]
-label = "DAPI"
+display_name = "DAPI"
 
 [channels.ACTIN]
-label = "F-actin"
+display_name = "F-actin"
 
 [channels.PAXILLIN]
-label = "Paxillin"
+display_name = "Paxillin"
 
 [channels.PHASE]
-label = "Phase contrast"
+display_name = "Phase contrast"
 
 [repeats.R001]
 confirmed = true

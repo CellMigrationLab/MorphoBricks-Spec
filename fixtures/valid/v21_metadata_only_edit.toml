@@ -6,19 +6,19 @@ schema = "morphobricks-experiment"
 schema_version = 1
 
 [conditions.CTRL]
-label = "Vehicle (DMSO 0.1%)"
+display_name = "Vehicle (DMSO 0.1%)"
 
 [conditions.DrugA]
-label = "Drug A"
+display_name = "Drug A"
 reference = "CTRL"
 treatment_key = "AZD0530"
 
 [channels.DNA]
-label = "DAPI"
+display_name = "DAPI"
 header_names = ["DAPI"]
 
 [channels.ACTIN]
-label = "F-actin"
+display_name = "F-actin"
 header_names = ["Phalloidin-488"]
 
 [repeats.rep1]

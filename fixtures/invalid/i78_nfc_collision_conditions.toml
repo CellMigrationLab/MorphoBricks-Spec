@@ -1,0 +1,62 @@
+# Fixture i78_nfc_collision_conditions
+# Expected: E_ID_NFC_COLLISION
+# Source: Owner decision 7 (6 Nov 2026)
+# Condition keys "Cafe\u0301" (decomposed) and "Caf\u00e9" (composed) are equal after NFC; TOML itself sees two different keys.
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions."Cafe\u0301"]
+display_name = "Control"
+
+[conditions."Caf\u00e9"]
+display_name = "Composed"
+
+[conditions.DrugA]
+display_name = "Drug A"
+reference = "Caf\u00e9"
+target = "SRC"
+treatment_key = "saracatinib"
+
+[channels.DNA]
+display_name = "DAPI"
+header_names = ["DAPI"]
+
+[channels.ACTIN]
+display_name = "F-actin"
+header_names = ["Phalloidin-488"]
+
+[repeats.rep1]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep1.members."Caf\u00e9"]
+source_repeat = "rep1"
+image_count = 12
+
+[repeats.rep1.members."Caf\u00e9".technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.rep1.members.DrugA]
+source_repeat = "rep1"
+image_count = 11
+
+[repeats.rep1.members.DrugA.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.rep2]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep2.members."Caf\u00e9"]
+source_repeat = "rep2"
+image_count = 10
+
+[repeats.rep2.members."Caf\u00e9".technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.rep2.members.DrugA]
+source_repeat = "rep2"
+image_count = 10
+
+[repeats.rep2.members.DrugA.technical_repeats.single]
+channels = ["DNA", "ACTIN"]

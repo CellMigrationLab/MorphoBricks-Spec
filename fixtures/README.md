@@ -16,17 +16,24 @@ is executed by this repository.
   `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` (lifted at Stage 3).
 - Physical cases that need images (within-unit divergence, header contradictions, mask pixel
   contradictions, reconciliation) cannot be expressed by a TOML file alone; they are listed as
-  scenarios P01-P12 in the [conformance plan](../docs/conformance-plan.md#3-physical-scenarios-preprocessing-owned),
+  scenarios P01-P16 in the [conformance plan](../docs/conformance-plan.md#3-physical-scenarios-preprocessing-owned),
   built on the valid files below.
 - `v18` MUST parse to the same model as `v01` (round trip); `v21` differs from `v01` only in the
-  `conditions` section (section digests for `channels`, `repeats`, `masks` equal).
+  `conditions` section (section digests for `channels`, `repeats`, `masks` equal); `v16` differs
+  from `v01` only in `display_name` values (all four section digests equal).
+- `transitions/` holds two files that are valid alone but are refused against a named published
+  predecessor (`R_CONFIRMED_ID_CHANGED`, experiment-v1 §4.6); they need the predecessor file and
+  are not part of the single-file valid/invalid rules.
+- Expected `experiment_design.csv` outputs (golden files) are deferred to Stage 1. The fixed-SHA
+  consumer audit (roadmap S0.1) is still TODO before Gate G0.
 
 ## Syntax check (6 November 2026)
 
 Checked with Python 3.13 `tomllib` (`tomllib.loads` on the UTF-8 decoded bytes):
 
-- `valid/`: 21 of 21 parse.
-- `invalid/`: 73 of 81 parse as TOML and are invalid only by the v1 rules. The 8 phase-1 fixtures
+- `valid/`: 23 of 23 parse.
+- `transitions/`: 2 of 2 parse.
+- `invalid/`: 74 of 82 parse as TOML and are invalid only by the v1 rules. The 8 phase-1 fixtures
   fail deliberately: `i01_bom` (`TOMLDecodeError`, BOM read as an invalid statement),
   `i02_invalid_utf8` (`UnicodeDecodeError`), `i03`-`i06` (`TOMLDecodeError`, "Cannot declare ...
   twice" / "Cannot overwrite a value"), `i07`, `i08` (`TOMLDecodeError`, "Invalid value" /
@@ -79,22 +86,41 @@ claim for any brick.
 | Topic | Fixtures |
 |---|---|
 | Duplicate keys | `i03`-`i06` |
-| Case collisions | `i48`-`i53`, `i68` (no folding when resolving) |
+| Case collisions | `i48`-`i52`, `i68` (no folding when resolving) |
+| NFC | `v23`, `i78` |
+| Display names | `v16`, `i53`, `i76`, `i77` |
 | Unknown and forbidden fields | `i16`-`i19`; `i20`-`i26` |
 | Implicit-conversion traps | `i07`, `i08`, `i12`-`i14`, `i19`, `i27`-`i30`, `i33`, `i34`, `i36`, `i38`, `i39`; valid side `v15` |
 | Reference DAG | `i64`-`i68`, `i41`; `v10`, `v19` |
 | Swapped channel order | `v04`, `v06` |
-| Extra / missing channel | `v05`, `v17`, `i69`, `i71` |
+| Extra / missing channel | `v05`, `v17`, `v22`, `i69` |
 | Within-unit divergence | `i20`; P01, P02 |
 | Instance vs binary masks | `v07`, `v08`, `i42`, `i43`; P05 |
 | Partial masks | `v09` |
-| Renames | `v16`, `i53`, `i75`-`i78`; P08 |
+| Immutable IDs (no renames) | `v16`, `i75`, `i82`, `t01`, `t02`; P08, P16 |
 | Aliases (header evidence) | `v11`, `v12`, `i46`, `i81`; P03 |
 | Versioning | `i09`-`i15` |
-| Identities | `v14`, `v15`, `v20`, `i54`-`i63` |
+| Identities | `v14`, `v15`, `v20`, `v23`, `i54`-`i63`, `i78` |
+| Target / treatment key | `v01`, `v10`, `v21`, `i71` |
 | Encoding | `i01`, `i02` |
 
-## Valid fixtures (21)
+### Owner decisions of 6 November 2026 (ADR 0001) and their fixtures
+
+| # | Decision | Fixtures / scenarios |
+|---|---|---|
+| D1 | Optional `target`, `treatment_key` | `v01`, `v10`, `v21`; `i71` (non-string) |
+| D2 | Channel ID = compartment name refused | `i61` |
+| D3 | Unused channel is a warning | `v22` |
+| D4 | Repeat ID = another repeat's source folder refused | `i75` |
+| D5 | IDs immutable; `display_name` mutable and unique; no `retired_repeats` | `v16` (display names change, identity identical), `i53`, `i76`, `i77` (collisions), `i82` (no table), `t01`, `t02`; P16 |
+| D6 | N35 reopens only on channel/layout/grouping change | P07, P15 |
+| D7 | NFC identities; NFC collision refused | `v23`, `i78` |
+| D8 | RGB refused | P13 |
+| D9 | Header names exact, case-sensitive | `v11`; P03 |
+| D10 | `binary` mask with > 2 values refused | P05 |
+| D11 | Drafts internal; `RunInputs` refuses them | `i37`; P14 |
+
+## Valid fixtures (23)
 
 | Fixture | Source | Expected | Homogeneous | Case |
 |---|---|---|---|---|
@@ -113,14 +139,25 @@ claim for any brick.
 | [`v13_homogeneous_legacy`](valid/v13_homogeneous_legacy.toml) | Adversarial 4 | pass | yes | A legacy homogeneous dataset: folder-name repeat IDs, one control, same layout everywhere. The derived experiment_design.csv must be byte-identical to today's; numerical outputs must keep parity. |
 | [`v14_no_repeat_folders`](valid/v14_no_repeat_folders.toml) | Extra: single convention | pass | yes | No biological-repeat or technical-repeat folders: the source label is `single` (N31, one group for the whole experiment). |
 | [`v15_toml_keys_are_text`](valid/v15_toml_keys_are_text.toml) | Extra: implicit-conversion traps (valid side) | pass | yes | Folder labels that YAML would retype (2026-01-01, 012, NO, 1.0, off) stay exact text in TOML keys and strings. The quoted key "1.0" is needed: a bare 1.0 would be a dotted key. |
-| [`v16_explicit_repeat_rename`](valid/v16_explicit_repeat_rename.toml) | Extra: renames | pass | yes | The user explicitly renamed canonical repeat rep1 to Day1 and removed repeat rep9; both are recorded in retired_repeats, so neither ID can be reused. Source labels are unchanged. |
+| [`v16_display_name_change`](valid/v16_display_name_change.toml) | Owner refinement: immutable IDs | pass | yes | v01 with every `display_name` changed or added (conditions, channels, repeats). Identity is identical: all four section digests equal v01's, nothing may be invalidated. |
 | [`v17_partial_channel_presence`](valid/v17_partial_channel_presence.toml) | Adversarial 9; addendum §3 | pass | **no** | PHASE exists only in CTRL/R002/acquisition_1. For a PHASE request R002 is partially represented and R001 unavailable: the analysis layer must refuse (A_SCOPE_INCOMPLETE) or record a user-selected subset, never drop or re-weight silently. |
 | [`v18_inline_and_dotted_forms`](valid/v18_inline_and_dotted_forms.toml) | Extra: round trip | pass | yes | Same model as v01 written with inline tables, dotted keys and quoted keys; parse(v18) must equal parse(v01). |
 | [`v19_warnings_unpaired`](valid/v19_warnings_unpaired.toml) | Extra: reference DAG semantics | pass + `W_REFERENCE_UNPAIRED`, `W_REPEAT_MISSING_CONDITIONS` | yes | Valid with warnings: CTRL only in rep1, DrugA only in rep2, so the repeats miss conditions (W_REPEAT_MISSING_CONDITIONS) and DrugA cannot be paired with its reference (W_REFERENCE_UNPAIRED). |
 | [`v20_unicode_and_spaces`](valid/v20_unicode_and_spaces.toml) | Extra: identities | pass | yes | Condition folder labels with spaces and non-ASCII text are valid labels (quoted keys); channel and mask IDs stay tokens. |
-| [`v21_metadata_only_edit`](valid/v21_metadata_only_edit.toml) | Adversarial 10 | pass | yes | v01 with only the conditions section edited (labels, target, treatment_key). The channels, repeats and masks section digests equal v01's, so no pixel-derived product may be invalidated. |
+| [`v21_metadata_only_edit`](valid/v21_metadata_only_edit.toml) | Adversarial 10 | pass | yes | v01 with only the conditions section edited (display names, target, treatment_key). The channels, repeats and masks section digests equal v01's, so no pixel-derived product may be invalidated. |
+| [`v22_unused_channel_warning`](valid/v22_unused_channel_warning.toml) | Owner decision 3 | pass + `W_UNUSED_CHANNEL` | yes | PHASE is declared but acquired by no unit: valid with a warning, never an error. |
+| [`v23_non_nfc_identity`](valid/v23_non_nfc_identity.toml) | Owner decision 7 | pass | yes | A condition key written decomposed (e + U+0301) and referenced composed (U+00E9) is one condition after NFC. |
 
-## Invalid fixtures (81)
+## Transition fixtures (2)
+
+Valid alone; refused against the named published predecessor.
+
+| Fixture | Predecessor | Expected | Case |
+|---|---|---|---|
+| [`t01_repeat_id_changed`](transitions/t01_repeat_id_changed.toml) | `valid/v01` | `R_CONFIRMED_ID_CHANGED` unless re-confirmation is recorded | Repeats rep1/rep2 (same member folders) are now Day1/Day2. |
+| [`t02_channel_id_changed`](transitions/t02_channel_id_changed.toml) | `valid/v01` | `R_CONFIRMED_ID_CHANGED` unless re-confirmation is recorded | Channel ACTIN (same header evidence and positions) is now Actin. |
+
+## Invalid fixtures (82)
 
 | Fixture | Source | Expected code(s) | Phase | Case |
 |---|---|---|---|---|
@@ -176,7 +213,7 @@ claim for any brick.
 | [`i50_case_collision_source_repeats`](invalid/i50_case_collision_source_repeats.toml) | Extra: case collisions; preprocessing check_identity_case | `E_ID_CASE_COLLISION` | 4 | Source folders Rep1 (CTRL) and rep1 (DrugA): a label is spelled one way in the whole run. |
 | [`i51_case_collision_repeat_ids`](invalid/i51_case_collision_repeat_ids.toml) | Extra: case collisions | `E_ID_CASE_COLLISION` | 4 | Canonical repeats rep1 and REP1. |
 | [`i52_case_collision_technical_repeats`](invalid/i52_case_collision_technical_repeats.toml) | Extra: case collisions | `E_ID_CASE_COLLISION` | 4 | Technical repeats acq_1 and Acq_1 in different members. |
-| [`i53_case_collision_retired_vs_current`](invalid/i53_case_collision_retired_vs_current.toml) | Extra: renames | `E_ID_CASE_COLLISION` | 4 | Retired REP1 vs current rep1. |
+| [`i53_display_name_collision_conditions`](invalid/i53_display_name_collision_conditions.toml) | Owner refinement | `E_DISPLAY_NAME_COLLISION` | 5 | Two conditions with display_name "Control". |
 | [`i54_channel_id_missing_text`](invalid/i54_channel_id_missing_text.toml) | Extra: identities (decision D-e) | `E_ID_TEXT` | 4 | Channel ID `NA` (tables read it as missing). |
 | [`i55_condition_outer_whitespace`](invalid/i55_condition_outer_whitespace.toml) | Extra: identities (decision D-e) | `E_ID_TEXT` | 4 | Condition key " CTRL" with a leading space. |
 | [`i56_source_repeat_null`](invalid/i56_source_repeat_null.toml) | Extra: identities | `E_ID_TEXT` | 4 | source_repeat = "null". |
@@ -194,14 +231,15 @@ claim for any brick.
 | [`i68_reference_case_mismatch`](invalid/i68_reference_case_mismatch.toml) | Extra: case rules (no folding on resolution) | `E_REFERENCE_UNKNOWN` | 5 | reference = "ctrl" does not resolve to CTRL. |
 | [`i69_unknown_channel_in_unit`](invalid/i69_unknown_channel_in_unit.toml) | Extra: extra channel not declared | `E_UNKNOWN_CHANNEL` | 5 | A unit lists PHASE, which is not declared. |
 | [`i70_duplicate_channel_in_unit`](invalid/i70_duplicate_channel_in_unit.toml) | Extra | `E_DUPLICATE_CHANNEL_IN_UNIT` | 5 | channels = ["DNA", "ACTIN", "DNA"]. |
-| [`i71_unused_channel`](invalid/i71_unused_channel.toml) | Extra: missing channel | `E_UNUSED_CHANNEL` | 5 | PHASE declared but acquired by no unit. |
+| [`i71_target_not_text`](invalid/i71_target_not_text.toml) | Owner decision 1 | `E_TYPE` | 3 | target = 5 (plain strings only). |
 | [`i72_member_unknown_condition`](invalid/i72_member_unknown_condition.toml) | Extra | `E_UNKNOWN_CONDITION` | 5 | A member for undeclared condition DrugB. |
 | [`i73_condition_without_members`](invalid/i73_condition_without_members.toml) | Extra | `E_CONDITION_WITHOUT_MEMBERS` | 5 | Condition DrugB declared, no member. |
 | [`i74_source_folder_in_two_repeats`](invalid/i74_source_folder_in_two_repeats.toml) | Extra: repeat pairing | `E_SOURCE_REPEAT_REUSED` | 5 | Source folder CTRL/exp7 belongs to repeats Day2 and Day3. |
 | [`i75_repeat_id_swap`](invalid/i75_repeat_id_swap.toml) | Extra: renames | `E_REPEAT_ID_SHADOWS_SOURCE` | 5 | Repeat rep1 holds folder rep2 and repeat rep2 holds folder rep1 for CTRL. |
-| [`i76_retired_id_reused`](invalid/i76_retired_id_reused.toml) | Extra: renames (never reuse an ID) | `E_REPEAT_ID_REUSED` | 5 | rep1 is both retired and current. |
-| [`i77_retired_chain_dangling`](invalid/i77_retired_chain_dangling.toml) | Extra: renames | `E_RETIRED_CHAIN` | 5 | Retired Day0 replaced_by Day9, which is neither current nor retired. |
-| [`i78_retired_chain_cycle`](invalid/i78_retired_chain_cycle.toml) | Extra: renames | `E_RETIRED_CHAIN` | 5 | Retired A -> B -> A never reaches a current repeat. |
+| [`i76_display_name_collision_repeats`](invalid/i76_display_name_collision_repeats.toml) | Owner refinement | `E_DISPLAY_NAME_COLLISION` | 5 | Repeats rep1 and rep2 both display as "Day 1". |
+| [`i77_display_name_collision_channels`](invalid/i77_display_name_collision_channels.toml) | Owner refinement | `E_DISPLAY_NAME_COLLISION` | 5 | Channels DNA and ACTIN both display as "DAPI". |
+| [`i78_nfc_collision_conditions`](invalid/i78_nfc_collision_conditions.toml) | Owner decision 7 | `E_ID_NFC_COLLISION` | 4 | Condition keys decomposed and composed "Café" are one identity after NFC. |
 | [`i79_mask_source_channel_unknown`](invalid/i79_mask_source_channel_unknown.toml) | Extra: masks | `E_UNKNOWN_CHANNEL` | 5 | source_channels names undeclared Hoechst. |
 | [`i80_mask_source_type_reused`](invalid/i80_mask_source_type_reused.toml) | Extra: masks | `E_MASK_SOURCE_TYPE_REUSED` | 5 | Two masks with source_type nuclei. |
 | [`i81_header_names_duplicate`](invalid/i81_header_names_duplicate.toml) | Extra: aliases | `E_DUPLICATE_VALUE` | 5 | header_names = ["DAPI", "DAPI"]. |
+| [`i82_retired_repeats_forbidden`](invalid/i82_retired_repeats_forbidden.toml) | Owner refinement | `E_FORBIDDEN_FIELD` | 3 | A `retired_repeats` table: IDs are immutable, v1 has no rename table. |

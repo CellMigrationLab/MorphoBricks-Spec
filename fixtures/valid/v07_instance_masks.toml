@@ -8,10 +8,10 @@ schema_version = 1
 [conditions.CTRL]
 
 [channels.DNA]
-label = "DAPI"
+display_name = "DAPI"
 
 [channels.ACTIN]
-label = "F-actin"
+display_name = "F-actin"
 
 [repeats.rep1]
 confirmed = true
@@ -33,4 +33,4 @@ source_channels = ["DNA"]
 source_type = "cells"
 representation = "instances"
 source_channels = ["ACTIN", "DNA"]
-label = "Whole cells"
+display_name = "Whole cells"

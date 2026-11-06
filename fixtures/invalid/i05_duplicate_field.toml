@@ -1,24 +1,24 @@
 # Fixture i05_duplicate_field
 # Expected: E_DUPLICATE_KEY
 # Source: Extra: duplicate keys
-# `label` written twice in one condition.
+# `display_name` written twice in one condition.
 schema = "morphobricks-experiment"
 schema_version = 1
 
 [conditions.CTRL]
-label = "Control"
-label = "Vehicle"
+display_name = "Control"
+display_name = "Vehicle"
 
 [conditions.DrugA]
-label = "Drug A"
+display_name = "Drug A"
 reference = "CTRL"
 
 [channels.DNA]
-label = "DAPI"
+display_name = "DAPI"
 header_names = ["DAPI"]
 
 [channels.ACTIN]
-label = "F-actin"
+display_name = "F-actin"
 
 [repeats.rep1]
 confirmed = true

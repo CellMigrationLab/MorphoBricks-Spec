@@ -6,18 +6,18 @@ schema = "morphobricks-experiment"
 schema_version = 1
 
 [conditions.CTRL]
-label = "Control"
+display_name = "Control"
 
 [conditions.DrugA]
-label = "Drug A"
+display_name = "Drug A"
 reference = "DrugA"
 
 [channels.DNA]
-label = "DAPI"
+display_name = "DAPI"
 header_names = ["DAPI"]
 
 [channels.ACTIN]
-label = "F-actin"
+display_name = "F-actin"
 
 [repeats.rep1]
 confirmed = true

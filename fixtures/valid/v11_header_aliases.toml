@@ -8,7 +8,7 @@ schema_version = 1
 [conditions.CTRL]
 
 [channels.DNA]
-label = "Nuclei stain"
+display_name = "Nuclei stain"
 header_names = ["DAPI", "Hoechst 33342"]
 
 [channels.ACTIN]

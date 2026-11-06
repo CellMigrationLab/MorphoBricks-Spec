@@ -1,23 +1,23 @@
-# Fixture i71_unused_channel
-# Expected: E_UNUSED_CHANNEL
-# Source: Extra: missing channel
-# PHASE declared but acquired by no unit.
+# Fixture v22_unused_channel_warning
+# Expected: PASS + W_UNUSED_CHANNEL
+# Source: Owner decision 3 (6 Nov 2026)
+# PHASE is declared but no unit acquires it. The file is valid; the reader reports the warning W_UNUSED_CHANNEL (a declared channel can be pre-confirmed or a unit excluded). It is never an error.
 schema = "morphobricks-experiment"
 schema_version = 1
 
 [conditions.CTRL]
-label = "Control"
+display_name = "Control"
 
 [conditions.DrugA]
-label = "Drug A"
+display_name = "Drug A"
 reference = "CTRL"
 
 [channels.DNA]
-label = "DAPI"
+display_name = "DAPI"
 header_names = ["DAPI"]
 
 [channels.ACTIN]
-label = "F-actin"
+display_name = "F-actin"
 
 [channels.PHASE]
 

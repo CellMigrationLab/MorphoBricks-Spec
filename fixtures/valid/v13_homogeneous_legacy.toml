@@ -14,10 +14,10 @@ reference = "CTRL"
 reference = "CTRL"
 
 [channels.DNA]
-label = "DAPI"
+display_name = "DAPI"
 
 [channels.ACTIN]
-label = "F-actin"
+display_name = "F-actin"
 
 [repeats.rep1]
 confirmed = true

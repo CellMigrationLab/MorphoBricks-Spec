@@ -1,0 +1,31 @@
+# Fixture v23_non_nfc_identity
+# Expected: PASS
+# Source: Owner decision 7 (6 Nov 2026)
+# The condition key is written decomposed (e + U+0301) and referenced composed (U+00E9). Identities are read in NFC, so both are the same condition "Caf\u00e9": the file is valid, and a writer emits the composed form only.
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions."Cafe\u0301"]
+
+[conditions.DrugA]
+reference = "Caf\u00e9"
+
+[channels.DNA]
+
+[repeats.rep1]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep1.members."Caf\u00e9"]
+source_repeat = "rep1"
+image_count = 3
+
+[repeats.rep1.members."Caf\u00e9".technical_repeats.single]
+channels = ["DNA"]
+
+[repeats.rep1.members.DrugA]
+source_repeat = "rep1"
+image_count = 3
+
+[repeats.rep1.members.DrugA.technical_repeats.single]
+channels = ["DNA"]

@@ -1,0 +1,59 @@
+# Fixture t01_repeat_id_changed
+# Expected: R_CONFIRMED_ID_CHANGED (against predecessor valid/v01, without a recorded re-confirmation)
+# Source: Owner refinement (6 Nov 2026)
+# Valid on its own, but the repeat with members CTRL/rep1 and DrugA/rep1 was confirmed as `rep1` in v01 and is now `Day1` (likewise rep2 -> Day2). A confirmed ID is never changed in place; display_name is the field for a friendlier name. Accepted only with an explicit, recorded re-confirmation (e.g. a mistyped ID).
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions.CTRL]
+display_name = "Control"
+
+[conditions.DrugA]
+display_name = "Drug A"
+reference = "CTRL"
+target = "SRC"
+treatment_key = "saracatinib"
+
+[channels.DNA]
+display_name = "DAPI"
+header_names = ["DAPI"]
+
+[channels.ACTIN]
+display_name = "F-actin"
+header_names = ["Phalloidin-488"]
+
+[repeats.Day1]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.Day1.members.CTRL]
+source_repeat = "rep1"
+image_count = 12
+
+[repeats.Day1.members.CTRL.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.Day1.members.DrugA]
+source_repeat = "rep1"
+image_count = 11
+
+[repeats.Day1.members.DrugA.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.Day2]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.Day2.members.CTRL]
+source_repeat = "rep2"
+image_count = 10
+
+[repeats.Day2.members.CTRL.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.Day2.members.DrugA]
+source_repeat = "rep2"
+image_count = 10
+
+[repeats.Day2.members.DrugA.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
