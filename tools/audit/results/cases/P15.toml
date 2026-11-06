@@ -1,0 +1,111 @@
+# Matrix audit case P15: P=same, L=tech-different, K=chain, M=instances, H=named
+# Spec v1 expects: accepted (Stage 1-2: R_HETEROGENEOUS_LAYOUT_NOT_ENABLED)
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions.CTRL]
+source_folder = "CTRL"
+
+[conditions.DrugA]
+source_folder = "DrugA"
+reference = "CTRL"
+
+[conditions.DrugB]
+source_folder = "DrugB"
+reference = "DrugA"
+
+[channels.ACTIN]
+header_names = ["ACTIN"]
+
+[channels.DAPI]
+header_names = ["DAPI"]
+
+[repeats.rep1]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep1.members.CTRL]
+source_repeat = "rep1"
+image_count = 4
+
+[repeats.rep1.members.CTRL.technical_repeats.acq1]
+source_folder = "acq1"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep1.members.CTRL.technical_repeats.acq2]
+source_folder = "acq2"
+channels = ["ACTIN", "DAPI"]
+
+[repeats.rep1.members.DrugA]
+source_repeat = "rep1"
+image_count = 4
+
+[repeats.rep1.members.DrugA.technical_repeats.acq1]
+source_folder = "acq1"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep1.members.DrugA.technical_repeats.acq2]
+source_folder = "acq2"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep1.members.DrugB]
+source_repeat = "rep1"
+image_count = 4
+
+[repeats.rep1.members.DrugB.technical_repeats.acq1]
+source_folder = "acq1"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep1.members.DrugB.technical_repeats.acq2]
+source_folder = "acq2"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep2]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep2.members.CTRL]
+source_repeat = "rep2"
+image_count = 4
+
+[repeats.rep2.members.CTRL.technical_repeats.acq1]
+source_folder = "acq1"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep2.members.CTRL.technical_repeats.acq2]
+source_folder = "acq2"
+channels = ["ACTIN", "DAPI"]
+
+[repeats.rep2.members.DrugA]
+source_repeat = "rep2"
+image_count = 4
+
+[repeats.rep2.members.DrugA.technical_repeats.acq1]
+source_folder = "acq1"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep2.members.DrugA.technical_repeats.acq2]
+source_folder = "acq2"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep2.members.DrugB]
+source_repeat = "rep2"
+image_count = 4
+
+[repeats.rep2.members.DrugB.technical_repeats.acq1]
+source_folder = "acq1"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep2.members.DrugB.technical_repeats.acq2]
+source_folder = "acq2"
+channels = ["DAPI", "ACTIN"]
+
+[masks.Cells]
+source_type = "Cells"
+representation = "instances"
+
+[used_ids]
+conditions = ["CTRL", "DrugA", "DrugB"]
+channels = ["ACTIN", "DAPI"]
+repeats = ["rep1", "rep2"]
+technical_repeats = ["acq1", "acq2"]

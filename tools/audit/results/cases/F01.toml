@@ -1,0 +1,35 @@
+# Matrix audit case F01: single flat folder (root is the leaf)
+# Spec v1 expects: accepted
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions.single]
+source_folder = "single"
+
+[channels.ACTIN]
+header_names = ["ACTIN"]
+
+[channels.DAPI]
+header_names = ["DAPI"]
+
+[repeats.single]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.single.members.single]
+source_repeat = "single"
+image_count = 2
+
+[repeats.single.members.single.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[masks.Cells]
+source_type = "Cells"
+representation = "instances"
+
+[used_ids]
+conditions = ["single"]
+channels = ["ACTIN", "DAPI"]
+repeats = ["single"]
+technical_repeats = ["single"]

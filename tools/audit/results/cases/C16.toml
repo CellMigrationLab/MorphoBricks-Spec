@@ -1,0 +1,71 @@
+# Matrix audit case C16: RGB images
+# Spec v1 expects: accepted
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions.CTRL]
+source_folder = "CTRL"
+
+[conditions.DrugA]
+source_folder = "DrugA"
+reference = "CTRL"
+
+[channels.B]
+
+[channels.G]
+
+[channels.R]
+
+[repeats.rep1]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep1.members.CTRL]
+source_repeat = "rep1"
+image_count = 2
+
+[repeats.rep1.members.CTRL.technical_repeats.single]
+source_folder = "single"
+channels = ["R", "G", "B"]
+image_type = "rgb"
+
+[repeats.rep1.members.DrugA]
+source_repeat = "rep1"
+image_count = 2
+
+[repeats.rep1.members.DrugA.technical_repeats.single]
+source_folder = "single"
+channels = ["R", "G", "B"]
+image_type = "rgb"
+
+[repeats.rep2]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep2.members.CTRL]
+source_repeat = "rep2"
+image_count = 2
+
+[repeats.rep2.members.CTRL.technical_repeats.single]
+source_folder = "single"
+channels = ["R", "G", "B"]
+image_type = "rgb"
+
+[repeats.rep2.members.DrugA]
+source_repeat = "rep2"
+image_count = 2
+
+[repeats.rep2.members.DrugA.technical_repeats.single]
+source_folder = "single"
+channels = ["R", "G", "B"]
+image_type = "rgb"
+
+[masks.Cells]
+source_type = "Cells"
+representation = "instances"
+
+[used_ids]
+conditions = ["CTRL", "DrugA"]
+channels = ["B", "G", "R"]
+repeats = ["rep1", "rep2"]
+technical_repeats = ["single"]

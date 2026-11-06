@@ -1,0 +1,67 @@
+# Matrix audit case F16: reserved/forbidden folder names: condition `control`, repeat `z`, technical repeat `files`
+# Spec v1 expects: accepted
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions.DrugA]
+source_folder = "DrugA"
+reference = "ctrl"
+
+[conditions.ctrl]
+source_folder = "control"
+
+[channels.ACTIN]
+header_names = ["ACTIN"]
+
+[channels.DAPI]
+header_names = ["DAPI"]
+
+[repeats.R1]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.R1.members.DrugA]
+source_repeat = "z"
+image_count = 2
+
+[repeats.R1.members.DrugA.technical_repeats.acq1]
+source_folder = "files"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.R1.members.ctrl]
+source_repeat = "z"
+image_count = 2
+
+[repeats.R1.members.ctrl.technical_repeats.acq1]
+source_folder = "files"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep2]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep2.members.DrugA]
+source_repeat = "rep2"
+image_count = 2
+
+[repeats.rep2.members.DrugA.technical_repeats.acq1]
+source_folder = "files"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep2.members.ctrl]
+source_repeat = "rep2"
+image_count = 2
+
+[repeats.rep2.members.ctrl.technical_repeats.acq1]
+source_folder = "files"
+channels = ["DAPI", "ACTIN"]
+
+[masks.Cells]
+source_type = "Cells"
+representation = "instances"
+
+[used_ids]
+conditions = ["DrugA", "ctrl"]
+channels = ["ACTIN", "DAPI"]
+repeats = ["R1", "rep2"]
+technical_repeats = ["acq1"]

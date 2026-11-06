@@ -1,0 +1,106 @@
+# Matrix audit case K03: several controls for different treatments
+# Spec v1 expects: accepted
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions.DMSO]
+source_folder = "DMSO"
+
+[conditions.DrugA]
+source_folder = "DrugA"
+reference = "DMSO"
+
+[conditions.KO]
+source_folder = "KO"
+reference = "WT"
+
+[conditions.WT]
+source_folder = "WT"
+
+[channels.ACTIN]
+header_names = ["ACTIN"]
+
+[channels.DAPI]
+header_names = ["DAPI"]
+
+[repeats.rep1]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep1.members.DMSO]
+source_repeat = "rep1"
+image_count = 2
+
+[repeats.rep1.members.DMSO.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep1.members.DrugA]
+source_repeat = "rep1"
+image_count = 2
+
+[repeats.rep1.members.DrugA.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep1.members.KO]
+source_repeat = "rep1"
+image_count = 2
+
+[repeats.rep1.members.KO.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep1.members.WT]
+source_repeat = "rep1"
+image_count = 2
+
+[repeats.rep1.members.WT.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep2]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep2.members.DMSO]
+source_repeat = "rep2"
+image_count = 2
+
+[repeats.rep2.members.DMSO.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep2.members.DrugA]
+source_repeat = "rep2"
+image_count = 2
+
+[repeats.rep2.members.DrugA.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep2.members.KO]
+source_repeat = "rep2"
+image_count = 2
+
+[repeats.rep2.members.KO.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep2.members.WT]
+source_repeat = "rep2"
+image_count = 2
+
+[repeats.rep2.members.WT.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[masks.Cells]
+source_type = "Cells"
+representation = "instances"
+
+[used_ids]
+conditions = ["DMSO", "DrugA", "KO", "WT"]
+channels = ["ACTIN", "DAPI"]
+repeats = ["rep1", "rep2"]
+technical_repeats = ["single"]
