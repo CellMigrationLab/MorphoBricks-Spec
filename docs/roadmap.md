@@ -135,7 +135,7 @@ Pooling, fitted normalization, CellPatcher exports, MorphoFeature features, Morp
 **S0.1 Owner decisions and contract freeze**
 - Decide TOML, naming/alias rules, stable canonical repeat policy, mask semantics, compatibility, comparability confirmation and histogram benchmark criteria.
 - Record accepted decisions and rejected alternatives in an ADR, including why no per-FOV overrides and no brick routing.
-- **TODO:** audit the merged preprocessing mask restriction and current normalization/CellPatcher consumers at fixed SHAs; record evidence and unknowns (not done; required before Gate G0).
+- **Done (6 November 2026):** fixed-SHA audit of the merged preprocessing mask restriction and of every consumer, with evidence and unknowns ([PR #5](https://github.com/CellMigrationLab/MorphoBricks-Spec/pull/5)); its questions Q1-Q13 are answered by the third round of owner decisions in [ADR 0001](adr/0001-experiment-description-v1.md) (AQ1-AQ13) and applied to the normative text and fixtures.
 
 **S0.2 Normative schema**
 - Write `docs/experiment-v1.md` with complete field definitions, required/optional keys, ID uniqueness/case rules, canonical/source identity and reference DAG semantics.
@@ -148,6 +148,8 @@ Pooling, fitted normalization, CellPatcher exports, MorphoFeature features, Morp
 - Document expected pass/refuse diagnostics and exact provenance. No implementation claim until executable tests exist.
 
 **Gate G0:** owner decisions recorded; normative schema and fixture catalogue reviewed; no runtime changes.
+
+G0 checklist (6 November 2026, awaiting owner review of PR #3): decisions recorded (ADR 0001, three rounds); schema reviewed; fixtures conform to the text (reference-validator cross-check, [fixtures/README.md](../fixtures/README.md)); consumer audit done (PR #5); no runtime changes.
 
 ### Stage 1 — additive preprocessing authoring, after first tags
 

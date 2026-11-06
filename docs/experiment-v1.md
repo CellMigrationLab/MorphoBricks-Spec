@@ -1,8 +1,12 @@
 # MorphoBricks experiment description, schema version 1 (normative)
 
 - **Status:** Normative specification, Stage 0 (6 November 2026). No reader implements it yet.
-  **TODO before Gate G0:** the fixed-SHA audit of current consumers (roadmap S0.1) is not done;
-  until it is, the consumer statements here are not audited.
+  The fixed-SHA audit of current consumers (roadmap S0.1) is done
+  ([PR #5](https://github.com/CellMigrationLab/MorphoBricks-Spec/pull/5), audit
+  `s01-consumer-audit-2026-11-06.md` on branch `claude/s01-consumer-audit`); the owner answered
+  its questions AQ1-AQ13 on 6 November 2026 ([ADR 0001](adr/0001-experiment-description-v1.md),
+  third round) and this text applies them. A statement about a consumer is as audited as that
+  audit; it is not a conformance claim for any brick.
 - **Decisions:** [ADR 0001](adr/0001-experiment-description-v1.md).
 - **Fixtures:** [fixtures/README.md](../fixtures/README.md). **Conformance:**
   [conformance-plan.md](conformance-plan.md).
@@ -55,6 +59,7 @@ v1 analyses 2-D planes only. A Z stack is projected by a recorded preprocessing 
 | Canonical repeat ID | key of `repeats` | Canonical (user-confirmed; default the source folder label) | Label |
 | Source repeat | `source_repeat` | Source (biological-repeat folder label) | Label |
 | Technical repeat | key of `technical_repeats` | Source = canonical (folder label, or `single`) | Label |
+| Image type | `image_type` | Declared by the user per imaging unit (§4.4b) | Enumeration |
 | Channel ID | key of `channels` | Canonical | Token |
 | Mask ID | key of `masks` | Canonical (object-set name) | Token + object set |
 | Mask source type | `source_type` | Source (discovered mask type) | Label |
@@ -62,18 +67,28 @@ v1 analyses 2-D planes only. A Z stack is projected by a recorded preprocessing 
 
 ### 3.2 Rule sets
 
-- **Label** (preprocessing decision D-e, `check_identity_text`, preprocessing `a786290b`): text;
+- **Label** (preprocessing decision D-e, `check_identity_text`, preprocessing v0.4.0 `bc7b872`): text;
   no leading or trailing whitespace (nothing is trimmed: refused as written); not `""`, `NA`, `nan`, `none`, `null`, `n/a` or `<NA>` in any
   case (`E_ID_TEXT`).
-- **Token** (MorphoFeature `naming.py`, `803e617a`): the Label rules, plus the regular expression
-  `^[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*$` (`E_ID_SYNTAX`; this also excludes the feature-column
-  separator `__`). A channel ID whose case-folded form is one of `whole`, `cell`, `nucleus`,
-  `cytoplasm`, `ring`, `expanded_nucleus` (the MorphoRelate compartment names; this is the whole
-  reserved list for channels, and a new compartment name needs a new `schema_version`) is
-  `E_ID_RESERVED`. A channel ID MUST NOT equal one of them in any case.
-- **Object set** (MorphoFeature `is_reserved_object_set`): a mask ID whose case-folded form is one
-  of the six names above, or whose case-folded `_`-separated parts include `in`, is
-  `E_ID_RESERVED`.
+- **Token** (MorphoFeature `naming.py`, MorphoFeature v0.1.0 `182b373`): the Label rules, plus the
+  regular expression `^[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*$` (`E_ID_SYNTAX`; this also excludes
+  the feature-column separator `__`). The two checks are independent rules: an identity that breaks
+  both is reported with both codes (§6, one code per broken rule).
+- **Reserved list** (one list, shared by channel IDs and mask IDs; AQ4). A channel ID or a mask ID
+  whose case-folded form (`str.casefold()`) is in the list is `E_ID_RESERVED`; `ring`, `Ring` and
+  `RING` are all refused. The list is closed: a new entry needs a new `schema_version`.
+
+  | Names | Source |
+  |---|---|
+  | `whole`, `cell`, `nucleus`, `cytoplasm`, `ring`, `expanded_nucleus` | MorphoRelate compartment names; MorphoFeature `naming.py:44-59` (`182b373`) |
+  | `condition`, `biological_repeat`, `repeat`, `technical_repeat`, `position_id`, `image_file`, `image_path`, `mask_file`, `patch_file`, `patch_id`, `label_id`, `z`, `z0`, `z1`, `c`, `t` | MorphoRelate reserved column names, `registry/_expand.py:41-59` (MorphoRelate v0.1.1 `160ad23`; name rules `:68-115`) |
+
+  The reserved list is not the forbidden-name list of §4.7, which is compared exactly and applies
+  to field names and ID keys. A name in both (`z`) is reported by the earlier phase only.
+- **Object set** (MorphoFeature `is_reserved_object_set`): in addition to the reserved list, a mask
+  ID whose case-folded `_`-separated parts include `in` is `E_ID_RESERVED`.
+- **RGB tokens:** `R`, `G` and `B` are the fixed channel IDs of RGB units (§4.4b); they are not on
+  the reserved list and are valid channel IDs, with the extra rules of §4.4b.
 - **`single`:** an identity of any kind whose case-folded form is `single` MUST be exactly
   `single`. A technical repeat `single` MUST be the only technical repeat of its member; a member
   with `source_repeat = "single"` MUST be the only member of its condition in the file
@@ -83,8 +98,10 @@ v1 analyses 2-D planes only. A Z stack is projected by a recorded preprocessing 
 
 - **NFC.** Identities (the keys and identity fields of §3.1, and every entry of `used_ids`) are
   Unicode NFC. A writer MUST emit NFC. A reader MUST refuse an identity that is not NFC
-  (`E_ID_NOT_NFC`, reported for every such identity, including `reference` values and members'
-  keys). A reader never transforms an identity: no normalization, trimming, case folding, parsing
+  (`E_ID_NOT_NFC`, reported for every such identity, including `reference` values, members' keys,
+  unit `channels` entries and `source_channels` entries). The check of a reference is NFC only and
+  belongs to phase 4, so a non-NFC channel reference is `E_ID_NOT_NFC` and never
+  `E_UNKNOWN_CHANNEL` (AQ13). A reader never transforms an identity: no normalization, trimming, case folding, parsing
   or repair of any kind, and so it never resolves a reference through a transformed spelling.
   Display names are not identities and are not checked (§4.8). A folder label read from disk that
   is not NFC is refused by preprocessing (`R_FOLDER_NOT_NFC`), never normalized and never renamed;
@@ -104,6 +121,26 @@ v1 analyses 2-D planes only. A Z stack is projected by a recorded preprocessing 
 - **Immutability and no reuse.** Once a repeat, condition or channel is confirmed, its ID never
   changes (§4.6) and is never reused after removal (§4.9). Only `display_name` may change, at any
   time.
+
+### 3.4 Keys downstream: the source label stays, the canonical repeat ID is added (AQ5)
+
+- The existing FOV key (`condition`, `biological_repeat`, `technical_repeat`, `position_id`) is
+  **unchanged**. `biological_repeat` in it stays the **source repeat**, the source folder label.
+  FOV, patch and object identities, fitted-scaling keys, caches and exports keep their current
+  spelling; a consumer MUST NOT replace the source label by the canonical repeat ID in any of
+  them.
+- The canonical repeat ID is **added** next to the key, as the field `repeat_group` (the column
+  name of the legacy design file, §11). Grouping and pairing MUST use `repeat_group`: pooling of
+  normalization and scaling, pairing of conditions and families in MorphoCoverage, and any
+  statement about biological N. A consumer MUST NOT group or pair by `biological_repeat` when a
+  description exists, and MUST NOT fall back to folder-name grouping.
+- `repeat_group` is a function of the FOV key (a member belongs to exactly one repeat,
+  `E_SOURCE_REPEAT_REUSED`), so adding it creates no new identity: two FOVs with equal keys have
+  equal `repeat_group`. Products that pool over a repeat key their caches on the `repeats` section
+  digest (§9.3); products of one FOV keep keying on the FOV key.
+- Consequence: `rep1` of `CTRL` and `rep1` of `DrugA` may be different repeats (`v30`) and the same
+  source label may be in two repeats under different conditions; the key stays unique because it
+  includes the condition.
 
 ## 4. Tables and fields
 
@@ -142,20 +179,33 @@ MUST NOT use either for grouping, pairing, joins, contrasts, family definitions 
 (§9.3 omits them from every digest). A future use as a grouping key needs a new `schema_version`
 that makes it an identity.
 
+**Prefill only (AQ3).** A consumer MAY offer the values as a *suggestion* to prefill an input of
+its own, for example MorphoCoverage's reagent grouping. The suggestion is shown to the user, who
+confirms or edits it **inside that consumer**; the confirmed grouping is the consumer's own input,
+recorded in its own configuration, and is the only thing the analysis reads. An unconfirmed
+prefill is never used, and a later edit of `target` or `treatment_key` in the file changes no
+confirmed grouping, no digest and no cache key.
+
 ### 4.3 `channels.<channel ID>`
 
 | Key | Type | Req | Rule |
 |---|---|---|---|
 | `display_name` | non-empty text | no | Display only (§4.8), e.g. `DAPI` |
-| `header_names` | array of non-empty text | no (default `[]`) | Header channel names the user confirmed as evidence for this channel; no duplicates (`E_DUPLICATE_VALUE`); order not semantic |
+| `header_names` | array of non-empty text | no (default `[]`) | Header channel names the user confirmed as evidence for this channel; stored as typed (not identities: no Label, Token or NFC check; outer whitespace is part of the name); no duplicates, where two entries equal after NFC are duplicates (`E_DUPLICATE_VALUE`); order not semantic. Not allowed for `R`, `G`, `B` (§4.4b) |
 
 A channel that appears in no technical repeat's `channels` is **valid**; the reader reports the warning `W_UNUSED_CHANNEL`. A declared but unused channel is never an error, and never an implicit zero or default.
 
 Header evidence (enforced by preprocessing, §8): a non-empty header channel name read at source
-index *i* of an image in a unit MUST match **exactly and case-sensitively** (after NFC, no
-trimming, no folding, no similarity) a member of `header_names` of the channel at position *i* of
-that unit's list, else `R_HEADER_CONTRADICTION`; any other spelling needs a user-confirmed alias
-(a new `header_names` entry). This holds even when the header
+index *i* of an image in a unit MUST match a member of `header_names` of the channel at position
+*i* of that unit's list, else `R_HEADER_CONTRADICTION`. **Matching rule (AQ7):** the name read from
+the header and the `header_names` entry are each converted to NFC, and the results are compared
+code point by code point. Nothing else is applied: **no trimming** (outer whitespace is part of
+the name, so a header ` DAPI` matches only an entry ` DAPI`), no case folding, no similarity. The
+NFC form is a comparison key only; it is never stored, and the header name is recorded as read.
+Any other spelling needs a user-confirmed alias (a new `header_names` entry). Preprocessing
+therefore MUST stop trimming header channel names (it trims today, `channel_names_trimmed`,
+preprocessing `zarr_input.py:68`): this is a Stage 1 change and the raw name is what is recorded
+and compared. This holds even when the header
 name equals the channel ID or display name: aliases are only ever user-confirmed, never inferred from
 name similarity, case or pixels. An image without header names needs no evidence. The same header
 name MAY be evidence for different channels (fluorophores are reused across acquisitions).
@@ -183,6 +233,34 @@ condition; at most one per condition per repeat, guaranteed by TOML key uniquene
 | Key | Type | Req | Rule |
 |---|---|---|---|
 | `channels` | array of channel IDs | yes | ≥ 1 entry; ordered: entry *i* is source channel C*i*; every entry declared (`E_UNKNOWN_CHANNEL`); no repeats (`E_DUPLICATE_CHANNEL_IN_UNIT`) |
+| `image_type` | text | no | Only the value `rgb` (`E_ENUM`: exact, lower case); absent = an ordinary channel image. User-declared, never inferred (§4.4b) |
+
+**§4.4b RGB imaging units (AQ6; supersedes the D8 refusal).** RGB (interleaved colour) is an
+accepted, **declared** image type, per imaging unit:
+
+- A unit with `image_type = "rgb"` MUST list exactly `["R", "G", "B"]`, in this order, as its
+  `channels` (source samples 0, 1, 2): any other count, order, case or IDs is
+  `E_RGB_UNIT_CHANNELS`.
+- `R`, `G`, `B` are fixed tokens. A unit without `image_type = "rgb"` MUST NOT list a channel whose
+  case-folded ID is `r`, `g` or `b` (`E_RGB_TOKEN_MISUSE`).
+- They have **no aliases**: a channel whose case-folded ID is `r`, `g` or `b` MUST NOT have a
+  non-empty `header_names` (`E_RGB_ALIAS`). `display_name` is allowed (display only).
+- The image type is declared by the user and is **never inferred** from pixels, dtype, channel
+  count or file name. Preprocessing checks it against the image **header metadata** only (the
+  colour interpretation and samples per pixel that the format states, for example TIFF
+  photometric interpretation or OME `Interleaved`), in both directions: a unit declared `rgb` whose
+  header says it is not, or a unit not declared `rgb` whose header says it is, is
+  `R_IMAGE_TYPE_CONTRADICTS_HEADER`. A format whose header states no colour interpretation cannot
+  contradict the declaration, which then stands on user confirmation and is recorded in the
+  manifest as not header-verified.
+- The spec gives RGB **no scientific meaning**: no grey conversion, luminance, stain separation
+  or joint-channel rule. Each brick owns the meaning and MUST declare, in its own documented
+  capabilities, whether it supports RGB; undeclared means unsupported. An analysis request that
+  includes an RGB unit's channels for a brick without RGB support is refused at analysis
+  (`A_RGB_NOT_SUPPORTED`, §8), never converted or split into grey channels silently.
+- A file MAY hold RGB and non-RGB units; their lists differ, so that layout is heterogeneous
+  (`R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` in Stage 1-2). A unit's `image_type` is part of the
+  `repeats` section digest (§9.3).
 
 **§4.4a `confirmed_on` is a user fact.** It is the calendar date of the user's confirmation
 action. A writer MUST NOT default, infer or refresh it (not from the write time, the read time,
@@ -208,33 +286,83 @@ Repeat rules:
 | Key | Type | Req | Rule |
 |---|---|---|---|
 | `source_type` | text | yes | Exact discovered mask type (Label rules); one mask per source type (`E_MASK_SOURCE_TYPE_REUSED`) |
-| `representation` | text | yes | `instances` or `binary` (`E_ENUM`); user-confirmed, never inferred from dtype, values or names. A mask declared `binary` with more than two distinct values is refused by preprocessing (`R_MASK_CONTRADICTS_REPRESENTATION`); the user must declare `instances` |
+| `representation` | text | yes | `instances` or `binary` (`E_ENUM`); user-confirmed, never inferred from dtype, values or names. A mask declared `binary` with more than two distinct values is refused by preprocessing's mask step (`R_MASK_CONTRADICTS_REPRESENTATION`, §4.5a); the user must declare `instances` |
 | `source_channels` | array of channel IDs | no | Provenance only (what the mask was derived from); not a restriction on measured channels; each declared (`E_UNKNOWN_CHANNEL`); no duplicates (`E_DUPLICATE_VALUE`); order not semantic |
 | `display_name` | non-empty text | no | Display only (§4.8) |
 
 Mask files, pairing, completeness and fingerprints stay in the run manifest. A declared mask with
 files for none, some or all FOVs is valid (progressive segmentation, 0/1000 → 1000/1000).
 
+**§4.5a When the representation is checked (AQ10).** `R_MASK_CONTRADICTS_REPRESENTATION` needs
+mask pixels. It is checked **in the preprocessing mask step** (the step that reads mask pixels),
+for every mask file as it is added: for a progressive mask, **for each new batch**, on the new
+files. Publishing `morphobricks.toml` MUST NOT read mask pixels; it records, per mask and file
+set in the run manifest, the status `checked` (with the checked files and their fingerprints) or
+`not yet checked`. A run that uses a mask file whose status is `not yet checked` MUST refuse
+(`A_MASK_UNCHECKED`, §8); it never checks implicitly and never assumes. A new batch of files is
+`not yet checked` until the mask step has read it. Pixels cannot prove `instances` (an integer
+mask holding only 0 and 1 is accepted as declared).
+
+**§4.5b Grouped (`parent_labels`) masks are out of scope in v1 (AQ8).** MorphoRelate's third
+representation `parent_labels` (preprocessing kind `grouped`) has no v1 value:
+`representation = "parent_labels"` is `E_ENUM`. A grouped mask cannot be declared `instances`
+(wrong objects) or `binary` (more than two values: `R_MASK_CONTRADICTS_REPRESENTATION`), so it
+is not described, and not analysed through a description, in v1. A design for it follows with a
+later `schema_version` (v1.1); nothing here predicts its form.
+
+**§4.5c A binary mask is never an object set by default (AQ9).** A request that uses a `binary`
+mask as an object set is `A_MASK_NOT_INSTANCES`. The only way around it is an **explicit,
+per-request, recorded conversion** to instances chosen in the request, for example CellPatcher
+`binary_mask_policy="connected_components"`: it is recorded in the run manifest with the mask ID,
+the method and its parameters, applies to that request only, and is never automatic, never a
+default and never stored in `morphobricks.toml`, where `representation` stays `binary`
+(`binary_mask_policy` and `mask_conversion` are `E_FORBIDDEN_FIELD`, §4.7). The numerical method
+stays in the brick that owns it.
+
 ### 4.6 Immutable IDs
 
 - Once confirmed, the ID of a repeat, condition or channel MUST NOT change. There is no rename
   and no retired-ID table. A rename in the file would be a different ID for the same data.
+- **What a changed entity is (AQ1).** An entity is what the published file says an ID holds: for a
+  repeat, its member folders `(condition, source_repeat)`; for a condition, its source repeat
+  folders over all repeats; for a channel, its positions `(condition, source_repeat, technical
+  repeat, index)` and its `header_names`. An entity is *changed* only when something it held in
+  the published file is **removed or reassigned**. **Adding** does not change it: a new member
+  folder joining an existing repeat, a new repeat folder of an existing condition, a new unit or
+  position of a channel, a new alias, is not `R_CONFIRMED_ID_CHANGED`. (It may reopen the N35
+  confirmation, §10; reopening is not an ID change.)
 - Preprocessing MUST refuse, as `R_CONFIRMED_ID_CHANGED`, a candidate file (compared with the
   published file it was drafted from, §10) in which (a) a repeat with the same member folders
   `(condition, source_repeat)` carries another ID, (b) a channel's ID is replaced by another ID at
-  every unit position it held with the same header evidence, or (c) an ID that is declared in both files now names a different entity (other member
-  folders for a repeat or condition, other positions or evidence for a channel). An ID that was
-  removed and comes back is `R_USED_ID_REUSED` (§4.9). A condition ID is its folder label, so a renamed
-  folder is a removed member plus a new pending one (§7).
+  every unit position it held with the same header evidence, or (c) an ID that is declared in both
+  files names a changed entity (some member folder, position or alias it held is removed or
+  reassigned). Removing or reassigning is accepted only with an explicit, recorded user
+  confirmation (the same record as for a mistyped ID, below); the confirmation of a removal that
+  §10 requires is that record. An ID that was removed and comes back is `R_USED_ID_REUSED`
+  (§4.9). A condition ID is its folder label, so a renamed folder is a removed member plus a new
+  pending one (§7).
 - A mistyped ID is fixed only by an explicit, recorded re-confirmation: a user action that
   writes a new file and records old ID, new ID, date and both file SHA-256 in the run manifest.
   Products keyed on that ID are invalidated. Nothing about it is stored in the file.
+- **A case-only correction needs a new ID (AQ2).** `ACTIN` cannot be corrected to `Actin`: the
+  retired spelling stays in `used_ids` and the new one collides with it
+  (`E_ID_CASE_COLLISION`, §4.9). The correction is a new, non-colliding ID (for example
+  `ActinStain`) with the recorded re-confirmation above, and `display_name` (here `Actin`) carries
+  the appearance. The old spelling stays listed and is never reused.
 - The friendly name of any entity is `display_name` (§4.8), not the ID.
+- **Publication reports a set (AQ2).** When several `R_*` refusals apply to one candidate,
+  preprocessing reports **every** applicable code, not the first (`t02` is
+  `R_CONFIRMED_ID_CHANGED` and `R_USED_ID_DROPPED`).
 
 ### 4.7 Forbidden fields
 
 These names are refused as `E_FORBIDDEN_FIELD` in **any** table, with a message naming where the
-information belongs. A forbidden field is reported once, at its name; its value is not examined:
+information belongs, and they apply both to **field names** and to **ID keys** (the key of a
+condition, channel, repeat, member, technical repeat or mask; AQ13). The comparison is exact and
+case-sensitive. A forbidden name is reported once, at its name; its value is not examined. A
+source folder label equal to one of these names (a condition `control`, a technical repeat
+`files`) therefore cannot be a condition or technical-repeat ID in v1 and cannot be described
+until the folder is renamed on disk; a `source_repeat` value is not a key and is not affected.
 
 | Field | Belongs to |
 |---|---|
@@ -242,6 +370,7 @@ information belongs. A forbidden field is reported once, at its name; its value 
 | `pixel_size`, `calibration` | `calibration.csv` |
 | `fovs`, `files`, `paths`, `overrides`, `exclude`, `fingerprints` | Run manifest / preprocessing inputs; no per-FOV statements |
 | `bricks`, `routes`, `features`, `normalization`, `statistics`, `contrasts` | Analysis requests / brick and MorphoCoverage configuration |
+| `binary_mask_policy`, `mask_conversion` | The analysis request that records a per-request binary-to-instances conversion (§4.5c) |
 | `control`, `roles`, `experiment` | Derived from `reference` / analysis requests / MorphoCoverage FDR families |
 | `source_index`, `channel_count` | Implied by the order and length of `channels` |
 | `retired_repeats`, `replaced_by` | None: IDs are immutable (§4.6); the only registry is `used_ids` (§4.9), IDs only and never a mapping |
@@ -284,7 +413,8 @@ date or a reason.
   drafted from (`R_USED_ID_DROPPED`: removing an entity keeps its ID listed), or (b) declares as
   an entity an ID that is listed but not declared there (`R_USED_ID_REUSED`). Rule (b) applies
   even when the same source folder returns: it needs a new ID. The registry carries no mapping,
-  so it cannot say which entity an ID once named.
+  so it cannot say which entity an ID once named. A case-only correction therefore needs a new,
+  non-colliding ID (§4.6).
 - Scope of the guarantee: the published file's lineage inside one output folder (§10 compares each
   publication with the file it replaces). A new output folder starts a new lineage and the
   registry cannot see across it; the run manifest history is the only cross-folder record
@@ -311,6 +441,11 @@ MUST report every error of that phase, each with the code, the table path (e.g.
 `repeats.Day1.members.CTRL.technical_repeats.single.channels[2]`) and the offending value.
 Warnings are reported only for a file without errors and never block publication. Conformance
 compares the **set of codes** of the reported phase ([fixtures](../fixtures/README.md)).
+**One code per broken rule (AQ13):** each rule has its own code and a reader reports every rule
+that an identity or value breaks, so ` DNA` as a channel ID is `E_ID_TEXT` (outer whitespace) and
+`E_ID_SYNTAX` (the regular expression), and a decomposed key is `E_ID_NOT_NFC` in addition to any
+other rule it breaks. A rule is never reported twice under two codes, and a reference is checked
+for NFC only (phase 4) before it is resolved (phase 5).
 
 | Phase | Code | Meaning |
 |---|---|---|
@@ -322,7 +457,7 @@ compares the **set of codes** of the reported phase ([fixtures](../fixtures/READ
 | 2 | `E_SCHEMA_VERSION_UNSUPPORTED` | `schema_version` an integer other than 1 |
 | 2 | `E_TYPE` | `schema` or `schema_version` of the wrong TOML type |
 | 3 Structure | `E_UNKNOWN_FIELD` | Field not defined for its table |
-| 3 | `E_FORBIDDEN_FIELD` | Field from §4.7 |
+| 3 | `E_FORBIDDEN_FIELD` | Field name or ID key from §4.7 |
 | 3 | `E_MISSING_FIELD` | Required field absent |
 | 3 | `E_TYPE` | Wrong TOML type (no conversion) |
 | 3 | `E_EMPTY` | Required table/array is empty |
@@ -333,14 +468,17 @@ compares the **set of codes** of the reported phase ([fixtures](../fixtures/READ
 | 3 | `E_REPEAT_UNCONFIRMED` | `confirmed = false` in a published file |
 | 4 Identity | `E_ID_TEXT` | Label rule violated |
 | 4 | `E_ID_SYNTAX` | Token regular expression violated |
-| 4 | `E_ID_RESERVED` | Reserved compartment / object-set name (channel IDs: §3.2 list) |
-| 4 | `E_ID_NOT_NFC` | An identity (key, reference, source repeat, `used_ids` entry) is not Unicode NFC; never normalized |
+| 4 | `E_ID_RESERVED` | Name on the reserved list of §3.2 (channel and mask IDs), or a mask ID with an `in` part |
+| 4 | `E_ID_NOT_NFC` | An identity (key, reference, source repeat, unit `channels` or `source_channels` entry, `used_ids` entry) is not Unicode NFC; never normalized |
 | 4 | `E_ID_CASE_COLLISION` | Two identities of one scope equal ignoring case (`used_ids` entries share the scope of their kind) |
 | 4 | `E_SINGLE_MISUSE` | `single` in another case or not alone |
 | 5 Semantics | `E_UNKNOWN_CONDITION` | Member key is not a declared condition ID |
 | 5 | `E_UNKNOWN_CHANNEL` | Unit or `source_channels` names an undeclared channel ID |
 | 5 | `E_DUPLICATE_CHANNEL_IN_UNIT` | A channel twice in one unit |
-| 5 | `E_DUPLICATE_VALUE` | Duplicate in `header_names`, `source_channels` or a `used_ids` list |
+| 5 | `E_DUPLICATE_VALUE` | Duplicate in `header_names` (equal after NFC), `source_channels` or a `used_ids` list |
+| 5 | `E_RGB_UNIT_CHANNELS` | A unit with `image_type = "rgb"` whose `channels` is not exactly `["R", "G", "B"]` (§4.4b) |
+| 5 | `E_RGB_TOKEN_MISUSE` | A unit without `image_type = "rgb"` lists a channel whose case-folded ID is `r`, `g` or `b` (§4.4b) |
+| 5 | `E_RGB_ALIAS` | A channel whose case-folded ID is `r`, `g` or `b` has non-empty `header_names` (§4.4b) |
 | 5 | `E_DISPLAY_NAME_COLLISION` | Two display names of one kind equal after NFC and case folding (§4.8) |
 | 5 | `E_USED_ID_MISSING` | A declared condition, channel or repeat ID is not in `used_ids` (§4.9) |
 | 5 | `E_CONDITION_WITHOUT_MEMBERS` | Declared condition in no repeat |
@@ -376,11 +514,17 @@ validation: a reader MUST NOT try to interpret fields of a version it does not s
   (the canonical ID does not change).
 - **Legacy `experiment_design.csv` → v1:** read with the strict reader (no `yes`/`no`/empty
   coercion). `repeat_group` → canonical repeat ID; `biological_repeat` → `source_repeat`;
-  `image_count`, `confirmed`, `confirmed_on` copied; technical repeats and channel lists come from
-  discovery and user confirmation. Controls: 0 marked → no `reference`; 1 marked → every other
+  `image_count`, `confirmed`, `confirmed_on` copied (see the next point for a group whose rows
+  have different dates); technical repeats and channel lists come from discovery and user
+  confirmation. Controls: 0 marked → no `reference`; 1 marked → every other
   condition references it; ≥ 2 marked → a draft with unresolved references that cannot be
   published until the user answers (no name-stem guessing). A legacy design that violates v1
   rules (e.g. `E_REPEAT_ID_SHADOWS_SOURCE`) MUST be refused with the code, not repaired.
+- **Legacy groups with different `confirmed_on` (AQ12).** v1 has one date per repeat. A legacy
+  `repeat_group` whose rows carry different dates takes the **latest** date (what preprocessing's
+  `ExperimentDesign.confirmed_on` returns today, `design.py:216-218`) and the migration records a
+  note listing each folder's original date. It never takes the clock. A group with no dated row
+  cannot be published until the user supplies the date of their confirmation.
 
 ## 8. Validation boundaries
 
@@ -395,22 +539,23 @@ Required preprocessing refusals (`R_*`):
 | Code | Meaning |
 |---|---|
 | `R_FILE_SYMLINK` | `morphobricks.toml` is a symlink |
-| `R_CONFIRMED_ID_CHANGED` | A confirmed ID was changed, or a declared ID now names another entity (§4.6), without a recorded re-confirmation |
+| `R_CONFIRMED_ID_CHANGED` | A confirmed ID was changed, or a declared ID names a changed entity (something it held was removed or reassigned; adding is not a change), without a recorded re-confirmation (§4.6) |
 | `R_USED_ID_REUSED` | A candidate declares an ID that `used_ids` lists as retired (§4.9) |
 | `R_USED_ID_DROPPED` | A candidate omits an ID listed in `used_ids` of the file it replaces (§4.9) |
 | `R_CONFIRMED_ON_CHANGED` | `confirmed_on` of a repeat whose confirmation was not reopened differs from the published file (§4.4a) |
 | `R_PUBLISHED_FILE_CHANGED` | The SHA-256 of the published file at publication differs from the draft's recorded base (§10) |
 | `R_DRAFT_BASE_MISSING` | A draft has no recorded base SHA-256 (§10) |
-| `R_FOLDER_NOT_NFC` | A folder label read from disk is not NFC (§3.3) |
+| `R_FOLDER_NOT_NFC` | A folder label or a discovered mask type name read from disk is not NFC (§3.3) |
 | `R_UNIT_NOT_FOUND` | A declared imaging unit has no included image |
 | `R_UNIT_NOT_DECLARED` | A discovered imaging unit is not in the file (reconciliation draft required) |
 | `R_CHANNEL_COUNT_MISMATCH` | An image's channel count differs from its unit's list length |
-| `R_UNIT_NOT_HOMOGENEOUS` | FOVs of one unit differ in channel count, interpreted axes or header names at one C index; the message names FOV, path and C index |
-| `R_HEADER_CONTRADICTION` | A header name at C*i* is not in the confirmed `header_names` of the unit's channel at *i* |
+| `R_UNIT_NOT_HOMOGENEOUS` | FOVs of one unit differ in channel count, image type, interpreted axes or header names at one C index; the message names FOV, path and C index |
+| `R_HEADER_CONTRADICTION` | A header name at C*i* is not, after NFC of both sides and with no trimming (§4.3), in the confirmed `header_names` of the unit's channel at *i* |
+| `R_IMAGE_TYPE_CONTRADICTS_HEADER` | A unit's declared image type (`rgb` or absent, §4.4b) contradicts the image header metadata, in either direction; pixels are never examined |
 | `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` | Stage 1–2 only: the units do not all have the same ordered list; names the units; lifted at Stage 3 |
 | `R_MASK_TYPE_NOT_DECLARED` | A discovered mask type has no `masks` entry |
-| `R_MASK_CONTRADICTS_REPRESENTATION` | A mask declared `binary` holds more than two distinct values |
-| `R_RGB_NOT_SUPPORTED` | Interleaved colour (RGB) image: refused in v1, no channel semantics |
+| `R_MASK_TYPE_NAME_INVALID` | A discovered mask type name breaks the Label rules (for example `NA`, ` cells`), so it cannot be a `source_type`; refused at discovery (AQ11) |
+| `R_MASK_CONTRADICTS_REPRESENTATION` | A mask declared `binary` holds more than two distinct values; raised by the mask step on each new batch, not at publication (§4.5a) |
 
 Within one unit, `R_UNIT_NOT_HOMOGENEOUS` is reported first and replaces
 `R_CHANNEL_COUNT_MISMATCH` and `R_HEADER_CONTRADICTION` for that unit: intra-unit discrepancies
@@ -422,10 +567,11 @@ Representative previews and explicit confirmation are the guard; image-based che
 Required analysis-layer refusals (`A_*`): `A_SCOPE_INCOMPLETE` (a requested canonical channel or
 mask is absent from part of the requested scope; refuse unless the user selects and records an
 eligible subset; never drop FOVs, impute, re-weight technical repeats or change biological N);
-`A_MASK_NOT_INSTANCES` (a `binary` mask requested as an object set); `A_DRAFT_REFUSED` (§10: `RunInputs` given a draft or an unconfirmed file). Each biological repeat is
+`A_MASK_NOT_INSTANCES` (a `binary` mask requested as an object set without the explicit recorded per-request conversion of §4.5c); `A_MASK_UNCHECKED` (a run uses a mask file whose representation check is `not yet checked`, §4.5a); `A_RGB_NOT_SUPPORTED` (a request includes the channels of an RGB unit, §4.4b, for a brick that does not declare RGB support); `A_DRAFT_REFUSED` (§10: `RunInputs` given a draft or an unconfirmed file). Each biological repeat is
 classified **fully represented**, **partially represented** or **unavailable** per request and
 recorded in the run manifest. Consumers resolve channels by canonical ID per unit, never by C
-index alone, and group by canonical repeat ID.
+index alone, and group by canonical repeat ID (`repeat_group`, §3.4) while keeping the source label
+in every key.
 
 ## 9. Serialization, round trip and caching
 
@@ -485,8 +631,13 @@ silently; edits go to a separate draft and are published atomically after valida
   channels, layout or grouping change: a new or removed unit or member, a unit's ordered channel
   list, or the pairing of folders into repeats. New FOVs (or removed ones) inside an existing unit
   whose confirmed layout still holds do **not** reopen it; they are reported and recorded.
-- A removed member is reported and removed only on user confirmation; a repeat left without
-  members is removed from the file, and its ID stays in `used_ids` and is never reused
+- **Adding a member is allowed (AQ1).** A new member folder or unit joins an existing repeat or
+  condition without a changed-ID refusal (§4.6); it is a grouping change, so it reopens the N35
+  confirmation of that repeat, and it never changes an existing ID. Only removing or reassigning
+  existing members counts as a changed entity.
+- A removed member is reported and removed only on user confirmation, which is the recorded
+  confirmation of §4.6 (without it the candidate is `R_CONFIRMED_ID_CHANGED`); a repeat left
+  without members is removed from the file, and its ID stays in `used_ids` and is never reused
   (`R_USED_ID_REUSED`, `R_USED_ID_DROPPED`; §4.9).
 - A new folder whose label equals an existing repeat ID is proposed for that repeat but stays
   pending until confirmed.
@@ -513,7 +664,10 @@ One row per member, sorted by `condition`, then `biological_repeat`, in code poi
 legacy dataset whose canonical IDs equal its folder labels and whose controls migrate
 deterministically, the derived file MUST be byte-identical to the one preprocessing writes today.
 Known loss: a legacy design marking a control that no other condition references (e.g. one
-condition only) exports `control = false`.
+condition only) exports `control = false`. For a migrated group whose legacy rows carried
+different `confirmed_on` dates (§7, AQ12) the derived file carries the group's one date on every
+row: it is byte-identical to the legacy file for every group whose rows share one date, and for
+the others the earlier per-row dates are the only difference, listed in the migration note.
 
 Expected `experiment_design.csv` outputs (golden files) are **deferred to Stage 1**; Stage 0 fixes
 only the derivation rules above.

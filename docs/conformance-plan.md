@@ -43,7 +43,11 @@ One parametrised test per fixture file, discovered from `fixtures/valid/*.toml` 
 | Round trip | For every valid file: `parse(write(parse(f))) == parse(f)`; `write` is idempotent; `write(parse(v18)) == write(parse(v01))` byte for byte |
 | Canonical bytes | `write` output is UTF-8, LF, no BOM, final newline, ordered per experiment-v1 §9.1 |
 | Section digests | `v01`, `v16` and `v21` have all four digests equal (`display_name`, `target` and `treatment_key` omitted; `used_ids` is not a section); editing only `target`, `treatment_key` or `display_name` fields of a copy of `v01` (as `v27` varies them) leaves all four digests unchanged, while editing a `reference` changes the `conditions` digest |
-| Transitions | Each `fixtures/transitions/t*.toml` is valid on its own; checked against its named predecessor it is refused with exactly the set of codes in its `Expected` line (`t01`: `R_CONFIRMED_ID_CHANGED`, accepted only with a recorded re-confirmation; `t02`: `R_CONFIRMED_ID_CHANGED` and `R_USED_ID_DROPPED`; `t03`: `R_USED_ID_REUSED`; `t04`: `R_USED_ID_DROPPED`; `t05`: `R_CONFIRMED_ON_CHANGED`) |
+| Transitions | Each `fixtures/transitions/t*.toml` is valid on its own; checked against its named predecessor it gives exactly the set of codes in its `Expected` line, all reported together (`t01`: `R_CONFIRMED_ID_CHANGED`, accepted only with a recorded re-confirmation; `t02`: `R_CONFIRMED_ID_CHANGED` and `R_USED_ID_DROPPED`; `t03`: `R_USED_ID_REUSED` only; `t04`: `R_USED_ID_DROPPED`; `t05`: `R_CONFIRMED_ON_CHANGED`; `t06`: no code, accepted: adding members is not a changed entity; `t07`, `t08`: `R_CONFIRMED_ID_CHANGED` unless a removal or reassignment confirmation is recorded; `t09`: `R_CONFIRMED_ID_CHANGED` only, accepted with a recorded re-confirmation) |
+| RGB | `v28`, `v29` are accepted; `i100`-`i106`, `i119` give their codes (`E_ENUM`, `E_TYPE`, `E_RGB_UNIT_CHANNELS`, `E_RGB_TOKEN_MISUSE`, `E_RGB_ALIAS`); a writer given a model with an RGB unit emits `channels` then `image_type = "rgb"` (field order of experiment-v1 §4, §9.1) and round-trips it |
+| Reserved and forbidden names | `i59`, `i61`, `i107`-`i109` are `E_ID_RESERVED` (the reader's list equals the table of experiment-v1 §3.2, compared case-folded, and `v32` is accepted); `i113`-`i115` are `E_FORBIDDEN_FIELD` for ID keys, as `i20`-`i26` are for fields |
+| One code per rule | `i118` gives exactly `E_ID_TEXT` and `E_ID_SYNTAX`; `i116`, `i117` give `E_ID_NOT_NFC` and never `E_UNKNOWN_CHANNEL`; `i110` is `E_DUPLICATE_VALUE` (equal after NFC); `v31` is accepted with its three whitespace aliases and a decomposed alias |
+| Mask fields | `i111` (`parent_labels`) is `E_ENUM`; `i112` (`binary_mask_policy`) is `E_FORBIDDEN_FIELD` |
 | Identity never repaired | `v26` is read and written back unchanged in every ID (`cl001`, `CL1000`, `R999`, `R1000`: no padding, re-casing or renumbering); `i78`, `i83`-`i85` are refused with `E_ID_NOT_NFC` and the reader output contains no normalized copy |
 | Display names | `v24` round-trips with every display name byte-identical; `i86`-`i88` are `E_DISPLAY_NAME_COLLISION`; `i89`-`i91` give the unknown-ID codes, never a match through a display name |
 | `used_ids` | `v25` is valid; `i92`-`i97` give their listed codes; a writer given a model whose `used_ids` lacks a declared ID refuses to write |
@@ -69,7 +73,7 @@ reported first (intra-unit discrepancies are detected before channel identity, r
 | P02 | `v01` | `CTRL/rep1`: FOV004 has 1 channel, others 2 | `R_UNIT_NOT_HOMOGENEOUS` (not `R_CHANNEL_COUNT_MISMATCH`) |
 | P03 | `v11` | C0 header `hoechst 33342` (lower case) | `R_HEADER_CONTRADICTION` (no case folding, no similarity); passes with `Hoechst 33342` |
 | P04 | `v04`, `v05`, `v06`, `v17` | Units matching the declared lists | Stage 1-2: `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` naming the units; nothing processed |
-| P05 | `v08` | `TumorRegion` mask with values 0-5 | `R_MASK_CONTRADICTS_REPRESENTATION`; an `instances` mask with values 0/1 is accepted (pixels cannot prove instance semantics) |
+| P05 | `v08` | `TumorRegion` mask with values 0-5 | `R_MASK_CONTRADICTS_REPRESENTATION`, raised by the mask step when it reads the file, not at publication (experiment-v1 §4.5a); an `instances` mask with values 0/1 is accepted (pixels cannot prove instance semantics) |
 | P06 | `v12` | Two unnamed, identical-shape units with fluorophores physically swapped | No refusal: documented limit; preview + confirmation only |
 | P07 | `v13` | A new technical repeat appears in `DrugA/rep2` | Reconciliation: unit **new**, repeat `rep2` reopened (`confirmed = false` in the draft), nothing published until confirmed; `confirmed_on` of every repeat that is not reopened is byte-identical in the draft |
 | P08 | `v03` | Folder `DrugA/experiment_23` renamed to `DrugA/experiment_23b` | Removed + new pending member, never auto-paired; publishing requires the user to assign it; `Day1` unchanged |
@@ -77,7 +81,7 @@ reported first (intra-unit discrepancies are detected before channel identity, r
 | P10 | `v07` | Masks folder holds an undeclared type `membrane` | `R_MASK_TYPE_NOT_DECLARED` |
 | P11 | `v09` | `Nuclei` masks for 0, then 300, then all FOVs | Valid at every step; completeness recorded in the manifest |
 | P12 | `v01` | A declared unit `DrugA/rep2/single` with every image excluded | `R_UNIT_NOT_FOUND` |
-| P13 | `v01` | An RGB (interleaved colour) TIFF in `CTRL/rep1` | `R_RGB_NOT_SUPPORTED` |
+| P13 | `v28` | RGB (interleaved colour) TIFFs in every unit, units declared `image_type = "rgb"` | Accepted: header colour interpretation matches the declaration; the manifest records header-verified (formats without such metadata: recorded as not header-verified); channels are `R`, `G`, `B`; nothing is converted. Replaces the earlier RGB refusal (decision AQ6) |
 | P14 | `v01` | `RunInputs` given a draft (reconciliation proposal, or a file with `confirmed = false`) | `A_DRAFT_REFUSED`; only the published `morphobricks.toml` is read |
 | P15 | `v13` | 5 FOVs added to an existing unit, same ordered channels and headers | Confirmation kept (not reopened) with `confirmed_on` byte-identical, change reported and recorded; a changed channel list would reopen it |
 | P16 | `v01` | `v01` published; `t01`/`t02` candidate offered | `R_CONFIRMED_ID_CHANGED` (`t02` also `R_USED_ID_DROPPED`); `t01` accepted only with a recorded re-confirmation; `v16` accepted with no invalidation |
@@ -88,10 +92,25 @@ reported first (intra-unit discrepancies are detected before channel identity, r
 | P21 | `v01` | Two folders `Cafe\u0301` and `Caf\u00e9` (or one decomposed folder) under a condition on a file system that allows both | `R_FOLDER_NOT_NFC`; nothing renamed or normalized |
 | P22 | `v01` (base), `t05` | Reconciliation after new FOVs in an existing unit (P15) and a run on a later date | Published `confirmed_on` stays `2026-11-06` byte for byte; `t05` offered over `v01`: `R_CONFIRMED_ON_CHANGED`; after a reopening (changed channel list) and a new user confirmation the new date is accepted |
 
+### Scenarios added by the third decision round (AQ1-AQ13)
+
+| # | Fixture | Image tree / action | Required outcome |
+|---|---|---|---|
+| P23 | `v28`, `v01` | (a) A unit declared `rgb` whose images are 2-channel grayscale; (b) an RGB TIFF in a `v01` unit that does not declare it; (c) an image of an undeclared type whose pixels look like RGB | (a), (b) `R_IMAGE_TYPE_CONTRADICTS_HEADER` (both directions); (c) no refusal and no inference: pixels are never examined |
+| P24 | `v28` | A request through a brick that does not declare RGB support; the same request through one that does | `A_RGB_NOT_SUPPORTED` for the first (no grey conversion, no channel split); the second proceeds and the brick owns the meaning |
+| P25 | `v03`, `v30` | `RunInputs` FOVs of `v03` and `v30` | Each FOV carries the key with `biological_repeat` = the source label (`rep1`, `experiment_23`) and the added `repeat_group` (`Day1`); patch IDs, scaling keys, caches and exports keep the source label; pairing and pooling use `repeat_group`; in `v30` the two `rep1` folders are in different repeats; falling back to grouping by `biological_repeat` fails a test |
+| P26 | `v11`, `v31` | C0 header ` DAPI` (leading space) against `v11`; against `v31`; a decomposed header `Cafe\u0301 488` against a composed entry (and the reverse) | `R_HEADER_CONTRADICTION` against `v11` (no trimming); accepted against `v31` (the confirmed alias ` DAPI`); NFC of both sides matches the decomposed and composed spellings; the manifest records the header name as read (untrimmed) |
+| P27 | `v08` | `TumorRegion` requested as an object set: (a) plainly; (b) with the per-request conversion `binary_mask_policy="connected_components"`; (c) a later request without it | (a) `A_MASK_NOT_INSTANCES`; (b) accepted, the conversion recorded in the run manifest with mask ID, method and parameters; (c) `A_MASK_NOT_INSTANCES` again; no setting is written to `morphobricks.toml` (`i112`) |
+| P28 | `v09`, `v08` | Masks added in batches; a run before the mask step has read a batch; a `binary` mask with values 0-5 in the second batch | Publication reads no mask pixels and records `not yet checked`; the run refuses with `A_MASK_UNCHECKED`; the mask step checks each new batch and the third batch is `not yet checked` again; the bad batch gives `R_MASK_CONTRADICTS_REPRESENTATION` |
+| P29 | `v07` | A mask folder `NA`, a mask folder ` cells`, a non-NFC mask type name | `R_MASK_TYPE_NAME_INVALID` for the first two at discovery (never reaching `E_ID_TEXT`); `R_FOLDER_NOT_NFC` for the third; nothing renamed |
+| P30 | `v13` | A legacy group whose rows carry `confirmed_on` 2026-10-01 and 2026-10-15; a legacy group whose rows share one date | The repeat's `confirmed_on` is 2026-10-15 and the migration note lists both folder dates; the clock is never read; the derived CSV is byte-identical to the legacy file for the one-date group and differs for the other group only in the earlier date |
+| P31 | `v27` | MorphoCoverage prefills its reagent grouping from `target`; the user confirms inside MorphoCoverage; then `target` is edited in the file | The prefill is shown as a suggestion and only the confirmed grouping is used; an unconfirmed prefill is refused for analysis; the edit changes no confirmed grouping, digest or cache key |
+
 ## 4. Later stages (obligations recorded, not planned in detail)
 
-- **Stage 2:** each consumer's tests use `RunInputs` built from `v03`, `v08`, `v13`, `v17`: canonical
-  repeat IDs reach MorphoCoverage (`v03`); `A_MASK_NOT_INSTANCES` (`v08`); `A_SCOPE_INCOMPLETE`
+- **Stage 2:** each consumer's tests use `RunInputs` built from `v03`, `v08`, `v13`, `v17`, `v28`: canonical
+  repeat IDs reach MorphoCoverage as `repeat_group` beside the unchanged source label (`v03`, `v30`, P25);
+  RGB support is declared or refused per brick (`v28`, P24); `A_MASK_NOT_INSTANCES` (`v08`); `A_SCOPE_INCOMPLETE`
   and full/partial/unavailable classification (`v17`); legacy parity (`v13`).
 - **Stage 3:** the end-to-end adversarial suite (roadmap S3.4) on trees for `v04`, `v05`, `v06`,
   `v17`: no channel mixed by C index, biological N unchanged, serial/parallel/resume identical.

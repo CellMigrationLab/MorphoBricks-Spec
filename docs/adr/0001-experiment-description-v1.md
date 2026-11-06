@@ -1,8 +1,9 @@
 # ADR 0001: experiment description v1 (`morphobricks.toml`)
 
-- **Status:** Accepted (owner decisions of 6 November 2026, including the later refinement
-  D5). Specification only; nothing is implemented. **TODO before Gate G0:** the fixed-SHA
-  consumer audit (roadmap S0.1) is not done.
+- **Status:** Accepted (owner decisions of 6 November 2026, three rounds, including the later
+  refinement D5). Specification only; nothing is implemented. The fixed-SHA consumer audit
+  (roadmap S0.1) is done ([PR #5](https://github.com/CellMigrationLab/MorphoBricks-Spec/pull/5)); the
+  third round below answers its questions.
 - **Tracking:** [RFC #1](https://github.com/CellMigrationLab/MorphoBricks-Spec/issues/1);
   [roadmap §2 and §5 Stage 0](../roadmap.md);
   [feasibility audit](../audits/rfc1-feasibility-2026-11-05.md);
@@ -77,7 +78,7 @@ Stage 0 freezes the decisions, the normative schema and the fixtures before any 
 | D5 | **Replaces** the earlier "recorded renames" decision: IDs of repeats, conditions and channels are immutable once confirmed; each has a mutable `display_name` used only for display (never identity, joins, pairing or cache keys; changing it invalidates nothing); display names are unique per kind (`E_DISPLAY_NAME_COLLISION`; comparison refined by Q2); an attempted ID change is `R_CONFIRMED_ID_CHANGED`; a mistyped ID is fixed only by a recorded re-confirmation | Renamable IDs with a `retired_repeats` table (old ID → new ID): it keeps identity mutable, needs tombstones, chain and reuse rules, and churns `biological_repeat`, FOV identities and caches | §4.6, §4.8 | `v16`, `i53`, `i76`, `i77`, `i82`, `t01`, `t02` (reuse: Q1) |
 | D6 | N35 is reopened only when channels, layout or grouping change; new FOVs with the same confirmed layout do not reopen it (recorded, reported) | Reopen on any new image | §10 | P07, P15 |
 | D7 | Identities are Unicode NFC. **Refined by Q3: a reader refuses a non-NFC identity (`E_ID_NOT_NFC`); it does not normalize, so `E_ID_NFC_COLLISION` no longer exists.** IDs are never otherwise transformed | Compare raw code points (look-alike duplicates); or NFKC / case folding (changes meaning) | §3.3 | `v23`, `i78`, `i83`-`i85` |
-| D8 | Refuse RGB (interleaved colour) images in v1 (`R_RGB_NOT_SUPPORTED`) | Treat RGB as three channels | §8 | P13 |
+| D8 | **Superseded by AQ6 (third round).** Was: refuse RGB (interleaved colour) images in v1 (`R_RGB_NOT_SUPPORTED`, now removed) | Treat RGB as three channels | §4.4b | P13, P23, P24 |
 | D9 | Header names match exactly and case-sensitively; anything else needs a user-confirmed alias | Case-insensitive or similarity matching | §4.3 | `v11`, P03 |
 | D10 | Refuse a mask declared `binary` with more than two distinct values (`R_MASK_CONTRADICTS_REPRESENTATION`); declare `instances` instead | Accept and threshold | §4.5 | P05 |
 | D11 | Drafts are internal to preprocessing; `RunInputs` reads only confirmed, published files and refuses drafts (`A_DRAFT_REFUSED`) | Let consumers read drafts | §12 | `i37`, P14 |
@@ -107,8 +108,45 @@ numbers refer to `fixtures/`.
 | A4 | `display_name` never substitutes for an ID, even when unique or equal | Resolving references through the display key: LabChronicle references reagents as `"TP53 [Remote]"` and a rename is an unlink plus recreate, so references dangle (L1) | §4.8 | `i89`-`i91` |
 | A5 | The vendored fixture tree MUST match the pinned SHA's tree hash; the supported-version check is a code constant, offline, with no default for a missing version; the reader has no fallback copy of the rules | A `fallback-template` rules path, a missing version read as `0.0.1`, and a compatibility check fetched from GitHub with `minimum_labchronicle_version` never enforced (B10) | §2, §7; [conformance plan](../conformance-plan.md) §1-§2 | `i09`-`i11`; CI tests |
 
-Also stated: expected `experiment_design.csv` outputs are deferred to Stage 1 (golden files); the
-fixed-SHA consumer audit (roadmap S0.1) remains TODO before Gate G0.
+Also stated: expected `experiment_design.csv` outputs are deferred to Stage 1 (golden files).
+
+### Owner decisions of 6 November 2026, third round (S0.1 consumer audit, all accepted)
+
+Evidence: the S0.1 fixed-SHA consumer audit (`docs/audits/s01-consumer-audit-2026-11-06.md` on
+branch `claude/s01-consumer-audit`, PR #5; not on this branch, so not linked), section 10, owner
+questions Q1-Q13. They are numbered **AQ1-AQ13** here so that they do not collide with the Q1-Q5 of
+the second round above. Where an AQ refines an earlier decision, the earlier row stays as history
+and the normative text states the result. Fixture numbers refer to `fixtures/`; P-numbers to the
+[conformance plan](../conformance-plan.md).
+
+| # | Accepted decision | Rejected alternative | Spec | Fixtures / scenarios |
+|---|---|---|---|---|
+| AQ1 | Adding a member folder to an existing repeat or condition is allowed and is not `R_CONFIRMED_ID_CHANGED`. Only **removing or reassigning** existing members (or, for a channel, positions and aliases) is a changed entity, and then only with a recorded confirmation. N35 reopens only on a layout, channel or grouping change (an added member is a grouping change) | The literal reading of the old text (§4.6 c): any change of an entity's member set is an ID change, so every legitimate new folder of the reconciliation flow would need a re-confirmation | §4.6, §10 | `t03` (corrected), `t06`, `t07`, `t08`; P07, P15 |
+| AQ2 | A case-only ID correction (`ACTIN` to `Actin`) cannot be published in place: the retired spelling stays in `used_ids` and collides. It needs a new, non-colliding ID with a recorded re-confirmation; `display_name` fixes the appearance. A publication reports **every** applicable `R_*` code as a set | Dropping the retired spelling from `used_ids` to allow the re-cased ID (breaks "never reused" and the append-only registry); reporting only the first code | §4.6, §4.9, §8 | `t02`, `t09`, `i95`; P16 |
+| AQ3 | `target` stays descriptive. MorphoCoverage may only **prefill** its own reagent grouping from it; the user confirms the grouping inside MorphoCoverage and only that confirmed grouping is analysed | MorphoCoverage reading `target` from the file as its reagent grouping (unconfirmed, and a wrong grouping would pool conditions silently); or making `target` an identity | §4.2a | `v27`; P31 |
+| AQ4 | The MorphoRelate reserved column names (`condition`, `biological_repeat`, `repeat`, `technical_repeat`, `position_id`, `image_file`, `image_path`, `mask_file`, `patch_file`, `patch_id`, `label_id`, `z`, `z0`, `z1`, `c`, `t`; MorphoRelate v0.1.1 `registry/_expand.py:41-59`) join the compartment names in **one** reserved list for channel and mask IDs (case-folded) | Leaving them to an `A_*` refusal by MorphoRelate: valid v1 files would then name channels no brick can export | §3.2 | `i61`, `i59`, `i107`-`i109`, `v32` |
+| AQ5 | The canonical repeat ID is **added** next to the FOV key as `repeat_group`; the key keeps the source folder label in `biological_repeat`, so IDs, caches and exports are unchanged; grouping and pairing use the canonical ID | Replacing the source label by the canonical ID in the key: it changes FOV and patch identities, scaling keys, caches and exports in every brick at once, and erases the provenance | §3.4 | `v03`, `v30`; P25 |
+| AQ6 | **Supersedes D8.** RGB is an accepted declared image type: `image_type = "rgb"` per imaging unit, fixed channel tokens `R`, `G`, `B` in that order, no aliases; checked against header metadata and never inferred from pixels; the scientific meaning is left to each brick, which must declare RGB support and is otherwise refused at analysis (`A_RGB_NOT_SUPPORTED`). `R_RGB_NOT_SUPPORTED` is removed | Keeping D8 (RGB users, supported by preprocessing today, would lose a working path once the file is required); or letting RGB runs bypass `morphobricks.toml` until a v2 rule exists (two ways to describe an experiment) | §4.4b, §8 | `v28`, `v29`, `i100`-`i106`, `i119`; P13, P23, P24 |
+| AQ7 | **No trimming.** A header name and a `header_names` entry are compared exactly after NFC of both sides; outer whitespace needs a confirmed alias. Preprocessing must stop trimming header names in Stage 1 | Normative trimming (what preprocessing does today, `zarr_input.py:68`): a trimmed name hides a header the user never confirmed | §4.3 | `v31`, `i110`; P26 |
+| AQ8 | `parent_labels` (grouped) masks are out of scope in v1 (`E_ENUM`); a v1.1 design follows later | Adding the value before freeze: it needs per-feature applicability rules that nothing has specified | §4.5b | `i111` |
+| AQ9 | A `binary` mask may stand in for instances only through an explicit, per-request, recorded conversion (for example CellPatcher `binary_mask_policy="connected_components"`), never automatically and never in the file | Refusing regardless (no route for users who segment regions); or an automatic conversion (today CellPatcher silently measures an integer 0/1 mask as one object) | §4.5c, §4.7, §8 | `v08`, `i112`; P27 |
+| AQ10 | `R_MASK_CONTRADICTS_REPRESENTATION` is checked in the mask step, on each new batch of a progressive mask. Publication records "not yet checked"; a run that uses an unchecked mask refuses (`A_MASK_UNCHECKED`) | Checking at publication (a full pixel read of every mask at every publication, masks being unfinished) or in `run` (the failure appears late and per run) | §4.5a, §8 | `v09`; P05, P28 |
+| AQ11 | A discovered mask type that breaks the Label rules has its own code, `R_MASK_TYPE_NAME_INVALID`, refused at discovery (a non-NFC name is `R_FOLDER_NOT_NFC`) | No code, leaving the failure to the later `E_ID_TEXT` on writing `source_type` | §8 | P29 |
+| AQ12 | A legacy repeat group whose rows carry different `confirmed_on` dates takes the **latest** date, with a recorded note of the original dates | Refusing such groups; taking the earliest date (it would claim a confirmation before the last folder was confirmed) | §7, §11 | `v13`; P30 |
+| AQ13 | (a) The forbidden names of §4.7 apply to ID keys as well as field names; (b) a non-NFC channel reference is `E_ID_NOT_NFC` in phase 4; (c) one code per broken rule: an identity that breaks two rules gets both codes | (a) Field positions only: a condition `control` would validate and then be ambiguous with the field; (b) `E_UNKNOWN_CHANNEL` in phase 5: it hides the NFC fault; (c) one code per value | §3.3, §4.7, §6 | `i113`-`i118` |
+
+Consequences recorded with this round:
+
+- **Stage 1 preprocessing changes** that the audit found to contradict v1, now decided: stop
+  trimming header names (AQ7); keep RGB support but declare it per unit and check the header
+  (AQ6); take `confirmed_on` only from a user action, never the clock; remove a folder from the
+  design only on user confirmation (the audit's behaviours 1-3).
+- A condition or technical-repeat folder named like a forbidden field (`control`, `files`, `z`,
+  `experiment`, ...) cannot be described in v1 (AQ13a); preprocessing must report it, and the user
+  renames the folder. A `source_repeat` value is not a key and is not affected.
+- A group with different legacy `confirmed_on` dates cannot keep every per-row date: the derived
+  `experiment_design.csv` is byte-identical to the legacy file for every group whose rows share one
+  date, and differs only in the earlier dates otherwise (AQ12).
 
 ### Histogram representation: candidates and criteria only (not decided)
 
