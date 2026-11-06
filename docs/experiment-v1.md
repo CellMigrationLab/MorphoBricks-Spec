@@ -5,7 +5,9 @@
   ([PR #5](https://github.com/CellMigrationLab/MorphoBricks-Spec/pull/5), audit
   `s01-consumer-audit-2026-11-06.md` on branch `claude/s01-consumer-audit`); the owner answered
   its questions AQ1-AQ13 on 6 November 2026 ([ADR 0001](adr/0001-experiment-description-v1.md),
-  third round) and this text applies them. A statement about a consumer is as audited as that
+  third round) and this text applies them. A fourth decision of the same day (ADR 0001, fourth
+  round: folder labels are never restricted) gives conditions and technical repeats a canonical ID
+  separate from their source folder label (§4.6a). A statement about a consumer is as audited as that
   audit; it is not a conformance claim for any brick.
 - **Decisions:** [ADR 0001](adr/0001-experiment-description-v1.md).
 - **Fixtures:** [fixtures/README.md](../fixtures/README.md). **Conformance:**
@@ -55,10 +57,12 @@ v1 analyses 2-D planes only. A Z stack is projected by a recorded preprocessing 
 
 | Identity | Where | Canonical or source | Rule set |
 |---|---|---|---|
-| Condition ID | key of `conditions` | Source = canonical (the condition folder label) | Label |
+| Condition ID | key of `conditions` | Canonical (user-confirmed; proposed = the source folder label when allowed, §4.6a) | Label |
+| Condition source folder | `conditions.<ID>.source_folder` | Source (condition folder label; not an identity key) | Label |
 | Canonical repeat ID | key of `repeats` | Canonical (user-confirmed; default the source folder label) | Label |
 | Source repeat | `source_repeat` | Source (biological-repeat folder label) | Label |
-| Technical repeat | key of `technical_repeats` | Source = canonical (folder label, or `single`) | Label |
+| Technical repeat ID | key of `technical_repeats` | Canonical (user-confirmed; proposed = the source folder label when allowed, §4.6a; or `single`) | Label |
+| Technical-repeat source folder | `technical_repeats.<ID>.source_folder` | Source (technical-repeat folder label, or `single`; not an identity key) | Label |
 | Image type | `image_type` | Declared by the user per imaging unit (§4.4b) | Enumeration |
 | Channel ID | key of `channels` | Canonical | Token |
 | Mask ID | key of `masks` | Canonical (object-set name) | Token + object set |
@@ -84,43 +88,50 @@ v1 analyses 2-D planes only. A Z stack is projected by a recorded preprocessing 
   | `condition`, `biological_repeat`, `repeat`, `technical_repeat`, `position_id`, `image_file`, `image_path`, `mask_file`, `patch_file`, `patch_id`, `label_id`, `z`, `z0`, `z1`, `c`, `t` | MorphoRelate reserved column names, `registry/_expand.py:41-59` (MorphoRelate v0.1.1 `160ad23`; name rules `:68-115`) |
 
   The reserved list is not the forbidden-name list of §4.7, which is compared exactly and applies
-  to field names and ID keys. A name in both (`z`) is reported by the earlier phase only.
+  to field names and ID keys. A name in both (`z`) is reported by the earlier phase only. Neither
+  list ever applies to a folder label: a `source_folder` or `source_repeat` value is never
+  restricted by them (§4.6a).
 - **Object set** (MorphoFeature `is_reserved_object_set`): in addition to the reserved list, a mask
   ID whose case-folded `_`-separated parts include `in` is `E_ID_RESERVED`.
 - **RGB tokens:** `R`, `G` and `B` are the fixed channel IDs of RGB units (§4.4b); they are not on
   the reserved list and are valid channel IDs, with the extra rules of §4.4b.
-- **`single`:** an identity of any kind whose case-folded form is `single` MUST be exactly
-  `single`. A technical repeat `single` MUST be the only technical repeat of its member; a member
-  with `source_repeat = "single"` MUST be the only member of its condition in the file
-  (`E_SINGLE_MISUSE`; preprocessing contract §1).
+- **`single`:** an identity of any kind whose case-folded form is `single` (a source folder
+  included) MUST be exactly `single`. A technical repeat `single` MUST be the only technical
+  repeat of its member; a member with `source_repeat = "single"` MUST be the only member of its
+  condition in the file. A technical repeat ID is `single` if and only if its `source_folder` is
+  `single` (`single` stands for "no technical-repeat folder level"; `E_SINGLE_MISUSE`;
+  preprocessing contract §1).
 
 ### 3.3 Normalization, uniqueness and case
 
 - **NFC.** Identities (the keys and identity fields of §3.1, and every entry of `used_ids`) are
   Unicode NFC. A writer MUST emit NFC. A reader MUST refuse an identity that is not NFC
   (`E_ID_NOT_NFC`, reported for every such identity, including `reference` values, members' keys,
-  unit `channels` entries and `source_channels` entries). The check of a reference is NFC only and
+  `source_folder` values, unit `channels` entries and `source_channels` entries). The check of a reference is NFC only and
   belongs to phase 4, so a non-NFC channel reference is `E_ID_NOT_NFC` and never
   `E_UNKNOWN_CHANNEL` (AQ13). A reader never transforms an identity: no normalization, trimming, case folding, parsing
   or repair of any kind, and so it never resolves a reference through a transformed spelling.
   Display names are not identities and are not checked (§4.8). A folder label read from disk that
   is not NFC is refused by preprocessing (`R_FOLDER_NOT_NFC`), never normalized and never renamed;
-  two folders equal after NFC are therefore also refused, because one of them is not NFC.
+  two folders equal after NFC are therefore also refused, because one of them is not NFC. The
+  stored `source_folder` is the label exactly as read, so it is NFC by the same rule.
 - Identities are compared exactly, code point by code point.
 - **No repair.** No reader or writer ever repairs, re-cases, pads, trims or renumbers an
   identity. A malformed, colliding or non-NFC ID is refused with its code and left as written.
   There is no ID allocator: IDs have no width, prefix or number rule (`R999`, `R1000` and `cl001`
   are valid and stay as they are).
 - Within each of these scopes, two identities that differ after NFC but whose `str.casefold()`
-  forms are equal are `E_ID_CASE_COLLISION`: condition IDs; repeat IDs; source repeats over the
-  whole file; technical repeats over the whole file; channel IDs; mask IDs; mask source types.
+  forms are equal are `E_ID_CASE_COLLISION`: condition IDs; condition source folders; repeat IDs;
+  source repeats over the whole file; technical repeat IDs over the whole file; technical-repeat
+  source folders over the whole file; channel IDs; mask IDs; mask source types.
   (Preprocessing `check_identity_case`: a label is spelled one way in the whole run.) Case folding
   is never applied when resolving a reference (`ctrl` does not resolve to `CTRL`).
 - Identities are never parsed. `rep1`, `2026-01-01`, `012` and `acquisition_2` are opaque text;
   no number, date, order or meaning is derived from them.
-- **Immutability and no reuse.** Once a repeat, condition or channel is confirmed, its ID never
-  changes (§4.6) and is never reused after removal (§4.9). Only `display_name` may change, at any
-  time.
+- **Immutability and no reuse.** Once a repeat, condition, technical repeat or channel is
+  confirmed, its ID never changes (§4.6) and is never reused after removal (§4.9). Only
+  `display_name` may change, at any time. The `source_folder` of an existing ID is not freely
+  editable: a change is a reassignment (§4.6).
 
 ### 3.4 Keys downstream: the source label stays, the canonical repeat ID is added (AQ5)
 
@@ -141,6 +152,16 @@ v1 analyses 2-D planes only. A Z stack is projected by a recorded preprocessing 
 - Consequence: `rep1` of `CTRL` and `rep1` of `DrugA` may be different repeats (`v30`) and the same
   source label may be in two repeats under different conditions; the key stays unique because it
   includes the condition.
+- **Conditions and technical repeats follow the same pattern (fourth round).** In the existing
+  FOV key, `condition` and `technical_repeat` stay the **source folder labels**
+  (`conditions.<ID>.source_folder`, `technical_repeats.<ID>.source_folder`); a consumer MUST NOT
+  replace them by the canonical IDs in FOV, patch or object identities, fitted-scaling keys,
+  caches or exports. The canonical IDs are **added** next to the key (proposed field names
+  `condition_id` and `technical_repeat_id`; the consumer contracts fix the spelling in Stage 1).
+  Each is a function of the FOV key (one folder, one ID, §4.6a), so adding them creates no new
+  identity. Everything that names a condition by identity (`reference`, families, pairing,
+  contrasts, `used_ids`) uses the canonical condition ID, and a consumer MUST NOT group, pair or
+  reference by the source folder label when a description exists.
 
 ## 4. Tables and fields
 
@@ -165,7 +186,8 @@ real calendar day (`E_DATE_FORMAT`); a TOML date literal is `E_TYPE`. "Non-empty
 
 | Key | Type | Req | Rule |
 |---|---|---|---|
-| `display_name` | non-empty text | no | Display only (§4.8) |
+| `source_folder` | text | yes | Exact condition folder label as read from disk (Label rules, NFC); a source value, **not an identity key**; not restricted by the reserved or forbidden names (§4.6a) |
+| `display_name` | non-empty text | no | Display only (§4.8); MAY be the folder label |
 | `reference` | text | no | One condition ID: the primary reference (§5) |
 | `target` | non-empty text | no | Descriptive plain string, e.g. `SRC` (§4.2a) |
 | `treatment_key` | non-empty text | no | Descriptive plain string, e.g. the same perturbation under different backgrounds (§4.2a) |
@@ -228,10 +250,12 @@ condition; at most one per condition per repeat, guaranteed by TOML key uniquene
 | `image_count` | integer ≥ 1 | yes | Images to analyse at confirmation (N35 evidence; `E_VALUE_RANGE`) |
 | `technical_repeats` | table of technical repeat | yes | ≥ 1 entry |
 
-`repeats.<R>.members.<C>.technical_repeats.<technical repeat>` (one imaging unit):
+`repeats.<R>.members.<C>.technical_repeats.<technical repeat ID>` (one imaging unit):
 
 | Key | Type | Req | Rule |
 |---|---|---|---|
+| `source_folder` | text | yes | Exact technical-repeat folder label as read from disk, or `single` when the member has no such folder level (Label rules, NFC); a source value, **not an identity key**; not restricted by the reserved or forbidden names (§4.6a) |
+| `display_name` | non-empty text | no | Display only (§4.8); MAY be the folder label |
 | `channels` | array of channel IDs | yes | ≥ 1 entry; ordered: entry *i* is source channel C*i*; every entry declared (`E_UNKNOWN_CHANNEL`); no repeats (`E_DUPLICATE_CHANNEL_IN_UNIT`) |
 | `image_type` | text | no | Only the value `rgb` (`E_ENUM`: exact, lower case); absent = an ordinary channel image. User-declared, never inferred (§4.4b) |
 
@@ -277,6 +301,10 @@ Repeat rules:
 - If a canonical repeat ID R equals, ignoring case, the `source_repeat` S of a member, that member
   MUST belong to R (`E_REPEAT_ID_SHADOWS_SOURCE`). This forbids swapped labels such as repeat
   `rep1` holding folder `rep2` while repeat `rep2` holds folder `rep1`.
+- One folder, one ID (§4.6a): a condition `source_folder` belongs to exactly one condition ID and
+  a technical-repeat `source_folder` to exactly one technical repeat ID over the whole file
+  (`E_SOURCE_FOLDER_REUSED`); one technical repeat ID carries the same `source_folder` in every
+  unit that declares it (`E_SOURCE_FOLDER_CONFLICT`).
 - A repeat MAY lack some conditions (warning `W_REPEAT_MISSING_CONDITIONS`).
 - Technical repeats inside one biological repeat MAY have different channel counts and orders.
   They remain one biological repeat; they never create additional biological replicates.
@@ -321,26 +349,31 @@ stays in the brick that owns it.
 
 ### 4.6 Immutable IDs
 
-- Once confirmed, the ID of a repeat, condition or channel MUST NOT change. There is no rename
-  and no retired-ID table. A rename in the file would be a different ID for the same data.
+- Once confirmed, the ID of a repeat, condition, technical repeat or channel MUST NOT change.
+  There is no rename and no retired-ID table. A rename in the file would be a different ID for the
+  same data.
 - **What a changed entity is (AQ1).** An entity is what the published file says an ID holds: for a
-  repeat, its member folders `(condition, source_repeat)`; for a condition, its source repeat
-  folders over all repeats; for a channel, its positions `(condition, source_repeat, technical
+  repeat, its member folders `(condition, source_repeat)`; for a condition, its `source_folder`
+  and its source repeat folders over all repeats; for a technical repeat, its `source_folder` and
+  the members `(condition, source_repeat)` that declare it; for a channel, its positions `(condition, source_repeat, technical
   repeat, index)` and its `header_names`. An entity is *changed* only when something it held in
   the published file is **removed or reassigned**. **Adding** does not change it: a new member
-  folder joining an existing repeat, a new repeat folder of an existing condition, a new unit or
-  position of a channel, a new alias, is not `R_CONFIRMED_ID_CHANGED`. (It may reopen the N35
+  folder joining an existing repeat, a new repeat folder of an existing condition, a new unit
+  of an existing technical repeat ID, a new unit or position of a channel, a new alias, is not
+  `R_CONFIRMED_ID_CHANGED`. (It may reopen the N35
   confirmation, §10; reopening is not an ID change.)
 - Preprocessing MUST refuse, as `R_CONFIRMED_ID_CHANGED`, a candidate file (compared with the
   published file it was drafted from, §10) in which (a) a repeat with the same member folders
   `(condition, source_repeat)` carries another ID, (b) a channel's ID is replaced by another ID at
-  every unit position it held with the same header evidence, or (c) an ID that is declared in both
+  every unit position it held with the same header evidence, (b2) a condition or technical repeat
+  with the same `source_folder` carries another ID, or (c) an ID that is declared in both
   files names a changed entity (some member folder, position or alias it held is removed or
-  reassigned). Removing or reassigning is accepted only with an explicit, recorded user
+  reassigned, or its `source_folder` is another folder). Removing or reassigning is accepted only with an explicit, recorded user
   confirmation (the same record as for a mistyped ID, below); the confirmation of a removal that
   §10 requires is that record. An ID that was removed and comes back is `R_USED_ID_REUSED`
-  (§4.9). A condition ID is its folder label, so a renamed folder is a removed member plus a new
-  pending one (§7).
+  (§4.9). A condition or technical repeat ID is not its folder label (§4.6a): a folder that is
+  renamed or replaced on disk under an existing ID is a removed folder plus a new pending one
+  (§7), and giving the existing ID the new `source_folder` is a reassignment under (c).
 - A mistyped ID is fixed only by an explicit, recorded re-confirmation: a user action that
   writes a new file and records old ID, new ID, date and both file SHA-256 in the run manifest.
   Products keyed on that ID are invalidated. Nothing about it is stored in the file.
@@ -354,15 +387,52 @@ stays in the brick that owns it.
   preprocessing reports **every** applicable code, not the first (`t02` is
   `R_CONFIRMED_ID_CHANGED` and `R_USED_ID_DROPPED`).
 
+### 4.6a Folder labels and canonical IDs (fourth round)
+
+Conditions and technical repeats are identified exactly like biological repeats: the key is a
+**canonical ID** (immutable, user-confirmed, the only thing identity uses), and the folder it was
+discovered under is recorded separately in the required field `source_folder`.
+
+- **`source_folder` is a source value, not an identity.** It holds the folder label exactly as
+  read from disk (Label rules, NFC; never trimmed, normalized or renamed). It is never a table
+  key, a `reference` value, a member key or a `used_ids` entry, and no reader resolves an ID
+  through it.
+- **Folder labels are never restricted by the reserved list (§3.2) or the forbidden names
+  (§4.7).** Any folder label that satisfies the Label rules and NFC may be a `source_folder`,
+  including `control`, `files` or `z`. The restrictions stay on the **IDs** (keys), where the
+  forbidden names would collide with fields.
+- **One folder, one ID.** Over the whole file a condition `source_folder` names exactly one
+  condition ID, and a technical-repeat `source_folder` exactly one technical repeat ID
+  (`E_SOURCE_FOLDER_REUSED` when two IDs of one kind share a folder; `E_SOURCE_FOLDER_CONFLICT`
+  when one technical repeat ID is declared with two different folders). A condition has one
+  folder; a technical repeat ID has the same folder in every unit that declares it. Folders that
+  differ only in case are `E_ID_CASE_COLLISION` (§3.3), as before.
+- **Proposed ID.** When preprocessing meets a new folder it proposes the folder label as the ID
+  if that is allowed: it passes the Label rules, is not an exact forbidden name (§4.7), and does
+  not collide (exactly or by case folding) with a declared or `used_ids` ID of its kind. If it
+  is not allowed (for example the folder `control`), preprocessing proposes a different ID that
+  is allowed, and the user confirms it or types another; the user MAY also set `display_name` to
+  the folder label. A proposal is never adopted unconfirmed, and no ID is repaired or derived by
+  a reader (§3.3).
+- **Existing ID, other folder.** Giving an existing condition or technical repeat ID another
+  `source_folder` is a reassignment (§4.6): `R_CONFIRMED_ID_CHANGED` without the recorded user
+  confirmation. A new folder next to the existing ones is a new pending member or unit (§10).
+- **`single`.** The technical repeat `single` has `source_folder = "single"`: the label denotes
+  "no technical-repeat folder level", not a folder (§3.2).
+- A folder label that breaks the Label rules (for example `NA`) is still refused at discovery as
+  today; this decision adds no new code for it.
+
 ### 4.7 Forbidden fields
 
 These names are refused as `E_FORBIDDEN_FIELD` in **any** table, with a message naming where the
 information belongs, and they apply both to **field names** and to **ID keys** (the key of a
 condition, channel, repeat, member, technical repeat or mask; AQ13). The comparison is exact and
 case-sensitive. A forbidden name is reported once, at its name; its value is not examined. A
-source folder label equal to one of these names (a condition `control`, a technical repeat
-`files`) therefore cannot be a condition or technical-repeat ID in v1 and cannot be described
-until the folder is renamed on disk; a `source_repeat` value is not a key and is not affected.
+source folder label equal to one of these names (a condition folder `control`, a technical-repeat
+folder `files`) cannot be used as the **ID** (the key) but **is** describable: it is stored as the
+`source_folder` value, which is never restricted (§4.6a), and the user confirms another ID
+(`ctrl`, `acq1`) that preprocessing proposes. The folder is never renamed on disk. A
+`source_repeat` value is not a key and was never affected.
 
 | Field | Belongs to |
 |---|---|
@@ -378,7 +448,7 @@ until the folder is renamed on disk; a `source_repeat` value is not a key and is
 
 ### 4.8 Display names
 
-`display_name` (conditions, repeats, channels, masks) is for display only (reports, notebooks,
+`display_name` (conditions, repeats, technical repeats, channels, masks) is for display only (reports, notebooks,
 plots). It MUST NOT be used for identity, joins, pairing, references or cache keys, and changing
 or adding it invalidates nothing (§9.3). A consumer MUST NOT accept a display name where an ID is
 expected, even when the two strings are equal and even when the display name is unique: a
@@ -386,9 +456,11 @@ expected, even when the two strings are equal and even when the display name is 
 of an unknown ID (`E_REFERENCE_UNKNOWN`, `E_UNKNOWN_CONDITION`, `E_UNKNOWN_CHANNEL`).
 
 Display names are kept exactly as typed: never normalized, trimmed or case-changed on read or
-write. They are unique within one kind (conditions, repeats, channels, masks; the same string may
-appear in two kinds): two display names of one kind whose keys are equal are
-`E_DISPLAY_NAME_COLLISION`, where the key of a name *x* is `NFC(casefold(NFC(x)))` with
+write. They are unique within one kind (conditions, repeats, technical repeats, channels, masks;
+the same string may appear in two kinds, and a display name may equal a `source_folder`): two
+display names of one kind whose keys are equal are `E_DISPLAY_NAME_COLLISION`; for technical
+repeats the names of one technical repeat ID in several units never collide with each other, only
+with those of another ID, and need not agree; where the key of a name *x* is `NFC(casefold(NFC(x)))` with
 `str.casefold()` (so `Control` and `control`, `Straße` and `STRASSE`, decomposed and composed
 `Café` collide). The key is used for the comparison only and is never stored or used for lookup.
 
@@ -402,12 +474,14 @@ date or a reason.
 | `conditions` | array of text | yes | Every condition ID ever confirmed |
 | `channels` | array of text | yes | Every channel ID ever confirmed |
 | `repeats` | array of text | yes | Every canonical repeat ID ever confirmed |
+| `technical_repeats` | array of text | yes | Every canonical technical repeat ID ever confirmed (`single` included) |
 
-- Entries follow the identity rules of their kind (Label for conditions and repeats, Token for
-  channels; NFC, §3.3), have no duplicates (`E_DUPLICATE_VALUE`), and share the case-collision
+- Entries follow the identity rules of their kind (Label for conditions, repeats and technical
+  repeats, Token for channels; NFC, §3.3), have no duplicates (`E_DUPLICATE_VALUE`), and share the case-collision
   scope of the kind's declared IDs (`E_ID_CASE_COLLISION`): a retired `ctrl` cannot come back as
   `CTRL`. At least one entry per kind (`E_EMPTY`).
-- Every declared ID of a kind MUST be listed (`E_USED_ID_MISSING`). A listed ID that is not
+- Source folder labels are not IDs and are never listed. Every declared ID of a kind MUST be
+  listed (`E_USED_ID_MISSING`). A listed ID that is not
   declared is a **retired** ID: its entity was removed.
 - Publication MUST refuse a candidate that (a) omits an ID listed in the published file it was
   drafted from (`R_USED_ID_DROPPED`: removing an entity keeps its ID listed), or (b) declares as
@@ -469,9 +543,9 @@ for NFC only (phase 4) before it is resolved (phase 5).
 | 4 Identity | `E_ID_TEXT` | Label rule violated |
 | 4 | `E_ID_SYNTAX` | Token regular expression violated |
 | 4 | `E_ID_RESERVED` | Name on the reserved list of §3.2 (channel and mask IDs), or a mask ID with an `in` part |
-| 4 | `E_ID_NOT_NFC` | An identity (key, reference, source repeat, unit `channels` or `source_channels` entry, `used_ids` entry) is not Unicode NFC; never normalized |
-| 4 | `E_ID_CASE_COLLISION` | Two identities of one scope equal ignoring case (`used_ids` entries share the scope of their kind) |
-| 4 | `E_SINGLE_MISUSE` | `single` in another case or not alone |
+| 4 | `E_ID_NOT_NFC` | An identity (key, reference, source repeat, `source_folder`, unit `channels` or `source_channels` entry, `used_ids` entry) is not Unicode NFC; never normalized |
+| 4 | `E_ID_CASE_COLLISION` | Two identities of one scope equal ignoring case (`used_ids` entries share the scope of their kind; source folders have their own scopes, §3.3) |
+| 4 | `E_SINGLE_MISUSE` | `single` in another case or not alone, or a technical repeat ID `single` whose `source_folder` is not `single` (or the reverse) |
 | 5 Semantics | `E_UNKNOWN_CONDITION` | Member key is not a declared condition ID |
 | 5 | `E_UNKNOWN_CHANNEL` | Unit or `source_channels` names an undeclared channel ID |
 | 5 | `E_DUPLICATE_CHANNEL_IN_UNIT` | A channel twice in one unit |
@@ -480,7 +554,9 @@ for NFC only (phase 4) before it is resolved (phase 5).
 | 5 | `E_RGB_TOKEN_MISUSE` | A unit without `image_type = "rgb"` lists a channel whose case-folded ID is `r`, `g` or `b` (§4.4b) |
 | 5 | `E_RGB_ALIAS` | A channel whose case-folded ID is `r`, `g` or `b` has non-empty `header_names` (§4.4b) |
 | 5 | `E_DISPLAY_NAME_COLLISION` | Two display names of one kind equal after NFC and case folding (§4.8) |
-| 5 | `E_USED_ID_MISSING` | A declared condition, channel or repeat ID is not in `used_ids` (§4.9) |
+| 5 | `E_USED_ID_MISSING` | A declared condition, channel, repeat or technical repeat ID is not in `used_ids` (§4.9) |
+| 5 | `E_SOURCE_FOLDER_REUSED` | One `source_folder` on two condition IDs, or on two technical repeat IDs (§4.6a) |
+| 5 | `E_SOURCE_FOLDER_CONFLICT` | One technical repeat ID declared with two different `source_folder` values (§4.6a) |
 | 5 | `E_CONDITION_WITHOUT_MEMBERS` | Declared condition in no repeat |
 | 5 | `E_SOURCE_REPEAT_REUSED` | One source folder in two repeats |
 | 5 | `E_REPEAT_ID_SHADOWS_SOURCE` | Repeat ID equal to the source folder name of another repeat's member |
@@ -505,25 +581,36 @@ validation: a reader MUST NOT try to interpret fields of a version it does not s
   mapped to a default version.
 - A migration between versions MUST be an explicit, recorded operation that writes a new file and
   never changes canonical identities silently.
-- **Repeat, condition and channel IDs are immutable** (§4.6) and never reused (§4.9). There is no
-  rename migration; a friendlier name is `display_name`. A mistyped ID is corrected only by a
+- **Repeat, condition, technical repeat and channel IDs are immutable** (§4.6) and never reused
+  (§4.9). There is no rename migration; a friendlier name is `display_name`. A mistyped ID is corrected only by a
   recorded re-confirmation, which retires the old ID in `used_ids`. No reader or writer repairs,
   re-cases or renumbers an ID (§3.3).
 - **Source folder renamed or moved:** a removed member plus a new, unpaired, pending member. It is
   never auto-paired with the removed one; the user may assign it to the existing canonical repeat
-  (the canonical ID does not change).
+  (the canonical ID does not change). For a **condition** or **technical repeat** folder the same
+  holds (the folder is removed, the new folder is pending with a proposed ID, §4.6a); giving the
+  new folder to the existing ID changes that ID's `source_folder`, which is a reassignment and
+  follows the removed/reassigned rules of §4.6 (recorded user confirmation, else
+  `R_CONFIRMED_ID_CHANGED`). The ID never changes.
 - **Legacy `experiment_design.csv` → v1:** read with the strict reader (no `yes`/`no`/empty
   coercion). `repeat_group` → canonical repeat ID; `biological_repeat` → `source_repeat`;
   `image_count`, `confirmed`, `confirmed_on` copied (see the next point for a group whose rows
-  have different dates); technical repeats and channel lists come from discovery and user
-  confirmation. Controls: 0 marked → no `reference`; 1 marked → every other
+  have different dates); the legacy `condition` label becomes the condition's `source_folder`,
+  and the condition ID is proposed as that label when allowed (§4.6a), else another proposed ID
+  the user confirms; technical repeats (folder, `source_folder`, ID) and channel lists come from
+  discovery and user confirmation. Controls: 0 marked → no `reference`; 1 marked → every other
   condition references it; ≥ 2 marked → a draft with unresolved references that cannot be
-  published until the user answers (no name-stem guessing). A legacy design that violates v1
-  rules (e.g. `E_REPEAT_ID_SHADOWS_SOURCE`) MUST be refused with the code, not repaired.
+  cannot be published until the user answers (no name-stem guessing). A legacy design that violates v1
+  rules (e.g. `E_REPEAT_ID_SHADOWS_SOURCE`) MUST be refused with the code, not repaired. A legacy
+  condition label on the reserved or forbidden lists is no longer a violation: it is the
+  `source_folder` and the user confirms another ID.
 - **Legacy groups with different `confirmed_on` (AQ12).** v1 has one date per repeat. A legacy
   `repeat_group` whose rows carry different dates takes the **latest** date (what preprocessing's
   `ExperimentDesign.confirmed_on` returns today, `design.py:216-218`) and the migration records a
-  note listing each folder's original date. It never takes the clock. A group with no dated row
+  note listing each folder's original date. It never takes the clock. Consequently the
+  byte-identity of the derived `experiment_design.csv` (§11) is guaranteed **only** for repeat
+  groups with a single `confirmed_on`; for a group with several dates the derived rows carry the
+  latest date and only the note keeps the original per-row dates. A group with no dated row
   cannot be published until the user supplies the date of their confirmation.
 
 ## 8. Validation boundaries
@@ -539,7 +626,7 @@ Required preprocessing refusals (`R_*`):
 | Code | Meaning |
 |---|---|
 | `R_FILE_SYMLINK` | `morphobricks.toml` is a symlink |
-| `R_CONFIRMED_ID_CHANGED` | A confirmed ID was changed, or a declared ID names a changed entity (something it held was removed or reassigned; adding is not a change), without a recorded re-confirmation (§4.6) |
+| `R_CONFIRMED_ID_CHANGED` | A confirmed ID was changed, or a declared ID names a changed entity (something it held was removed or reassigned, a `source_folder` included; adding is not a change), without a recorded re-confirmation (§4.6) |
 | `R_USED_ID_REUSED` | A candidate declares an ID that `used_ids` lists as retired (§4.9) |
 | `R_USED_ID_DROPPED` | A candidate omits an ID listed in `used_ids` of the file it replaces (§4.9) |
 | `R_CONFIRMED_ON_CHANGED` | `confirmed_on` of a repeat whose confirmation was not reopened differs from the published file (§4.4a) |
@@ -579,8 +666,8 @@ in every key.
 
 Writers MUST produce deterministic bytes: UTF-8, no BOM, LF, a final newline, no comments.
 Order: `schema`, `schema_version`, then `conditions`, `channels`, `repeats`, `masks` (an empty
-optional table is omitted), `used_ids` (kinds in the order `conditions`, `channels`, `repeats`;
-each array sorted in code point order, inline); identities are NFC. Entries of each table sorted by key in code
+optional table is omitted), `used_ids` (kinds in the order `conditions`, `channels`, `repeats`,
+`technical_repeats`; each array sorted in code point order, inline); identities are NFC. Entries of each table sorted by key in code
 point order; fields in the order of §4; each table as a standard `[header]`; arrays inline;
 `header_names`, `source_channels` and `used_ids` arrays sorted, unit `channels` in declared order; keys bare when
 they match `[A-Za-z0-9_-]+`, else basic quoted strings; strings as TOML basic strings with the
@@ -597,7 +684,8 @@ standard/inline/dotted tables, never changes meaning.
 
 The whole-file SHA-256 is provenance. Preprocessing SHOULD also record per-section digests (SHA-256
 of the canonical serialization of `conditions`, `channels`, `repeats`, `masks`) so that consumers
-key derived products only on the sections they use. Digests are computed with every `display_name`,
+key derived products only on the sections they use. `source_folder` is part of the `conditions` and
+`repeats` digests (it fixes which folder an ID names; a reassignment changes them). Digests are computed with every `display_name`,
 `target` and `treatment_key` omitted (descriptive fields are never cache keys, §4.2a), and
 `used_ids` is not a section: a change to any of them MUST NOT change any digest, a change to `reference` MUST NOT
 invalidate pixel-derived products; a change to a unit's channel list MUST invalidate the products
@@ -641,6 +729,13 @@ silently; edits go to a separate draft and are published atomically after valida
   (`R_USED_ID_REUSED`, `R_USED_ID_DROPPED`; §4.9).
 - A new folder whose label equals an existing repeat ID is proposed for that repeat but stays
   pending until confirmed.
+- **Condition and technical-repeat folders (fourth round).** Discovery matches a folder to an ID
+  by its `source_folder`, never by the ID. A folder equal to a published `source_folder` is the
+  same entity. A folder not in the file is new and pending, with an ID proposed under §4.6a (the
+  label if allowed, else another proposal); it joins no existing ID without the user's
+  confirmation, which for an existing ID is a reassignment (§4.6). A published `source_folder`
+  with no folder on disk is a removed folder, removed only on user confirmation like a removed
+  member.
 - A conflicting unit (`R_*`) blocks publication; no per-FOV exception is created.
 
 ## 11. Derived `experiment_design.csv` (compatibility output)
@@ -650,24 +745,28 @@ deterministically from a published file, with the contract's byte rules:
 
 | CSV column | Value |
 |---|---|
-| `condition` | member's condition ID |
+| `condition` | member's condition's `source_folder` (the folder label, not the condition ID) |
 | `biological_repeat` | member's `source_repeat` |
 | `repeat_group` | canonical repeat ID |
 | `control` | `true` iff some condition's `reference` names this condition |
 | `image_count` | member's `image_count` |
-| `technical_repeat_count` | 0 if the only technical repeat is `single`, else the number of technical repeats |
+| `technical_repeat_count` | 0 if the only technical repeat is `single` (its `source_folder` is `single`), else the number of technical repeats |
 | `confirmed` | `true` |
 | `confirmed_on` | repeat's `confirmed_on` |
 | `schema_version` | `1` |
 
-One row per member, sorted by `condition`, then `biological_repeat`, in code point order. For a
-legacy dataset whose canonical IDs equal its folder labels and whose controls migrate
-deterministically, the derived file MUST be byte-identical to the one preprocessing writes today.
+One row per member, sorted by `condition` (the source folder label), then `biological_repeat`, in
+code point order. The CSV carries the **source folder labels exactly as today** and no technical
+repeat or condition ID, so the choice of a condition or technical repeat ID (for example `ctrl` for
+the folder `control`) never changes it. For a legacy dataset whose `repeat_group` values migrate
+to the canonical repeat IDs and whose controls migrate deterministically, the derived file MUST be
+byte-identical to the one preprocessing writes today.
 Known loss: a legacy design marking a control that no other condition references (e.g. one
 condition only) exports `control = false`. For a migrated group whose legacy rows carried
-different `confirmed_on` dates (§7, AQ12) the derived file carries the group's one date on every
-row: it is byte-identical to the legacy file for every group whose rows share one date, and for
-the others the earlier per-row dates are the only difference, listed in the migration note.
+different `confirmed_on` dates (§7, AQ12) the derived file carries the group's one date, the
+latest, on every row. **Byte-identity is guaranteed only for repeat groups with a single
+`confirmed_on`**; for a group with several dates the earlier per-row dates are the only difference
+and are recorded in the migration note, which is their only record.
 
 Expected `experiment_design.csv` outputs (golden files) are **deferred to Stage 1**; Stage 0 fixes
 only the derivation rules above.

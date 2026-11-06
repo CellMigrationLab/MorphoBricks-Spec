@@ -149,7 +149,7 @@ Pooling, fitted normalization, CellPatcher exports, MorphoFeature features, Morp
 
 **Gate G0:** owner decisions recorded; normative schema and fixture catalogue reviewed; no runtime changes.
 
-G0 checklist (6 November 2026, awaiting owner review of PR #3): decisions recorded (ADR 0001, three rounds); schema reviewed; fixtures conform to the text (reference-validator cross-check, [fixtures/README.md](../fixtures/README.md)); consumer audit done (PR #5); no runtime changes.
+G0 checklist (6 November 2026, awaiting owner review of PR #3): decisions recorded (ADR 0001, four rounds); schema reviewed; fixtures conform to the text (reference-validator cross-check, [fixtures/README.md](../fixtures/README.md)); consumer audit done (PR #5); no runtime changes.
 
 ### Stage 1 — additive preprocessing authoring, after first tags
 

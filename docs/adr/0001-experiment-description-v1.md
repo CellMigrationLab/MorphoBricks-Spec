@@ -1,9 +1,10 @@
 # ADR 0001: experiment description v1 (`morphobricks.toml`)
 
-- **Status:** Accepted (owner decisions of 6 November 2026, three rounds, including the later
+- **Status:** Accepted (owner decisions of 6 November 2026, four rounds, including the later
   refinement D5). Specification only; nothing is implemented. The fixed-SHA consumer audit
   (roadmap S0.1) is done ([PR #5](https://github.com/CellMigrationLab/MorphoBricks-Spec/pull/5)); the
-  third round below answers its questions.
+  third round below answers its questions; the fourth round (FR1, FR2) separates condition and
+  technical-repeat IDs from their folder labels and states the limit of CSV byte-identity.
 - **Tracking:** [RFC #1](https://github.com/CellMigrationLab/MorphoBricks-Spec/issues/1);
   [roadmap §2 and §5 Stage 0](../roadmap.md);
   [feasibility audit](../audits/rfc1-feasibility-2026-11-05.md);
@@ -92,7 +93,7 @@ numbers refer to `fixtures/`.
 
 | # | Accepted decision | Rejected alternative | Spec | Fixtures / scenarios |
 |---|---|---|---|---|
-| Q1 | An append-only `used_ids` list per kind (conditions, channels, repeats): IDs only, no mapping. Every declared ID MUST be listed. Publication refuses reusing a listed ID (`R_USED_ID_REUSED`) and refuses dropping one (`R_USED_ID_DROPPED`); removing an entity keeps its ID listed. The guarantee covers the lineage of published files in one output folder; a new output folder starts a new lineage and only the run manifest history spans folders | Keep retired IDs only in the manifest history (lost with the manifest or a new output folder, so reuse goes undetected); or `retired_repeats` with old-to-new mapping (already rejected, D5: tombstones, chains, mapping rules) | §4.9, §6, §8 | `v25`, `t03`, `t04`, `i92`-`i97`; P19, P20 |
+| Q1 | An append-only `used_ids` list per kind (conditions, channels, repeats; technical repeats added by FR1): IDs only, no mapping. Every declared ID MUST be listed. Publication refuses reusing a listed ID (`R_USED_ID_REUSED`) and refuses dropping one (`R_USED_ID_DROPPED`); removing an entity keeps its ID listed. The guarantee covers the lineage of published files in one output folder; a new output folder starts a new lineage and only the run manifest history spans folders | Keep retired IDs only in the manifest history (lost with the manifest or a new output folder, so reuse goes undetected); or `retired_repeats` with old-to-new mapping (already rejected, D5: tombstones, chains, mapping rules) | §4.9, §6, §8 | `v25`, `t03`, `t04`, `i92`-`i97`; P19, P20 |
 | Q2 | `display_name` uniqueness within a kind is decided after Unicode case folding and NFC (`NFC(casefold(NFC(x)))`); names are kept as typed and never normalized | NFC-only (case-sensitive): `Control` and `control` would be two names that look the same in every report | §4.8 | `v24`, `i53`, `i76`, `i77`, `i86`-`i88` |
 | Q3 | A reader REFUSES a non-NFC identity (`E_ID_NOT_NFC`); the writer always writes NFC; readers never transform identities. Preprocessing likewise refuses a non-NFC folder label (`R_FOLDER_NOT_NFC`, a consequence, not a separate choice: a folder label is a source identity) | Normalize to NFC on read (an identity would be silently changed; the written file and the read model differ; a reader bug becomes an identity change) | §3.3 | `v23`, `i78`, `i83`-`i85`; P21 |
 | Q4 | `treatment_key` and `target` are descriptive only: never used for grouping, joins, pairing or cache keys; omitted from every digest | Make them identities (Label rules, case-collision scope, immutability): they are free text people vary, and a wrong grouping would pool biological repeats silently | §4.2a, §9.3 | `v27`, `v21`; `i71` |
@@ -141,12 +142,34 @@ Consequences recorded with this round:
   trimming header names (AQ7); keep RGB support but declare it per unit and check the header
   (AQ6); take `confirmed_on` only from a user action, never the clock; remove a folder from the
   design only on user confirmation (the audit's behaviours 1-3).
-- A condition or technical-repeat folder named like a forbidden field (`control`, `files`, `z`,
+- **Superseded by FR1 (fourth round):** a condition or technical-repeat folder named like a forbidden field (`control`, `files`, `z`,
   `experiment`, ...) cannot be described in v1 (AQ13a); preprocessing must report it, and the user
   renames the folder. A `source_repeat` value is not a key and is not affected.
 - A group with different legacy `confirmed_on` dates cannot keep every per-row date: the derived
   `experiment_design.csv` is byte-identical to the legacy file for every group whose rows share one
   date, and differs only in the earlier dates otherwise (AQ12).
+
+### Owner decisions of 6 November 2026, fourth round (folder labels, derived-CSV dates; all accepted)
+
+| # | Accepted decision | Rejected alternative | Spec | Fixtures / scenarios |
+|---|---|---|---|---|
+| FR1 | **Folder labels are never restricted by the reserved or forbidden-name lists.** Conditions and technical repeats, like biological repeats, have a canonical ID (immutable, user-confirmed, the only identity) separate from the folder it was discovered under, recorded in the required `conditions.<ID>.source_folder` and `technical_repeats.<ID>.source_folder` (exact label; Label rules and NFC; not an identity key). The proposed ID is the folder label when allowed; when the label is a forbidden name (`control`, `files`, `z`, ...) preprocessing proposes another ID, the user confirms it, and `display_name` may carry the label. One folder, one ID over the whole file (`E_SOURCE_FOLDER_REUSED`, `E_SOURCE_FOLDER_CONFLICT`); `single` is the ID of `source_folder = "single"` only; `used_ids` gains `technical_repeats` (technical repeat IDs are now immutable and never reused); a folder change for an existing ID is a reassignment (`R_CONFIRMED_ID_CHANGED` without a recorded confirmation); the FOV key and the derived `experiment_design.csv` keep the source folder labels, so legacy datasets stay byte-identical, and the canonical IDs are added beside the key; `source_folder` is part of the `conditions` and `repeats` digests | **Reserved names only in field positions:** keys stay free and the ID remains the folder label, so a condition `control` is valid. It makes the ID key ambiguous with the forbidden field of the same name in every consumer that reads a table path, and it keeps the identity tied to a folder spelling the user does not control. Also rejected: keeping the earlier rule (the folder must be renamed on disk before it can be described): the spec would demand an edit of the user's data and break provenance and the FOV key | §3.1-§3.4, §4.2, §4.4, §4.6, §4.6a, §4.7, §4.9, §6, §7, §8, §9, §10, §11 | `v33`, `v34`, `i113`, `i115`, `i120`-`i127`, `t10`-`t12`; P32, P33 |
+| FR2 | **Derived CSV dates.** Byte-identity of the derived `experiment_design.csv` with the legacy file is guaranteed only for repeat groups with a single `confirmed_on`. A legacy group with several dates gets the **latest** date (AQ12) in the derived file and the migration note records the original per-row dates | Claiming byte-identity for every legacy dataset (false for a group whose rows carry different dates: v1 stores one date per repeat); storing the per-row dates in `morphobricks.toml` (a per-member date has no meaning in v1 and would add a field only the migration reads) | §7, §11 | `v13`; P30 |
+
+Consequences recorded with this round:
+
+- **Schema additions (breaking for the earlier Stage 0 draft, which no reader implements):**
+  required `source_folder` on every condition and technical repeat, optional `display_name` on a
+  technical repeat, required `used_ids.technical_repeats`. The reserved list and the forbidden
+  names still apply to **IDs** (keys), where a collision with a field or a column is real.
+- The identity of a condition or technical repeat in a published file is its ID. The FOV key still
+  spells the folder label in `condition` and `technical_repeat`; consumers add the canonical IDs
+  beside it (proposed names `condition_id`, `technical_repeat_id`), as `repeat_group` does for the
+  repeat (AQ5). The consumer contracts fix the field spelling in Stage 1.
+- A folder label that breaks the Label rules (for example `NA`) is still refused at discovery as
+  today; this round adds no code for it.
+- A renamed condition or technical-repeat folder is a removed folder plus a new pending one; giving
+  the new folder to the existing ID is a reassignment that needs the recorded confirmation.
 
 ### Histogram representation: candidates and criteria only (not decided)
 
