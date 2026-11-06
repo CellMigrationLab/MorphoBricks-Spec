@@ -1,0 +1,107 @@
+# Matrix audit case K04: per-treatment matched controls (siNC per background)
+# Spec v1 expects: accepted
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions.THBS5_SiCol]
+source_folder = "THBS5_SiCol"
+reference = "THBS5_SiNC"
+
+[conditions.THBS5_SiNC]
+source_folder = "THBS5_SiNC"
+reference = "VEC_SiNC"
+
+[conditions.VEC_SiCol]
+source_folder = "VEC_SiCol"
+reference = "VEC_SiNC"
+
+[conditions.VEC_SiNC]
+source_folder = "VEC_SiNC"
+
+[channels.ACTIN]
+header_names = ["ACTIN"]
+
+[channels.DAPI]
+header_names = ["DAPI"]
+
+[repeats.rep1]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep1.members.THBS5_SiCol]
+source_repeat = "rep1"
+image_count = 2
+
+[repeats.rep1.members.THBS5_SiCol.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep1.members.THBS5_SiNC]
+source_repeat = "rep1"
+image_count = 2
+
+[repeats.rep1.members.THBS5_SiNC.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep1.members.VEC_SiCol]
+source_repeat = "rep1"
+image_count = 2
+
+[repeats.rep1.members.VEC_SiCol.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep1.members.VEC_SiNC]
+source_repeat = "rep1"
+image_count = 2
+
+[repeats.rep1.members.VEC_SiNC.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep2]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep2.members.THBS5_SiCol]
+source_repeat = "rep2"
+image_count = 2
+
+[repeats.rep2.members.THBS5_SiCol.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep2.members.THBS5_SiNC]
+source_repeat = "rep2"
+image_count = 2
+
+[repeats.rep2.members.THBS5_SiNC.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep2.members.VEC_SiCol]
+source_repeat = "rep2"
+image_count = 2
+
+[repeats.rep2.members.VEC_SiCol.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep2.members.VEC_SiNC]
+source_repeat = "rep2"
+image_count = 2
+
+[repeats.rep2.members.VEC_SiNC.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[masks.Cells]
+source_type = "Cells"
+representation = "instances"
+
+[used_ids]
+conditions = ["THBS5_SiCol", "THBS5_SiNC", "VEC_SiCol", "VEC_SiNC"]
+channels = ["ACTIN", "DAPI"]
+repeats = ["rep1", "rep2"]
+technical_repeats = ["single"]

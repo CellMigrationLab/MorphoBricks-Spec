@@ -66,9 +66,9 @@ def run_case(py, work: Path, case: matrix.Case) -> dict:
     with_masks = any(i.mask != "none" for i in case.images)
     if with_masks:
         obs["pp_masks"] = step(py, "pp_masks", cd, {})
-    z_all = any(i.axes in ("TCYX",) for i in case.images)
+    t_all = any(i.axes in ("TCYX",) for i in case.images)
     for mode in ("grid", "random", "whole_fov") + (("cell",) if with_masks else ()):
-        obs[f"cp_{mode}"] = step(py, "cp", cd, {"mode": mode, "z_all": z_all,
+        obs[f"cp_{mode}"] = step(py, "cp", cd, {"mode": mode, "t_all": t_all,
                                                 "binary_policy": case.cp_binary_policy})
     first = case.images[0]
     canon = list(dict.fromkeys(first.chans))
@@ -76,7 +76,8 @@ def run_case(py, work: Path, case: matrix.Case) -> dict:
     all_ch = list(doc["channels"])
     base_args = {"masks": with_masks, "channels": all_ch,
                  "channels_key": None if named else canon,
-                 "calibrated": any(i.phys for i in case.images)}
+                 "calibrated": any(i.phys for i in case.images),
+                 "nan_probe": any(i.mask == "tiny" for i in case.images)}
     provs = ["morphoobjects"] + (["morphorelate", "fiberfeatures", "morphoembed"] if with_masks else [])
     for prov in provs:
         r = step(py, "mf", cd, {**base_args, "provider": prov})

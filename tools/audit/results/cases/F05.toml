@@ -1,0 +1,67 @@
+# Matrix audit case F05: repeats paired with different folder names (v03)
+# Spec v1 expects: accepted
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions.CTRL]
+source_folder = "CTRL"
+
+[conditions.DrugA]
+source_folder = "DrugA"
+reference = "CTRL"
+
+[channels.ACTIN]
+header_names = ["ACTIN"]
+
+[channels.DAPI]
+header_names = ["DAPI"]
+
+[repeats.Day1]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.Day1.members.CTRL]
+source_repeat = "rep1"
+image_count = 2
+
+[repeats.Day1.members.CTRL.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.Day1.members.DrugA]
+source_repeat = "exp23"
+image_count = 2
+
+[repeats.Day1.members.DrugA.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.Day2]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.Day2.members.CTRL]
+source_repeat = "rep2"
+image_count = 2
+
+[repeats.Day2.members.CTRL.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.Day2.members.DrugA]
+source_repeat = "exp24"
+image_count = 2
+
+[repeats.Day2.members.DrugA.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[masks.Cells]
+source_type = "Cells"
+representation = "instances"
+
+[used_ids]
+conditions = ["CTRL", "DrugA"]
+channels = ["ACTIN", "DAPI"]
+repeats = ["Day1", "Day2"]
+technical_repeats = ["single"]

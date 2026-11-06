@@ -1,0 +1,89 @@
+# Matrix audit case K07: several reagents per target (si1, si2 -> SRC)
+# Spec v1 expects: accepted
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions.CTRL]
+source_folder = "CTRL"
+
+[conditions.si1]
+source_folder = "si1"
+reference = "CTRL"
+target = "SRC"
+
+[conditions.si2]
+source_folder = "si2"
+reference = "CTRL"
+target = "SRC"
+
+[channels.ACTIN]
+header_names = ["ACTIN"]
+
+[channels.DAPI]
+header_names = ["DAPI"]
+
+[repeats.rep1]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep1.members.CTRL]
+source_repeat = "rep1"
+image_count = 2
+
+[repeats.rep1.members.CTRL.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep1.members.si1]
+source_repeat = "rep1"
+image_count = 2
+
+[repeats.rep1.members.si1.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep1.members.si2]
+source_repeat = "rep1"
+image_count = 2
+
+[repeats.rep1.members.si2.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep2]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep2.members.CTRL]
+source_repeat = "rep2"
+image_count = 2
+
+[repeats.rep2.members.CTRL.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep2.members.si1]
+source_repeat = "rep2"
+image_count = 2
+
+[repeats.rep2.members.si1.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep2.members.si2]
+source_repeat = "rep2"
+image_count = 2
+
+[repeats.rep2.members.si2.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[masks.Cells]
+source_type = "Cells"
+representation = "instances"
+
+[used_ids]
+conditions = ["CTRL", "si1", "si2"]
+channels = ["ACTIN", "DAPI"]
+repeats = ["rep1", "rep2"]
+technical_repeats = ["single"]

@@ -1,0 +1,67 @@
+# Matrix audit case F21: non-NFC folder label (decomposed e-acute)
+# Spec v1 expects: refused: E_ID_NOT_NFC
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions.CTRL]
+source_folder = "CTRL"
+
+[conditions.Cafe]
+source_folder = "Café"
+reference = "CTRL"
+
+[channels.ACTIN]
+header_names = ["ACTIN"]
+
+[channels.DAPI]
+header_names = ["DAPI"]
+
+[repeats.rep1]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep1.members.CTRL]
+source_repeat = "rep1"
+image_count = 2
+
+[repeats.rep1.members.CTRL.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep1.members.Cafe]
+source_repeat = "rep1"
+image_count = 2
+
+[repeats.rep1.members.Cafe.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep2]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep2.members.CTRL]
+source_repeat = "rep2"
+image_count = 2
+
+[repeats.rep2.members.CTRL.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.rep2.members.Cafe]
+source_repeat = "rep2"
+image_count = 2
+
+[repeats.rep2.members.Cafe.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[masks.Cells]
+source_type = "Cells"
+representation = "instances"
+
+[used_ids]
+conditions = ["CTRL", "Cafe"]
+channels = ["ACTIN", "DAPI"]
+repeats = ["rep1", "rep2"]
+technical_repeats = ["single"]

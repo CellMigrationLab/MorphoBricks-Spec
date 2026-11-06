@@ -119,8 +119,8 @@ def cp(cd, a):
     c.common.preprocessing_run = "out"
     c.common.output_dir = f"cp_{mode}"
     c.export.enabled = True
-    if a.get("z_all"):
-        c.common.z_policy = "all"
+    if a.get("t_all"):
+        c.common.t_policy = "all"
     if mode == "grid":
         c.grid.tile_size = 16
         c.normalization = NormalizationConfig(enabled=True, scope="biological_repeat")
@@ -170,7 +170,9 @@ def mf(cd, a):
     if prov == "morphoobjects":
         if a["masks"]:
             run["requests"] += [
-                {"provider": "morphoobjects", "features": ["area"], "object_set": "Cells"},
+                {"provider": "morphoobjects", "features": ["area"] + (["eccentricity", "perimeter"]
+                                                                      if a.get("nan_probe") else []),
+                 "object_set": "Cells"},
                 {"provider": "morphoobjects", "feature": "mean_intensity", "object_set": "Cells",
                  "for_each_channel": chans}]
         run["patch_sets"] = {"tiles": {"mode": "grid", "side": 16}}
@@ -180,6 +182,10 @@ def mf(cd, a):
         run["requests"].append({"provider": "morphorelate", "feature": "mean_intensity",
                                 "object_set": "Cells", "compartment": "cell",
                                 "masks": {"cell": "Cells"}, "for_each_channel": chans})
+        if a.get("nan_probe"):
+            run["requests"].append({"provider": "morphorelate", "feature": "correlation",
+                                    "object_set": "Cells", "compartment": "cell",
+                                    "masks": {"cell": "Cells"}, "channels": chans[:2]})
     elif prov == "fiberfeatures":
         if a.get("calibrated"):
             run["bricks"] = {"fiberfeatures": {"scales": [0.5, 1.0], "sigma_in": 0.5,
@@ -195,7 +201,7 @@ def mf(cd, a):
     verb = "check" if prov == "morphoembed" else "run"
     rc, o, e = sh([MF, verb, rf.name], cd)
     res = {"rc": rc, "tail": tail(o + e, 1000), "channels_used": chans}
-    if rc == 0 and verb == "run":
+    if verb == "run" and (Path(cd) / f"mf_{prov}").exists():
         res.update(inspect_mf(Path(cd) / f"mf_{prov}"))
     return res
 
@@ -204,9 +210,16 @@ def inspect_mf(folder: Path):
     import pandas as pd
 
     out = {}
+    if not (folder / "fovs.csv").exists():
+        return {"no_fov_table": sorted(p.name for p in folder.iterdir()) if folder.exists() else None}
     fovs = pd.read_csv(folder / "fovs.csv", keep_default_na=False, na_values=[""])
     if "status" in fovs:
         out["fov_status"] = fovs["status"].value_counts().to_dict()
+        bad = fovs[fovs["status"] != "processed"]
+        if len(bad):
+            cols = [c for c in fovs.columns if c in ("reason", "detail", "error", "message")]
+            out["fov_failures"] = sorted({" | ".join(str(r[c])[:300] for c in cols)
+                                          for _, r in bad.iterrows()})[:3]
     feats = {}
     nan_total, nan_explained = 0, 0
     app = pd.read_csv(folder / "applicability.csv", keep_default_na=False, na_values=[""])

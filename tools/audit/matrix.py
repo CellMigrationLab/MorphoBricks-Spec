@@ -421,6 +421,8 @@ def ofat() -> list[Case]:
              grid(mask="grouped"), references={"DrugA": "CTRL"},
              spec_note="v1 cannot describe a grouped mask (4.5b); declaring it `instances` is "
                        "not detectable from the file and pixels cannot prove instances (4.5a)."))
+    add(Case("N01", "NaN probe: a one-pixel object and an object flat in one channel", {"A": "nan-probe"},
+             grid(mask="tiny"), references={"DrugA": "CTRL"}))
     return C
 
 
@@ -507,7 +509,10 @@ def write_dataset(case: Case, root: Path) -> None:
             planes = []
             for ch in im.chans:
                 lv = LEVEL.get(ch, 500)
-                planes.append(np.where(obj, lv, lv // 2) + rng.integers(-20, 21, (32, 32)))
+                p = np.where(obj, lv, lv // 2) + rng.integers(-20, 21, (32, 32))
+                if im.mask == "tiny" and ch == im.chans[-1]:
+                    p[lab == 3] = lv  # a flat object: no variance in this channel
+                planes.append(p)
             a = np.stack(planes).astype(np.uint16)
             axes = im.axes
             if axes == "YX":
@@ -557,6 +562,8 @@ def label_image(kind: str):
     m[2:12, 2:12] = 1
     m[16:28, 4:14] = 2
     m[5:15, 18:30] = 3
+    if kind == "tiny":
+        m[30, 30] = 4  # a one-pixel object
     if kind == "grouped":
         m[m == 3] = 1  # label 1 in two pieces, label 2 one piece
         m[22:30, 20:30] = 1

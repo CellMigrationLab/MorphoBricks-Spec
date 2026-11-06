@@ -1,0 +1,47 @@
+# Matrix audit case F17: lower-case `single` folder as the only repeat folder
+# Spec v1 expects: accepted
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions.CTRL]
+source_folder = "CTRL"
+
+[conditions.DrugA]
+source_folder = "DrugA"
+reference = "CTRL"
+
+[channels.ACTIN]
+header_names = ["ACTIN"]
+
+[channels.DAPI]
+header_names = ["DAPI"]
+
+[repeats.single]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.single.members.CTRL]
+source_repeat = "single"
+image_count = 2
+
+[repeats.single.members.CTRL.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.single.members.DrugA]
+source_repeat = "single"
+image_count = 2
+
+[repeats.single.members.DrugA.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[masks.Cells]
+source_type = "Cells"
+representation = "instances"
+
+[used_ids]
+conditions = ["CTRL", "DrugA"]
+channels = ["ACTIN", "DAPI"]
+repeats = ["single"]
+technical_repeats = ["single"]

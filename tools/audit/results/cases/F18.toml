@@ -1,0 +1,47 @@
+# Matrix audit case F18: `Single` folder (other case)
+# Spec v1 expects: refused: E_SINGLE_MISUSE
+schema = "morphobricks-experiment"
+schema_version = 1
+
+[conditions.CTRL]
+source_folder = "CTRL"
+
+[conditions.DrugA]
+source_folder = "DrugA"
+reference = "CTRL"
+
+[channels.ACTIN]
+header_names = ["ACTIN"]
+
+[channels.DAPI]
+header_names = ["DAPI"]
+
+[repeats.Single]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.Single.members.CTRL]
+source_repeat = "Single"
+image_count = 2
+
+[repeats.Single.members.CTRL.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[repeats.Single.members.DrugA]
+source_repeat = "Single"
+image_count = 2
+
+[repeats.Single.members.DrugA.technical_repeats.single]
+source_folder = "single"
+channels = ["DAPI", "ACTIN"]
+
+[masks.Cells]
+source_type = "Cells"
+representation = "instances"
+
+[used_ids]
+conditions = ["CTRL", "DrugA"]
+channels = ["ACTIN", "DAPI"]
+repeats = ["Single"]
+technical_repeats = ["single"]
