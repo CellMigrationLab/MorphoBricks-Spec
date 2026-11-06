@@ -14,25 +14,25 @@ Keep the spec repository lightweight: normative documents, fixtures, conformance
 
 ## 2. Decisions to freeze before implementation
 
-| Decision | Proposed resolution | Verification / open question |
-|---|---|---|
-| Format | **TOML** (`morphobricks.toml`) with strict parser and semantic validator | Owner confirmation; duplicate keys, implicit conversions and unknown fields must refuse |
-| Biological-repeat identity | Canonical, stable, user-confirmed ID; for trivial same-name pairing default to existing source folder name | Never automatically change ID on rename/reorder; record explicit identity migrations |
-| Imaging unit | `condition × source biological repeat × technical repeat` | Each unit has one ordered canonical channel list; FOVs in a unit must conform |
-| Heterogeneity | Supported in **normative v1** across imaging units | Stage 1 runtime may refuse until Stage 3 coordinated enablement |
-| Channel names | Stable canonical token plus optional display label and confirmed header evidence | Header name and canonical token need not be identical; never infer from pixels |
-| Masks | Confirm `instances` vs `binary`; retain source type and optional source-channel provenance | Drop redundant `axes`/`shared` under merged 2-D-only preprocessing contract; revisit if scope changes |
-| Calibration | Remains in authoritative `calibration.csv` | Do not copy into experiment metadata |
-| Compatibility | Keep `experiment_design.csv` as a derived compatibility output | Define deterministic export and migration behavior |
-| Comparability | Preserve N35 user confirmation | Reopen on materially changed repeat grouping/inventory; log decision provenance |
-| Histogram representation | Benchmark semantic-wide (preferred candidate) versus long/channel-keyed | Freeze only after legacy parity, pooling, missingness and pseudoreplication tests |
-| Statistical references | Optional primary `condition.reference` edge; graph acyclic | Additional contrasts belong to MorphoCoverage |
+| Decision | Proposed resolution | Verification / open question | Status |
+|---|---|---|---|
+| Format | **TOML** (`morphobricks.toml`) with strict parser and semantic validator | Owner confirmation; duplicate keys, implicit conversions and unknown fields must refuse | **Accepted** 2026-11-06 ([ADR 0001](adr/0001-experiment-description-v1.md)) |
+| Biological-repeat identity | Canonical, stable, user-confirmed ID; for trivial same-name pairing default to existing source folder name | Never automatically change ID on rename/reorder; record explicit identity migrations | **Accepted** 2026-11-06 ([ADR 0001](adr/0001-experiment-description-v1.md)) |
+| Imaging unit | `condition × source biological repeat × technical repeat` | Each unit has one ordered canonical channel list; FOVs in a unit must conform | Accepted with scope ([ADR 0001](adr/0001-experiment-description-v1.md)) |
+| Heterogeneity | Supported in **normative v1** across imaging units | Stage 1 runtime may refuse until Stage 3 coordinated enablement | **Accepted** 2026-11-06, scope ([ADR 0001](adr/0001-experiment-description-v1.md)) |
+| Channel names | Stable canonical token plus optional display label and confirmed header evidence | Header name and canonical token need not be identical; never infer from pixels | **Accepted** 2026-11-06, aliases ([ADR 0001](adr/0001-experiment-description-v1.md)) |
+| Masks | Confirm `instances` vs `binary`; retain source type and optional source-channel provenance | Drop redundant `axes`/`shared` under merged 2-D-only preprocessing contract; revisit if scope changes | **Accepted** 2026-11-06, scope ([ADR 0001](adr/0001-experiment-description-v1.md)) |
+| Calibration | Remains in authoritative `calibration.csv` | Do not copy into experiment metadata | Accepted earlier, kept ([ADR 0001](adr/0001-experiment-description-v1.md)) |
+| Compatibility | Keep `experiment_design.csv` as a derived compatibility output | Define deterministic export and migration behavior | Accepted earlier, kept ([ADR 0001](adr/0001-experiment-description-v1.md)) |
+| Comparability | Preserve N35 user confirmation | Reopen on materially changed repeat grouping/inventory; log decision provenance | Accepted earlier, kept ([ADR 0001](adr/0001-experiment-description-v1.md)) |
+| Histogram representation | Benchmark semantic-wide (preferred candidate) versus long/channel-keyed | Freeze only after legacy parity, pooling, missingness and pseudoreplication tests | Deferred to benchmark; candidates and criteria in [ADR 0001](adr/0001-experiment-description-v1.md) |
+| Statistical references | Optional primary `condition.reference` edge; graph acyclic | Additional contrasts belong to MorphoCoverage | **Accepted** 2026-11-06, scope ([ADR 0001](adr/0001-experiment-description-v1.md)) |
 
-**Not yet decided:** final TOML field spelling, exact header-alias representation, exact per-mask applicability representation, and the physical histogram schema. Do not treat illustrative examples as frozen syntax until fixtures and validators are reviewed.
+**Stage 0 outcome (6 November 2026):** field spelling, header-alias representation (`header_names`) and the error catalogue are now normative in [experiment-v1.md](experiment-v1.md), with [fixtures](../fixtures/README.md) and a [conformance plan](conformance-plan.md). Per-mask applicability is an analysis-layer check (`A_*` codes). **Still open:** the physical histogram schema (benchmark) and the questions listed in the Stage 0 pull request.
 
 ## 3. Minimal conceptual schema
 
-The following TOML is an **illustrative candidate**, not an implemented schema:
+The following TOML is an **illustrative candidate**, not an implemented schema. It is superseded by the normative [experiment-v1.md](experiment-v1.md) (e.g. repeats now carry `confirmed`, `confirmed_on` and per-member `image_count`):
 
 ```toml
 schema = "morphobricks-experiment"

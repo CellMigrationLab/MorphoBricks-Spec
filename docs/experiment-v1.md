@@ -312,6 +312,10 @@ Required preprocessing refusals (`R_*`):
 | `R_MASK_CONTRADICTS_REPRESENTATION` | A mask declared `binary` holds more than two distinct values |
 | `R_RGB_NOT_SUPPORTED` | Image type RGB (no v1 channel semantics yet) |
 
+Within one unit, `R_UNIT_NOT_HOMOGENEOUS` is reported first and replaces
+`R_CHANNEL_COUNT_MISMATCH` and `R_HEADER_CONTRADICTION` for that unit: intra-unit discrepancies
+are detected before channel identity is checked.
+
 Undetectable by any layer: identical-shape, unnamed images with physically swapped fluorophores.
 Representative previews and explicit confirmation are the guard; image-based checks are advisory.
 
