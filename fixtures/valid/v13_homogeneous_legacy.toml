@@ -93,3 +93,8 @@ image_count = 10
 
 [repeats.rep3.members.DrugB.technical_repeats.single]
 channels = ["DNA", "ACTIN"]
+
+[used_ids]
+conditions = ["CTRL", "DrugA", "DrugB"]
+channels = ["ACTIN", "DNA"]
+repeats = ["rep1", "rep2", "rep3"]

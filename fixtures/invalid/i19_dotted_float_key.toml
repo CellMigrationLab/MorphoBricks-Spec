@@ -44,3 +44,8 @@ source_channels = ["DNA"]
 
 [conditions.1.0]
 display_name = "one point zero"
+
+[used_ids]
+conditions = ["1", "CTRL", "DrugA"]
+channels = ["ACTIN", "DNA"]
+repeats = ["rep1"]

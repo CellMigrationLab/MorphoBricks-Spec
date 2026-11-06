@@ -76,3 +76,8 @@ image_count = 6
 
 [repeats.rep1.members.VEC_SiNC.technical_repeats.single]
 channels = ["DNA", "ACTIN"]
+
+[used_ids]
+conditions = ["THBS5", "THBS5_SiCol6a1", "THBS5_SiNC", "VEC", "VEC_SiCol6a1", "VEC_SiNC"]
+channels = ["ACTIN", "DNA"]
+repeats = ["rep1"]

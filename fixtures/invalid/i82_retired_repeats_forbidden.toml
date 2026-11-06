@@ -61,3 +61,8 @@ channels = ["DNA", "ACTIN"]
 [retired_repeats.rep0]
 retired_on = "2026-11-01"
 replaced_by = "rep1"
+
+[used_ids]
+conditions = ["CTRL", "DrugA"]
+channels = ["ACTIN", "DNA"]
+repeats = ["rep1", "rep2"]

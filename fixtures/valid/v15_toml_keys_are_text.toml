@@ -33,3 +33,8 @@ image_count = 3
 
 [repeats.2026-01-01.members."1.0".technical_repeats.off]
 channels = ["DNA", "ACTIN"]
+
+[used_ids]
+conditions = ["1.0", "NO"]
+channels = ["ACTIN", "DNA"]
+repeats = ["2026-01-01"]

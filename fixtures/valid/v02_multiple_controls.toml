@@ -72,3 +72,8 @@ image_count = 8
 
 [repeats.rep1.members.WT.technical_repeats.single]
 channels = ["DNA", "ACTIN"]
+
+[used_ids]
+conditions = ["DMSO", "DrugA", "DrugB", "KO1", "KO2", "WT"]
+channels = ["ACTIN", "DNA"]
+repeats = ["rep1"]

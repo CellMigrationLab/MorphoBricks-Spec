@@ -32,3 +32,8 @@ source_channels = ["DNA"]
 [masks.TumorRegion]
 source_type = "tumor_region"
 representation = "binary"
+
+[used_ids]
+conditions = ["CTRL"]
+channels = ["ACTIN", "DNA"]
+repeats = ["rep1"]

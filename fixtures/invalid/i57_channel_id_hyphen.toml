@@ -41,3 +41,8 @@ channels = ["DNA", "F-actin"]
 source_type = "nuclei"
 representation = "instances"
 source_channels = ["DNA"]
+
+[used_ids]
+conditions = ["CTRL", "DrugA"]
+channels = ["DNA", "F-actin"]
+repeats = ["rep1"]

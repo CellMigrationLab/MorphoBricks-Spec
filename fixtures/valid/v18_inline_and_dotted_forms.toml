@@ -27,3 +27,8 @@ members.DrugA.technical_repeats.single.channels = ["DNA", "ACTIN"]
 members.CTRL.source_repeat = "rep1"
 members.CTRL.image_count = 12
 members.CTRL.technical_repeats.single.channels = ["DNA", "ACTIN"]
+
+[used_ids]
+conditions = ["CTRL", "DrugA"]
+channels = ["ACTIN", "DNA"]
+repeats = ["rep1", "rep2"]

@@ -39,3 +39,8 @@ channels = ["DNA", "ACTIN", "PHASE"]
 
 [repeats.R002.members.CTRL.technical_repeats.acquisition_2]
 channels = ["DNA", "ACTIN"]
+
+[used_ids]
+conditions = ["CTRL"]
+channels = ["ACTIN", "DNA", "PHASE"]
+repeats = ["R001", "R002"]

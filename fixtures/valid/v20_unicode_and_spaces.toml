@@ -34,3 +34,8 @@ image_count = 4
 
 [repeats."Réplica_1".members."Knock-out β1".technical_repeats.single]
 channels = ["DNA", "ACTIN"]
+
+[used_ids]
+conditions = ["Knock-out \u03b21", "Wild type"]
+channels = ["ACTIN", "DNA"]
+repeats = ["R\u00e9plica_1"]

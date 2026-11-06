@@ -1,16 +1,26 @@
-# Fixture v23_non_nfc_identity
+# Fixture v23_nfc_identity
 # Expected: PASS
-# Source: Owner decision 7 (6 Nov 2026)
-# The condition key is written decomposed (e + U+0301) and referenced composed (U+00E9). Identities are read in NFC, so both are the same condition "Caf\u00e9": the file is valid, and a writer emits the composed form only.
+# Source: Owner decisions of 6 Nov 2026 (Q3)
+# A condition key written composed (U+00E9, NFC) and referenced composed. A writer emits only this form and a reader accepts only this form: any decomposed spelling of an identity is E_ID_NOT_NFC (i78, i83-i85), never normalized.
 schema = "morphobricks-experiment"
 schema_version = 1
 
-[conditions."Cafe\u0301"]
+[conditions."Caf\u00e9"]
+display_name = "Control"
 
 [conditions.DrugA]
+display_name = "Drug A"
 reference = "Caf\u00e9"
+target = "SRC"
+treatment_key = "saracatinib"
 
 [channels.DNA]
+display_name = "DAPI"
+header_names = ["DAPI"]
+
+[channels.ACTIN]
+display_name = "F-actin"
+header_names = ["Phalloidin-488"]
 
 [repeats.rep1]
 confirmed = true
@@ -18,14 +28,37 @@ confirmed_on = "2026-11-06"
 
 [repeats.rep1.members."Caf\u00e9"]
 source_repeat = "rep1"
-image_count = 3
+image_count = 12
 
 [repeats.rep1.members."Caf\u00e9".technical_repeats.single]
-channels = ["DNA"]
+channels = ["DNA", "ACTIN"]
 
 [repeats.rep1.members.DrugA]
 source_repeat = "rep1"
-image_count = 3
+image_count = 11
 
 [repeats.rep1.members.DrugA.technical_repeats.single]
-channels = ["DNA"]
+channels = ["DNA", "ACTIN"]
+
+[repeats.rep2]
+confirmed = true
+confirmed_on = "2026-11-06"
+
+[repeats.rep2.members."Caf\u00e9"]
+source_repeat = "rep2"
+image_count = 10
+
+[repeats.rep2.members."Caf\u00e9".technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[repeats.rep2.members.DrugA]
+source_repeat = "rep2"
+image_count = 10
+
+[repeats.rep2.members.DrugA.technical_repeats.single]
+channels = ["DNA", "ACTIN"]
+
+[used_ids]
+conditions = ["Caf\u00e9", "DrugA"]
+channels = ["ACTIN", "DNA"]
+repeats = ["rep1", "rep2"]

@@ -45,3 +45,8 @@ source_channels = ["DNA"]
 [masks.Nuclei2]
 source_type = "nuclei"
 representation = "binary"
+
+[used_ids]
+conditions = ["CTRL", "DrugA"]
+channels = ["ACTIN", "DNA"]
+repeats = ["rep1"]

@@ -40,3 +40,8 @@ channels = ["DNA", "ACTIN"]
 [masks.Nuclei]
 source_type = "nuclei"
 source_channels = ["DNA"]
+
+[used_ids]
+conditions = ["CTRL", "DrugA"]
+channels = ["ACTIN", "DNA"]
+repeats = ["rep1"]

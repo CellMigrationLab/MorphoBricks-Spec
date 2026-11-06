@@ -1,7 +1,7 @@
 # Fixture v21_metadata_only_edit
 # Expected: PASS
 # Source: Adversarial 10
-# v01 with only the conditions section edited (labels, target, treatment_key). The channels, repeats and masks section digests equal v01's, so no pixel-derived product may be invalidated.
+# v01 with only descriptive condition fields edited (display name, target removed, treatment_key changed). All four section digests equal v01's (display_name, target and treatment_key are omitted, experiment-v1 9.3), so no pixel-derived product may be invalidated.
 schema = "morphobricks-experiment"
 schema_version = 1
 
@@ -56,3 +56,8 @@ image_count = 10
 
 [repeats.rep2.members.DrugA.technical_repeats.single]
 channels = ["DNA", "ACTIN"]
+
+[used_ids]
+conditions = ["CTRL", "DrugA"]
+channels = ["ACTIN", "DNA"]
+repeats = ["rep1", "rep2"]

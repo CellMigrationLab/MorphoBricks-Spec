@@ -27,3 +27,8 @@ channels = ["DNA", "ACTIN"]
 
 [repeats.rep1.members.CTRL.technical_repeats.acquisition_2]
 channels = ["DNA", "ACTIN"]
+
+[used_ids]
+conditions = ["CTRL"]
+channels = ["ACTIN", "DNA"]
+repeats = ["rep1"]

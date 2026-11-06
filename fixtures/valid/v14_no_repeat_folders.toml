@@ -33,3 +33,8 @@ image_count = 18
 
 [repeats.single.members.DrugA.technical_repeats.single]
 channels = ["DNA", "ACTIN"]
+
+[used_ids]
+conditions = ["CTRL", "DrugA"]
+channels = ["ACTIN", "DNA"]
+repeats = ["single"]

@@ -44,3 +44,8 @@ source_channels = ["DNA"]
 
 [repeats.rep1.members.CTRL.technical_repeats.acquisition_2]
 channels = ["DNA", "ACTIN"]
+
+[used_ids]
+conditions = ["CTRL", "DrugA"]
+channels = ["ACTIN", "DNA"]
+repeats = ["rep1"]

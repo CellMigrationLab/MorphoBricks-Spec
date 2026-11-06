@@ -60,3 +60,8 @@ image_count = 5
 
 [repeats.R002.members.DrugA.technical_repeats.single]
 channels = ["DNA", "ACTIN", "PAXILLIN"]
+
+[used_ids]
+conditions = ["CTRL", "DrugA"]
+channels = ["ACTIN", "DNA", "PAXILLIN", "PHASE"]
+repeats = ["R001", "R002"]

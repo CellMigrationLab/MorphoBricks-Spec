@@ -34,3 +34,8 @@ source_type = "cells"
 representation = "instances"
 source_channels = ["ACTIN", "DNA"]
 display_name = "Whole cells"
+
+[used_ids]
+conditions = ["CTRL"]
+channels = ["ACTIN", "DNA"]
+repeats = ["rep1"]

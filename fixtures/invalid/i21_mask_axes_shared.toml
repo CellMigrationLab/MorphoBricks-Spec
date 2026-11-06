@@ -43,3 +43,8 @@ representation = "instances"
 source_channels = ["DNA"]
 axes = "YX"
 shared = true
+
+[used_ids]
+conditions = ["CTRL", "DrugA"]
+channels = ["ACTIN", "DNA"]
+repeats = ["rep1"]
