@@ -252,7 +252,8 @@ def main(path):
     print("\n## Cell notes\n")
     for cid, rec, cells in rows:
         notes = [f"{c} {SHORT[v]}: {why}" for c, (v, why) in cells.items()
-                 if v not in ("N/A",) and why and (v != "MATCH" or c in ("PP",))]
+                 if v not in ("N/A",) and why and (v != "MATCH" or c in ("PP",))
+                 and not (v == "SKIP" and why.startswith("weights absent"))]
         if notes:
             print(f"- **{cid}** " + "; ".join(n.replace("|", "/") for n in notes))
     return 0
