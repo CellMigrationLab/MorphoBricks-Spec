@@ -1,7 +1,7 @@
 # Fixture t03_used_id_reused
 # Expected: R_USED_ID_REUSED (against predecessor valid/v25)
 # Source: Owner decisions of 6 Nov 2026 (Q1); LabChronicle audit L2
-# Valid on its own, but DrugA was retired in v25 (listed in used_ids, not declared) and is declared again here for a new source folder. A listed ID is never reused, even by the same folder returning: it needs a new ID.
+# Valid on its own, but DrugA was retired in v25 (listed in used_ids, not declared) and is declared again here for a new source folder. A listed ID is never reused, even by the same folder returning: it needs a new ID. Repeat rep1 gains the member DrugA/new_folder_1; adding a member to an existing repeat is not a changed entity (experiment-v1 4.6, owner decision AQ1), so the set is exactly {R_USED_ID_REUSED}, not R_CONFIRMED_ID_CHANGED.
 schema = "morphobricks-experiment"
 schema_version = 1
 

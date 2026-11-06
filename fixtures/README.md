@@ -16,7 +16,7 @@ is executed by this repository.
   `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` (lifted at Stage 3).
 - Physical cases that need images (within-unit divergence, header contradictions, mask pixel
   contradictions, reconciliation) cannot be expressed by a TOML file alone; they are listed as
-  scenarios P01-P22 in the [conformance plan](../docs/conformance-plan.md#3-physical-scenarios-preprocessing-owned),
+  scenarios P01-P31 in the [conformance plan](../docs/conformance-plan.md#3-physical-scenarios-preprocessing-owned),
   built on the valid files below.
 - `v18` MUST parse to the same model as `v01` (round trip); `v21` differs from `v01` only in
   `display_name`, `target` and `treatment_key` values and `v16` only in `display_name` values, so
@@ -24,53 +24,56 @@ is executed by this repository.
 - Every file carries the required `used_ids` table (experiment-v1 §4.9) listing at least all of its
   declared condition, channel and repeat IDs; `i92` is the file without it. The eight undecodable
   or unparsable phase-1 fixtures (`i01`-`i08`) are unchanged and fail before it matters.
-- `transitions/` holds five files that are valid alone but are refused against a named published
-  predecessor (`R_CONFIRMED_ID_CHANGED`, `R_USED_ID_REUSED`, `R_USED_ID_DROPPED`,
-  `R_CONFIRMED_ON_CHANGED`; experiment-v1 §4.4a, §4.6, §4.9); they need the predecessor file and
-  are not part of the single-file valid/invalid rules. Publication-base and folder-name rules need
-  no TOML of their own: they run on named fixtures in scenarios P17-P22.
+- `transitions/` holds nine files that are valid alone and are checked against a named published
+  predecessor: refused with an exact set of publication codes (`R_CONFIRMED_ID_CHANGED`,
+  `R_USED_ID_REUSED`, `R_USED_ID_DROPPED`, `R_CONFIRMED_ON_CHANGED`; experiment-v1 §4.4a, §4.6,
+  §4.9) or, for `t06`, **accepted** (adding members is not a changed entity, §4.6). They need the
+  predecessor file and are not part of the single-file valid/invalid rules. Publication-base and
+  folder-name rules need no TOML of their own: they run on named fixtures in scenarios P17-P22.
+- Rules that need images, a run or a consumer (header matching, image type against the header,
+  mask checks and conversions, mask type names, the FOV key, the `target` prefill, legacy
+  migration dates) have no single-file TOML form: each is a scenario P23-P31 of the conformance
+  plan on a named fixture, listed in the coverage tables below.
 - A copy of this tree vendored by a reader MUST hash to the pinned SHA's `fixtures` tree
   (conformance plan §1).
 - Expected `experiment_design.csv` outputs (golden files) are deferred to Stage 1. The fixed-SHA
-  consumer audit (roadmap S0.1) is still TODO before Gate G0.
+  consumer audit (roadmap S0.1) is done (PR #5); its questions are answered by the third round of
+  owner decisions (ADR 0001) and the fixtures `v28`-`v32`, `t06`-`t09`, `i100`-`i119` follow from
+  them.
 
 ## Syntax check (6 November 2026)
 
-Checked with Python 3.13 `tomllib` (`tomllib.loads` on the UTF-8 decoded bytes), after the second
+Checked with Python 3.13 `tomllib` (`tomllib.loads` on the UTF-8 decoded bytes), after the third
 round of owner decisions:
 
-- `valid/`: 27 of 27 parse.
-- `transitions/`: 5 of 5 parse.
-- `invalid/`: 91 of 99 parse as TOML and are invalid only by the v1 rules. The 8 phase-1 fixtures
+- `valid/`: 32 of 32 parse.
+- `transitions/`: 9 of 9 parse.
+- `invalid/`: 111 of 119 parse as TOML and are invalid only by the v1 rules. The 8 phase-1 fixtures
   fail deliberately: `i01_bom` (`TOMLDecodeError`, BOM read as an invalid statement),
   `i02_invalid_utf8` (`UnicodeDecodeError`), `i03`-`i06` (`TOMLDecodeError`, "Cannot declare ...
   twice" / "Cannot overwrite a value"), `i07`, `i08` (`TOMLDecodeError`, "Invalid value" /
   "Expected newline").
 
-For the valid and transition files, a throw-away script (not committed) also checked that every
-declared ID is listed in `used_ids`, that every identity and `used_ids` entry is NFC, and that no
-display names collide within a kind after NFC and case folding; for `i86`-`i88` it confirmed the
-collision.
-
 ## Reference-validator cross-check (6 November 2026, roadmap S0.1)
 
 A throw-away reference validator (Python 3.13, not committed: this repository holds no runtime
 code) implementing experiment-v1 §2-§6 phase by phase, plus the predecessor checks of §4.6,
-§4.4a and §4.9 expressible from two files, was run on every fixture. Results after this commit:
+§4.4a and §4.9 expressible from two files, was run on every fixture after the third round of
+owner decisions. The validator implements the text as written, including the new rules (one code
+per broken rule, forbidden names on ID keys, the extended reserved list, NFC of channel
+references, `image_type` and the RGB rules, "changed entity" as removal or reassignment). Results:
 
-- `valid/`: 27 of 27 accepted with exactly the listed warnings.
-- `invalid/`: 99 of 99 refused with exactly the listed code set, from the listed phase only.
-- `transitions/`: 5 of 5 valid alone (`t03` with `W_REPEAT_MISSING_CONDITIONS`); against their
-  predecessors `t01`, `t02`, `t04`, `t05` give exactly their listed codes. `t03` gives
-  `R_USED_ID_REUSED`, and also `R_CONFIRMED_ID_CHANGED` under a literal reading of §4.6 (c),
-  because repeat `rep1` gains a member folder; whether adding a member to a repeat is "another
-  entity" is an open owner question (S0.1 audit), so `t03` is unchanged.
+- `valid/`: 32 of 32 accepted with exactly the listed warnings.
+- `invalid/`: 119 of 119 refused with exactly the listed code set, from the listed phase only.
+- `transitions/`: 9 of 9 valid alone (`t03`, `t06`, `t07`, `t08` with
+  `W_REPEAT_MISSING_CONDITIONS`); against their predecessors each gives exactly its listed set:
+  `t01` `R_CONFIRMED_ID_CHANGED`; `t02` `R_CONFIRMED_ID_CHANGED` and `R_USED_ID_DROPPED`; `t03`
+  `R_USED_ID_REUSED` only; `t04` `R_USED_ID_DROPPED`; `t05` `R_CONFIRMED_ON_CHANGED`; `t06` no
+  code (accepted); `t07`, `t08`, `t09` `R_CONFIRMED_ID_CHANGED`.
 - `v18` parses to the same model as `v01`; `v16` and `v21` have the same four sections as `v01`
   once `display_name`, `target` and `treatment_key` are omitted.
 
-The run found two transition fixtures inconsistent with §4.9 (`t01`, `t02` dropped the old IDs
-from `used_ids`); they are corrected above. This is a check of the fixtures against the text,
-not a conformance claim for any brick.
+This is a check of the fixtures against the text, not a conformance claim for any brick.
 
 ## Coverage of RFC #1 and its discussion
 
@@ -129,10 +132,20 @@ not a conformance claim for any brick.
 | Swapped channel order | `v04`, `v06` |
 | Extra / missing channel | `v05`, `v17`, `v22`, `i69` |
 | Within-unit divergence | `i20`; P01, P02 |
-| Instance vs binary masks | `v07`, `v08`, `i42`, `i43`; P05 |
+| Instance vs binary masks | `v07`, `v08`, `i42`, `i43`, `i111`, `i112`; P05, P27, P28 |
 | Partial masks | `v09` |
 | Immutable IDs (no renames) | `v16`, `i75`, `i82`, `t01`, `t02`; P08, P16 |
-| Aliases (header evidence) | `v11`, `v12`, `i46`, `i81`; P03 |
+| Adding is not a change; removing or reassigning is | `t03`, `t06`, `t07`, `t08`; P07, P15 |
+| Case-only correction needs a new ID; set of publication codes | `t02`, `t09`, `i95`; P16 |
+| RGB images (declared type, fixed tokens, no aliases) | `v28`, `v29`, `i100`-`i106`, `i119`; P13, P23, P24 |
+| Reserved names (one list for channel and mask IDs) | `i59`, `i61`, `i107`-`i109`, `v32` |
+| Forbidden names apply to ID keys | `i113`-`i115` |
+| One code per broken rule; NFC of channel references | `i116`-`i118` |
+| FOV key keeps the source label, `repeat_group` added | `v03`, `v30`; P25 |
+| Mask checks: when, unchecked masks, type names | `v09`; P05, P28, P29 |
+| Descriptive keys prefill only | `v27`; P31 |
+| Legacy migration dates | `v13`; P30 |
+| Aliases (header evidence) | `v11`, `v12`, `v31`, `i46`, `i81`, `i110`; P03, P26 |
 | Versioning (offline constant, no default) | `i09`-`i15` |
 | Identities | `v14`, `v15`, `v20`, `v23`, `v26`, `i54`-`i63`, `i78` |
 | Target / treatment key (descriptive only) | `v01`, `v10`, `v21`, `v27`, `i71` |
@@ -149,7 +162,7 @@ not a conformance claim for any brick.
 | D5 | IDs immutable; `display_name` mutable and unique; no `retired_repeats` | `v16` (display names change, identity identical), `i53`, `i76`, `i77` (collisions), `i82` (no table), `t01`, `t02`; P16 |
 | D6 | N35 reopens only on channel/layout/grouping change | P07, P15 |
 | D7 | NFC identities (refined by Q3: non-NFC refused, never normalized; no NFC-collision code) | `v23`, `i78`, `i83`-`i85` |
-| D8 | RGB refused | P13 |
+| D8 | RGB refused (**superseded by AQ6**) | P13 (now: RGB accepted when declared) |
 | D9 | Header names exact, case-sensitive | `v11`; P03 |
 | D10 | `binary` mask with > 2 values refused | P05 |
 | D11 | Drafts internal; `RunInputs` refuses them | `i37`; P14 |
@@ -163,19 +176,32 @@ not a conformance claim for any brick.
 | A3 | `confirmed_on` is a user fact | `i98`, `t05`; P22 |
 | A4 | `display_name` never substitutes for an ID | `i89`-`i91` |
 | A5 | Pin integrity, offline version check, no fallback rules | `i09`-`i11`; conformance plan §1-§2 |
+| AQ1 | Adding a member is allowed; only removing or reassigning is a changed entity | `t03`, `t06`, `t07`, `t08`; P07, P15 |
+| AQ2 | Case-only ID correction needs a new ID; publication reports every `R_*` code | `t02`, `t09`, `i95`; P16 |
+| AQ3 | `target` descriptive; MorphoCoverage may only prefill, confirmed inside MorphoCoverage | `v27`; P31 |
+| AQ4 | One reserved list: compartments plus MorphoRelate reserved column names | `i59`, `i61`, `i107`-`i109`, `v32` |
+| AQ5 | Canonical repeat ID added as `repeat_group`; the FOV key keeps the source label | `v03`, `v30`; P25 |
+| AQ6 | RGB accepted as a declared type (`image_type = "rgb"`, tokens `R`, `G`, `B`); supersedes D8 | `v28`, `v29`, `i100`-`i106`, `i119`; P13, P23, P24 |
+| AQ7 | No trimming: header names exact after NFC of both sides | `v31`, `i110`; P26 |
+| AQ8 | `parent_labels` masks out of scope in v1 | `i111` |
+| AQ9 | Binary-as-instances only by an explicit, per-request, recorded conversion | `v08`, `i112`; P27 |
+| AQ10 | Mask representation checked in the mask step; publication records "not yet checked"; unchecked masks refuse | `v09`; P05, P28 |
+| AQ11 | A discovered mask type breaking the Label rules: `R_MASK_TYPE_NAME_INVALID` | P29 |
+| AQ12 | Legacy groups with different `confirmed_on` take the latest date, with a note | `v13`; P30 |
+| AQ13 | Forbidden names apply to ID keys; NFC of channel references; one code per broken rule | `i113`-`i118` |
 
-## Valid fixtures (27)
+## Valid fixtures (32)
 
 | Fixture | Source | Expected | Homogeneous | Case |
 |---|---|---|---|---|
 | [`v01_single_control`](valid/v01_single_control.toml) | RFC case 1 | pass | yes | One control; trivial pairing, so canonical repeat IDs default to the folder names. |
 | [`v02_multiple_controls`](valid/v02_multiple_controls.toml) | RFC case 2 | pass | yes | Two controls (DMSO, WT), each referenced by two conditions. |
-| [`v03_paired_different_folder_names`](valid/v03_paired_different_folder_names.toml) | RFC case 3; adversarial 8 | pass | yes | Source folders rep1 (CTRL) and experiment_23 (DrugA) paired by the user into canonical repeat Day1; rep2/rep2_drug into Day2. MorphoCoverage must see Day1 and Day2 as the biological repeats. |
+| [`v03_paired_different_folder_names`](valid/v03_paired_different_folder_names.toml) | RFC case 3; adversarial 8 | pass | yes | Source folders rep1 (CTRL) and experiment_23 (DrugA) paired by the user into canonical repeat Day1; rep2/rep2_drug into Day2. MorphoCoverage must see Day1 and Day2 as the biological repeats: the FOV key keeps `rep1` / `experiment_23` in `biological_repeat` and the added `repeat_group` is Day1 (P25). |
 | [`v04_swapped_channel_order`](valid/v04_swapped_channel_order.toml) | RFC case 4; adversarial 3 | pass | **no** | Same channels, opposite source order between conditions (CTRL C0=DNA, DrugA C0=ACTIN). Valid schema; heterogeneous, so Stage 1-2 runtime refuses (R_HETEROGENEOUS_LAYOUT_NOT_ENABLED). From Stage 3, ACTIN and DNA are never mixed by C index. |
 | [`v05_variable_channel_counts`](valid/v05_variable_channel_counts.toml) | RFC case 5 | pass | **no** | Extra channel PHASE in DrugA/rep1 only; CTRL lacks it (missing elsewhere). Heterogeneous. |
 | [`v06_technical_repeats_different_layouts`](valid/v06_technical_repeats_different_layouts.toml) | RFC case 6; adversarial 1 | pass | **no** | One biological repeat (R002) whose CTRL member has two technical repeats with different counts and orders. It stays ONE biological repeat (N = 2 repeats in total, not 3). Heterogeneous. |
 | [`v07_instance_masks`](valid/v07_instance_masks.toml) | RFC case 8 | pass | yes | Two instance masks with source-channel provenance; canonical mask IDs differ from discovered source types. |
-| [`v08_binary_masks`](valid/v08_binary_masks.toml) | RFC case 9; adversarial 6 | pass | yes | A binary region mask beside an instance mask. Valid; an analysis request using TumorRegion as an object set must refuse (A_MASK_NOT_INSTANCES). |
+| [`v08_binary_masks`](valid/v08_binary_masks.toml) | RFC case 9; adversarial 6 | pass | yes | A binary region mask beside an instance mask. Valid; an analysis request using TumorRegion as an object set must refuse (A_MASK_NOT_INSTANCES) unless it carries an explicit, per-request, recorded conversion (P27). |
 | [`v09_partial_masks`](valid/v09_partial_masks.toml) | RFC case 10 | pass | yes | Masks declared while segmentation is in progress (e.g. 0/1000 or 300/1000 FOVs). Completeness lives in the run manifest, so the file is valid at every stage; scope checks belong to the analysis layer (A_SCOPE_INCOMPLETE). |
 | [`v10_reference_chain`](valid/v10_reference_chain.toml) | RFC case 11 | pass | yes | Reference chains VEC_SiCol6a1 -> VEC_SiNC -> VEC and THBS5_SiCol6a1 -> THBS5_SiNC -> THBS5; shared treatment_key across backgrounds. |
 | [`v11_header_aliases`](valid/v11_header_aliases.toml) | Adversarial 5 | pass | yes | Canonical DNA confirmed with header evidence DAPI and Hoechst 33342; canonical ACTIN with an exact-match header name that still had to be confirmed. A header name outside these lists is R_HEADER_CONTRADICTION. |
@@ -192,23 +218,32 @@ not a conformance claim for any brick.
 | [`v22_unused_channel_warning`](valid/v22_unused_channel_warning.toml) | Owner decision 3 | pass + `W_UNUSED_CHANNEL` | yes | PHASE is declared but acquired by no unit: valid with a warning, never an error. |
 | [`v23_nfc_identity`](valid/v23_nfc_identity.toml) | Owner decision Q3 | pass | yes | A condition key written composed (U+00E9, NFC) and referenced composed: the only form a writer emits and a reader accepts. |
 | [`v24_display_name_as_typed`](valid/v24_display_name_as_typed.toml) | Owner decision Q2 | pass | yes | Display names kept as typed (one decomposed, one lower case); a channel and a condition share the display name "Drug A" because uniqueness is per kind. |
-| [`v25_removed_condition_id_retained`](valid/v25_removed_condition_id_retained.toml) | Owner decision Q1 | pass | yes | v01 after DrugA was removed: DrugA stays listed in `used_ids.conditions`. Predecessor of t03 and t04. |
+| [`v25_removed_condition_id_retained`](valid/v25_removed_condition_id_retained.toml) | Owner decision Q1 | pass | yes | v01 after DrugA was removed: DrugA stays listed in `used_ids.conditions`. Predecessor of t03 and t04 (and, with the recorded removal confirmation of experiment-v1 4.6, the removal of v01). |
 | [`v26_ids_kept_as_written`](valid/v26_ids_kept_as_written.toml) | Audit B1, B2, B11 | pass | yes | IDs `cl001`, `CL1000`, `R999`, `R1000`: no width, prefix or case rule; kept exactly as written. |
 | [`v27_descriptive_keys_collide`](valid/v27_descriptive_keys_collide.toml) | Owner decision Q4 | pass | yes | Identical and case-differing `target` / `treatment_key` values on different conditions: valid, no warning, no grouping. |
+| [`v28_rgb_units`](valid/v28_rgb_units.toml) | Owner decision AQ6 (supersedes D8) | pass | yes | An RGB experiment (e.g. H&E): every unit declares `image_type = "rgb"` with the fixed channels R, G, B in that order and no aliases. Valid and homogeneous. The scientific meaning is left to each brick: a brick that does not declare RGB support refuses a request on these units (A_RGB_NOT_SUPPORTED, P24); preprocessing compares the declaration with the image header and never with pixels (P13, P23). |
+| [`v29_rgb_and_channels_mixed`](valid/v29_rgb_and_channels_mixed.toml) | Owner decision AQ6 | pass | **no** | One condition with an RGB brightfield unit and a two-channel fluorescence unit of the same biological repeat. Valid schema; heterogeneous (different lists), so the Stage 1-2 runtime refuses it (R_HETEROGENEOUS_LAYOUT_NOT_ENABLED). Both units stay ONE biological repeat. |
+| [`v30_same_source_label_different_repeats`](valid/v30_same_source_label_different_repeats.toml) | Owner decision AQ5; S0.1 audit section 5 | pass | yes | Source folder label rep1 is in canonical repeat Day1 for CTRL and in Day2 for DrugA (and rep2 the other way round). Valid: no repeat ID equals another repeat's source label. The FOV key keeps the source label in `biological_repeat` and stays unique through the condition; the added `repeat_group` is Day1 or Day2, and grouping and pairing use it (experiment-v1 3.4, P25). |
+| [`v31_header_alias_whitespace_and_decomposed`](valid/v31_header_alias_whitespace_and_decomposed.toml) | Owner decision AQ7 | pass | yes | Header evidence is compared exactly after NFC of both sides, with no trimming. DNA lists the aliases "DAPI", " DAPI" (leading space) and "DAPI " (trailing space): outer whitespace needs its own confirmed alias, each is a distinct entry. ACTIN lists a decomposed alias (written with a TOML escape and stored as typed), which matches the header name "Caf\u00e9 488" after NFC of both sides (P26). header_names are not identities and are not NFC-checked. |
+| [`v32_reserved_name_near_misses`](valid/v32_reserved_name_near_misses.toml) | Owner decision AQ4 | pass | yes | Names next to the reserved list (experiment-v1 3.2) are valid: channels c1, t0, z2 and label, masks Patches and Labels. Only the exact names, compared case-folded, are reserved (t, z0, label_id, patch_id, ...). |
 
-## Transition fixtures (5)
+## Transition fixtures (9)
 
-Valid alone; refused against the named published predecessor.
+Valid alone; checked against the named published predecessor (refused with the listed set, or accepted).
 
 | Fixture | Predecessor | Expected | Case |
 |---|---|---|---|
 | [`t01_repeat_id_changed`](transitions/t01_repeat_id_changed.toml) | `valid/v01` | `R_CONFIRMED_ID_CHANGED` unless re-confirmation is recorded | Repeats rep1/rep2 (same member folders) are now Day1/Day2; rep1, rep2 stay listed in `used_ids`. |
-| [`t02_channel_id_changed`](transitions/t02_channel_id_changed.toml) | `valid/v01` | `R_CONFIRMED_ID_CHANGED`, `R_USED_ID_DROPPED` | Channel ACTIN (same header evidence and positions) is now Actin, and ACTIN is no longer listed in `used_ids`. Listing it beside `Actin` would be `E_ID_CASE_COLLISION`, so a case-only ID change cannot be published even with a re-confirmation (owner question, S0.1 audit). |
-| [`t03_used_id_reused`](transitions/t03_used_id_reused.toml) | `valid/v25` | `R_USED_ID_REUSED` | DrugA (retired in v25) is declared again for a new source folder. Valid alone, with `W_REPEAT_MISSING_CONDITIONS` (rep2 has no DrugA member). |
+| [`t02_channel_id_changed`](transitions/t02_channel_id_changed.toml) | `valid/v01` | `R_CONFIRMED_ID_CHANGED`, `R_USED_ID_DROPPED` | Channel ACTIN (same header evidence and positions) is now Actin, and ACTIN is no longer listed in `used_ids`. Listing it beside `Actin` would be `E_ID_CASE_COLLISION`, so a case-only ID change cannot be published in place (owner decision AQ2): it needs a new ID, `t09`. |
+| [`t03_used_id_reused`](transitions/t03_used_id_reused.toml) | `valid/v25` | `R_USED_ID_REUSED` (only) | DrugA (retired in v25) is declared again for a new source folder. rep1 gains a member, which is not a changed entity (owner decision AQ1), so `R_CONFIRMED_ID_CHANGED` does not apply. Valid alone, with `W_REPEAT_MISSING_CONDITIONS` (rep2 has no DrugA member). |
 | [`t04_used_id_dropped`](transitions/t04_used_id_dropped.toml) | `valid/v25` | `R_USED_ID_DROPPED` | DrugA is no longer listed in `used_ids.conditions`. |
 | [`t05_confirmed_on_changed`](transitions/t05_confirmed_on_changed.toml) | `valid/v01` | `R_CONFIRMED_ON_CHANGED` (N35 not reopened) | rep1 unchanged except `confirmed_on` 2026-11-07. |
+| [`t06_member_added`](transitions/t06_member_added.toml) | `valid/v01` | no R_* code: accepted (against predecessor valid/v01) | Adding is not a change of entity. Against v01: a new condition DrugB joins the existing repeats rep1 and rep2 as a member, and a new folder CTRL/rep3 (new repeat rep3) joins the existing condition CTRL. Every member folder, position and alias of v01 is still there. The confirmation of rep1 and rep2 is reopened by the new member (grouping change, experiment-v1 10) and re-confirmed on 2026-11-07, so the changed `confirmed_on` is not R_CONFIRMED_ON_CHANGED. DrugB and rep3 are new IDs, listed in `used_ids`. Valid alone with W_REPEAT_MISSING_CONDITIONS (rep3). |
+| [`t07_member_removed`](transitions/t07_member_removed.toml) | `valid/v01` | R_CONFIRMED_ID_CHANGED (against predecessor valid/v01, without a recorded removal confirmation) | Removing is a change of entity. The member DrugA/rep2 of repeat rep2 is gone (rep2 reopened and re-confirmed on 2026-11-07). The removal is accepted only with the recorded user confirmation of experiment-v1 4.6 and 10; without it the candidate is refused. All IDs stay listed in `used_ids`. Valid alone with W_REPEAT_MISSING_CONDITIONS. |
+| [`t08_member_reassigned`](transitions/t08_member_reassigned.toml) | `valid/v03` | R_CONFIRMED_ID_CHANGED (against predecessor valid/v03, without a recorded confirmation) | Reassigning is a change of entity. DrugA/experiment_23 was a member of Day1 in v03 and is now the member of a new repeat Day3, so Day1 lost a member it held. Accepted only with the recorded user confirmation of experiment-v1 4.6. Day3 is a new ID listed in `used_ids`. Valid alone with W_REPEAT_MISSING_CONDITIONS. |
+| [`t09_case_correction_new_id`](transitions/t09_case_correction_new_id.toml) | `valid/v01` | R_CONFIRMED_ID_CHANGED (against predecessor valid/v01, accepted only with a recorded re-confirmation) | How a case-only mistake is corrected. v01's channel ACTIN was meant to be Actin; the corrected spelling cannot be used (it collides with the retired ACTIN, see t02 and i95), so the channel gets the new, non-colliding ID ActinStain at the same positions with the same header evidence, and `display_name` "Actin" carries the appearance. ACTIN stays listed in `used_ids`. The set is exactly {R_CONFIRMED_ID_CHANGED}: no R_USED_ID_DROPPED, no R_USED_ID_REUSED, no E_* code. |
 
-## Invalid fixtures (99)
+## Invalid fixtures (119)
 
 | Fixture | Source | Expected code(s) | Phase | Case |
 |---|---|---|---|---|
@@ -311,3 +346,23 @@ Valid alone; refused against the named published predecessor.
 | [`i97_used_ids_unknown_kind`](invalid/i97_used_ids_unknown_kind.toml) | Owner decision Q1 | `E_UNKNOWN_FIELD` | 3 | `used_ids.masks`. |
 | [`i98_confirmed_on_missing`](invalid/i98_confirmed_on_missing.toml) | Audit L8; owner decision A3 | `E_MISSING_FIELD` | 3 | No `confirmed_on`: no default exists. |
 | [`i99_labchronicle_provenance`](invalid/i99_labchronicle_provenance.toml) | Owner decision Q5 | `E_FORBIDDEN_FIELD` | 3 | A top-level `labchronicle` table. |
+| [`i100_image_type_unknown_value`](invalid/i100_image_type_unknown_value.toml) | Owner decision AQ6 | `E_ENUM` | 3 | `image_type = "RGB"` (upper case): the only value is exactly `rgb`. |
+| [`i101_image_type_not_text`](invalid/i101_image_type_not_text.toml) | Owner decision AQ6 | `E_TYPE` | 3 | `image_type = true`: a boolean is not converted to text. |
+| [`i102_rgb_unit_wrong_order`](invalid/i102_rgb_unit_wrong_order.toml) | Owner decision AQ6 | `E_RGB_UNIT_CHANNELS` | 5 | An RGB unit lists R, B, G: the order is fixed (R, G, B). |
+| [`i103_rgb_unit_other_channels`](invalid/i103_rgb_unit_other_channels.toml) | Owner decision AQ6 | `E_RGB_UNIT_CHANNELS` | 5 | A unit declared `rgb` lists the fluorescence channels DNA and ACTIN: an RGB unit has exactly R, G, B. |
+| [`i104_rgb_token_in_plain_unit`](invalid/i104_rgb_token_in_plain_unit.toml) | Owner decision AQ6 | `E_RGB_TOKEN_MISUSE` | 5 | Units that list R, G, B without `image_type = "rgb"`: the tokens are only for declared RGB units (and an undeclared RGB image is never inferred). |
+| [`i105_rgb_token_lowercase_in_plain_unit`](invalid/i105_rgb_token_lowercase_in_plain_unit.toml) | Owner decision AQ6 | `E_RGB_TOKEN_MISUSE` | 5 | A fluorescence unit lists a channel `r`: R, G, B are reserved for RGB units in any case. |
+| [`i106_rgb_channel_header_alias`](invalid/i106_rgb_channel_header_alias.toml) | Owner decision AQ6 | `E_RGB_ALIAS` | 5 | The channel R carries `header_names`: R, G, B have no aliases. |
+| [`i107_channel_id_reserved_column`](invalid/i107_channel_id_reserved_column.toml) | Owner decision AQ4 | `E_ID_RESERVED` | 4 | Channel ID `label_id`, a MorphoRelate reserved column name (registry/_expand.py:41-59). |
+| [`i108_channel_id_reserved_casefold`](invalid/i108_channel_id_reserved_casefold.toml) | Owner decision AQ4 | `E_ID_RESERVED` | 4 | Channel ID `T`: reserved names are compared case-folded, so `T` is the reserved `t`. |
+| [`i109_mask_id_reserved_column`](invalid/i109_mask_id_reserved_column.toml) | Owner decision AQ4 | `E_ID_RESERVED` | 4 | Mask ID `patch_id`, a MorphoRelate reserved column name: one reserved list for channel and mask IDs. |
+| [`i110_header_names_duplicate_after_nfc`](invalid/i110_header_names_duplicate_after_nfc.toml) | Owner decision AQ7 | `E_DUPLICATE_VALUE` | 5 | `header_names` = ["Caf\u00e9", "Cafe\u0301"]: header names are compared after NFC, so these are the same alias twice. |
+| [`i111_mask_representation_parent_labels`](invalid/i111_mask_representation_parent_labels.toml) | Owner decision AQ8 | `E_ENUM` | 3 | `representation = "parent_labels"` (MorphoRelate's grouped masks): out of scope in v1. |
+| [`i112_mask_conversion_field_forbidden`](invalid/i112_mask_conversion_field_forbidden.toml) | Owner decision AQ9 | `E_FORBIDDEN_FIELD` | 3 | `binary_mask_policy = "connected_components"` in a mask table: a binary-to-instances conversion is a per-request, recorded choice of the analysis request, never part of the file. |
+| [`i113_forbidden_name_condition_key`](invalid/i113_forbidden_name_condition_key.toml) | Owner decision AQ13a | `E_FORBIDDEN_FIELD` | 3 | A condition (folder) named `control`: forbidden names apply to ID keys as well as fields (reported at the condition and at its member keys). |
+| [`i114_forbidden_name_channel_key`](invalid/i114_forbidden_name_channel_key.toml) | Owner decision AQ13a | `E_FORBIDDEN_FIELD` | 3 | A channel ID `files`: a forbidden name used as a channel key. |
+| [`i115_forbidden_name_technical_repeat_key`](invalid/i115_forbidden_name_technical_repeat_key.toml) | Owner decision AQ13a | `E_FORBIDDEN_FIELD` | 3 | A technical repeat (folder) named `overrides`: a forbidden name used as a technical-repeat key. |
+| [`i116_non_nfc_unit_channel`](invalid/i116_non_nfc_unit_channel.toml) | Owner decision AQ13b | `E_ID_NOT_NFC` | 4 | A unit lists "ACTIN\u0301" (decomposed). The reference is checked for NFC in phase 4 and is not reported as E_UNKNOWN_CHANNEL (phase 5). |
+| [`i117_non_nfc_source_channel`](invalid/i117_non_nfc_source_channel.toml) | Owner decision AQ13b | `E_ID_NOT_NFC` | 4 | A mask's `source_channels` lists "DNA\u0301" (decomposed): NFC before resolution, so not E_UNKNOWN_CHANNEL. |
+| [`i118_channel_id_whitespace_and_syntax`](invalid/i118_channel_id_whitespace_and_syntax.toml) | Owner decision AQ13c | `E_ID_TEXT`, `E_ID_SYNTAX` | 4 | Channel ID " DNA" (leading space): it breaks two rules, the Label rule (outer whitespace) and the Token expression, and gets both codes (one code per broken rule). |
+| [`i119_rgb_unit_two_channels`](invalid/i119_rgb_unit_two_channels.toml) | Owner decision AQ6 | `E_RGB_UNIT_CHANNELS` | 5 | An RGB unit lists only R and G: exactly three channels are required. |
