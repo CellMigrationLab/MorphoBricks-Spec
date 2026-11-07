@@ -1,13 +1,13 @@
 # MorphoBricks master roadmap
 
-Status: 5 November 2026 (owner-approved plan; owner priorities of the same day). This page orders
+Status: 5 November 2026 (owner-approved plan; owner priorities of the same day); release status refreshed 7 November 2026 from the brick tags on GitHub (the work items below are as written on 5 November). This page orders
 the work across all ten repositories and links out. It copies nothing: the live state lives in
 each repo's own roadmap and in the [restart notes][restart]. Nothing here is a claim that an item is
 implemented or tested. Sizes are rough: S = one small PR, M = 2-4 PRs, L = 5+ PRs.
 
 ## Overview
 
-1. **Release first.** normalization v0.3.4 and preprocessing v0.4.0 are tagged; CellPatcher v0.2.0 is in progress.
+1. **Release first.** normalization v0.3.4, preprocessing v0.4.0, CellPatcher v0.2.0, MorphoObjects v0.1.0, MorphoEmbed v0.1.0 and fiberfeatures v0.2.1 are tagged (checked 7 November 2026).
 2. **Then:** repins, MorphoFeature rows 39-43, fiberfeatures rows 44-45, the full pinned gate, the brick tags.
 3. **Mixed data next:** a recorded channel-subset copy (via `convert`) so the owner's datasets with EXTRA channels can run. It is not Stage 3.
 4. **Spec:** Stage 0 (decisions, M0) -> Stage 1 -> Stage 2 -> Stage 3 (mixed layouts) -> Stage 4. Stage 0 is docs only.
@@ -25,7 +25,7 @@ Related: the staged spec plan is [docs/roadmap.md](roadmap.md) (Stages 0-4, gate
 | # | Repos | Goal | Depends on | Size | Source |
 |---|---|---|---|---|---|
 | R0 | normalization, preprocessing | v0.3.4 and v0.4.0 tagged. Done. | - | done | [RESTART NOW][restart] |
-| R1 | CellPatcher | Row 38 merged (#84 `ee196e2`). v0.2.0 release PR (pins v0.3.4 and v0.4.0, converts Z>1 tests per #83 list), then the owner tags. #31 closes with the tag. | R0 | S | [#31](https://github.com/CellMigrationLab/CellPatcher/issues/31); [blocker 38][restart] |
+| R1 | CellPatcher | Row 38 merged (#84 `ee196e2`). v0.2.0 release PR (pins v0.3.4 and v0.4.0, converts Z>1 tests per #83 list), then the owner tags. #31 closes with the tag. **Done: `v0.2.0` is tagged (checked 7 November 2026).** | R0 | S | [#31](https://github.com/CellMigrationLab/CellPatcher/issues/31); [blocker 38][restart] |
 | R2 | MorphoFeature | "Batch 8": rows 39 (`--to-segment` no-clobber), 40 (release gate exact tree), 41 (skips fatal in release mode), 42 (`brick_cache` symlinks/outcome). Row 42 is delicate: Opus review. | - (can start now) | M | [blocker tracker][restart] |
 | R3 | fiberfeatures | Row 44: valid non-square pixels (Y=0.5, X=0.25 um) accepted; patches square in pixels. Opus. | - | M | [blocker 44][restart] |
 | R4 | all bricks | Repins to the final tags, including row 43 (MorphoFeature and MorphoRelate tests that build fresh Z>1 runs) and the Z>1 test conversions; MorphoFeature adopts `write_target_refusal`, bumps notebook pin and `RELEASE_TAG`, simplifies the CUDA cache thread identity (`ENTRY_FORMAT` bump). | R1 | M | [RESTART item 4][restart]; [MF roadmap](https://github.com/CellMigrationLab/MorphoFeature/blob/main/docs/roadmap.md) |
@@ -33,7 +33,7 @@ Related: the staged spec plan is [docs/roadmap.md](roadmap.md) (Stages 0-4, gate
 | R6 | MorphoFeature | R-bucket: #48 (enforced real-provider gate, record the tested set in `docs/install.md`), #140 (frozen-manifest test must catch drift). | R4 | M | [triage R items][triage] |
 | R7 | all | Full pinned gate (CI or local gate green on exact heads; short matrix subset A2, P2, H, T, F bitwise equal to the stable point), then the brick tags. Tags are published by the owner. | R2-R6 | M | [RESTART items 5-6][restart] |
 
-MorphoObjects `ba3f6d7`, MorphoEmbed `422cc01`, preprocessing and normalization are tag-ready at batch 8; MorphoFeature (R2), MorphoRelate (row 43), fiberfeatures (R3, R5) and CellPatcher (R1) are not.
+As written on 5 November: MorphoObjects `ba3f6d7`, MorphoEmbed `422cc01`, preprocessing and normalization were tag-ready at batch 8; MorphoFeature (R2), MorphoRelate (row 43), fiberfeatures (R3, R5) and CellPatcher (R1) were not. Since then the tags above exist, plus MorphoFeature `v0.1.0` and MorphoRelate `v0.1.1`; whether R2 to R6 were completed is not re-verified here.
 **DECISION:** refuse run folders from EARLIER release candidates that recorded Z>1? (recommended: no).
 
 ## Track 2: Mixed data (right after the release)
@@ -57,11 +57,11 @@ The owner's datasets share the core channels, but some images have EXTRA channel
 
 ## Track 3: Spec (RFC #1)
 
-Detail, gates and acceptance tests: [docs/roadmap.md](roadmap.md) §5, [feasibility audit](audits/rfc1-feasibility-2026-11-05.md), [addendum](audits/rfc1-addendum-2026-11-05.md) (the addendum wins), [RFC #1](https://github.com/CellMigrationLab/MorphoBricks-Spec/issues/1). Total estimated about 20-25 PRs across 6 repos, including one breaking normalization table change.
+Detail, gates and acceptance tests: [docs/roadmap.md](roadmap.md) §5, [feasibility audit](audits/rfc1-feasibility-2026-11-05.md), [addendum](audits/rfc1-feasibility-2026-11-05.md#addendum-after-chatgpts-response-5-november-2026) (the addendum wins), [RFC #1](https://github.com/CellMigrationLab/MorphoBricks-Spec/issues/1). Total estimated about 20-25 PRs across 6 repos, including one breaking normalization table change.
 
 | # | Repos | Goal | Depends on | Size | Source |
 |---|---|---|---|---|---|
-| S0 | spec | Stage 0: record the 10 owner decisions (TOML, mask fields, canonical repeat IDs, histogram benchmark criteria...), then write `experiment-v1.md`, fixtures (RFC's 12 plus 10 adversarial tests). Docs only; may run during the release. **DECISION** | owner | M | [roadmap §5 S0.1-S0.3](roadmap.md); [addendum §4](audits/rfc1-addendum-2026-11-05.md) |
+| S0 | spec | Stage 0: record the 10 owner decisions (TOML, mask fields, canonical repeat IDs, histogram benchmark criteria...), then write `experiment-v1.md`, fixtures (RFC's 12 plus 10 adversarial tests). Docs only; may run during the release. **DECISION** | owner | M | [roadmap §5 S0.1-S0.3](roadmap.md); [addendum §4](audits/rfc1-feasibility-2026-11-05.md#addendum-after-chatgpts-response-5-november-2026) |
 | S1 | preprocessing | Stage 1 (v0.5): discover, preview, confirm and reconcile the schema; semantic `RunInputs`; derived `experiment_design.csv`; heterogeneous runs explicitly refused. Gate G1. | S0, R7 | L | [roadmap S1](roadmap.md) |
 | S2 | MorphoFeature, MorphoRelate, fiberfeatures, MorphoObjects, MorphoEmbed, MorphoCoverage, CellPatcher | Stage 2: adapters read canonical channels and repeat IDs. Gate G2. | S1 | L | [roadmap S2](roadmap.md) |
 | S3 | preprocessing, normalization, CellPatcher | Stage 3: mixed layouts enabled together; histogram benchmark (semantic-wide vs long); canonical-channel pooling; adversarial suite. Gate G3. | S2 | L | [roadmap S3](roadmap.md) |
@@ -198,6 +198,6 @@ What blocks what: R4 waits for R1; R7 waits for R2-R6; the shortcut and S1 both 
 - Issue lists for CellPatcher, fiberfeatures, normalization and MorphoCoverage were read as titles only; MorphoCoverage (225 issues) is summarised from the triage, not re-read.
 - The triage and CI audit are proposals and measurements from 5 November (Python 3.12, 4 vCPU); they are not decisions.
 
-[restart]: https://github.com/CellMigrationLab/MorphoFeature/blob/claude/restart-doc/docs/restart/RESTART.md
-[triage]: https://github.com/CellMigrationLab/MorphoFeature/blob/claude/restart-doc/docs/restart/triage-2026-11-05.md
-[ci]: https://github.com/CellMigrationLab/MorphoFeature/blob/claude/restart-doc/docs/restart/ci-and-timing-audit-2026-11-05.md
+[restart]: https://github.com/CellMigrationLab/MorphoFeature/blob/ff19de8938d5ed8c4143cff563715551ee874a05/docs/restart/RESTART.md
+[triage]: https://github.com/CellMigrationLab/MorphoFeature/blob/ff19de8938d5ed8c4143cff563715551ee874a05/docs/restart/triage-2026-11-05.md
+[ci]: https://github.com/CellMigrationLab/MorphoFeature/blob/ff19de8938d5ed8c4143cff563715551ee874a05/docs/restart/archive/ci-and-timing-audit-2026-11-05.md

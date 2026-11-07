@@ -3,7 +3,7 @@
 - **Status:** Normative specification, Stage 0 (6 November 2026). No reader implements it yet.
   The fixed-SHA audit of current consumers (roadmap S0.1) is done
   ([PR #5](https://github.com/CellMigrationLab/MorphoBricks-Spec/pull/5), audit
-  `s01-consumer-audit-2026-11-06.md` on branch `claude/s01-consumer-audit`); the owner answered
+  [`s01-consumer-audit-2026-11-06.md`](audits/s01-consumer-audit-2026-11-06.md)); the owner answered
   its questions AQ1-AQ13 on 6 November 2026 ([ADR 0001](adr/0001-experiment-description-v1.md),
   third round) and this text applies them. A fourth decision of the same day (ADR 0001, fourth
   round: folder labels are never restricted) gives conditions and technical repeats a canonical ID
