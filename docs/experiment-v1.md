@@ -161,8 +161,8 @@ Time-lapses (T > 1) are allowed: the file has no T field, and the homogeneity of
   FOV key, `condition` and `technical_repeat` stay the **source folder labels**
   (`conditions.<ID>.source_folder`, `technical_repeats.<ID>.source_folder`); a consumer MUST NOT
   replace them by the canonical IDs in FOV, patch or object identities, fitted-scaling keys,
-  caches or exports. The canonical IDs are **added** next to the key (proposed field names
-  `condition_id` and `technical_repeat_id`; the consumer contracts fix the spelling in Stage 1).
+  caches or exports. The canonical IDs are **added** next to the key, beside `repeat_group`, under
+  the names `condition_id` and `technical_repeat_id`, which Stage 1 fixes for every consumer.
   Each is a function of the FOV key (one folder, one ID, §4.6a), so adding them creates no new
   identity. Everything that names a condition by identity (`reference`, families, pairing,
   contrasts, `used_ids`) uses the canonical condition ID, and a consumer MUST NOT group, pair or
