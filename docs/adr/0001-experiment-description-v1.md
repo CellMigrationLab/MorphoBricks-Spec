@@ -1,10 +1,11 @@
 # ADR 0001: experiment description v1 (`morphobricks.toml`)
 
-- **Status:** Accepted (owner decisions of 6 November 2026, four rounds, including the later
+- **Status:** Accepted (owner decisions of 6 and 7 November 2026, five rounds, including the later
   refinement D5). Specification only; nothing is implemented. The fixed-SHA consumer audit
   (roadmap S0.1) is done ([PR #5](https://github.com/CellMigrationLab/MorphoBricks-Spec/pull/5)); the
   third round below answers its questions; the fourth round (FR1, FR2) separates condition and
-  technical-repeat IDs from their folder labels and states the limit of CSV byte-identity.
+  technical-repeat IDs from their folder labels and states the limit of CSV byte-identity; the
+  fifth round (7 November 2026, SQ2, SQ6-SQ8) settles the Stage 1 design questions.
 - **Tracking:** [RFC #1](https://github.com/CellMigrationLab/MorphoBricks-Spec/issues/1);
   [roadmap §2 and §5 Stage 0](../roadmap.md);
   [feasibility audit](../audits/rfc1-feasibility-2026-11-05.md);
@@ -164,12 +165,27 @@ Consequences recorded with this round:
   names still apply to **IDs** (keys), where a collision with a field or a column is real.
 - The identity of a condition or technical repeat in a published file is its ID. The FOV key still
   spells the folder label in `condition` and `technical_repeat`; consumers add the canonical IDs
-  beside it (proposed names `condition_id`, `technical_repeat_id`), as `repeat_group` does for the
-  repeat (AQ5). The consumer contracts fix the field spelling in Stage 1.
+  beside it (`condition_id`, `technical_repeat_id`; spelling fixed by SQ8), as `repeat_group` does
+  for the repeat (AQ5).
 - A folder label that breaks the Label rules (for example `NA`) is still refused at discovery as
   today; this round adds no code for it.
 - A renamed condition or technical-repeat folder is a removed folder plus a new pending one; giving
   the new folder to the existing ID is a reassignment that needs the recorded confirmation.
+
+### Owner decisions of 7 November 2026, fifth round (Stage 1 design, PR 0; all recommendations accepted)
+
+The numbers are those of the open questions of the Stage 1 design (`SQ2` is its question 2).
+
+| # | Accepted decision | Rejected alternative | Spec | Fixtures / scenarios |
+|---|---|---|---|---|
+| SQ2 | **Where publication records live.** A re-confirmation is made at publication, outside a run, so the run manifest cannot hold it yet. Preprocessing appends each record (old ID, new ID, date, both file SHA-256) to an append-only `morphobricks.records.jsonl` next to `morphobricks.toml`, under the publication lock, and copies the records into the next run manifest | Write the record into `morphobricks.toml` (already rejected, §4.6: nothing about it is stored in the file); hold it only in the next manifest (lost when no run follows, or when the draft is discarded); a records directory per publication (more files, no gain) | §4.6 | none (physical; P16) |
+| SQ6 | **Spec gaps MS-1 and MS-2 of the matrix audit.** (a) A condition gets the same `single` rule as a technical repeat: `source_folder = "single"` means "no condition folder level" (an experiment folder that is itself the leaf), the condition ID is `single` if and only if its `source_folder` is `single`, and such a condition is the only condition of the file (`E_SINGLE_MISUSE`). (b) The proposal rule of §4.6a covers repeat IDs: the folder label is proposed when allowed; when it is not (for example `z`), no ID is proposed, nothing is repaired or derived, and the user names the repeat ID | (a) Leaving the flat experiment without a condition `source_folder` (the file could not be written for a root-level dataset), or a free choice of ID for it (no rule ties the label `single` to one ID, unlike technical repeats); (b) proposing a derived ID for a repeat (`z` to `z_1`, `R1`): an invented or repaired ID, against §3.3 | §3.2, §4.2, §4.6a, §6 | `v35`, `v36`, `i130`-`i133` |
+| SQ7 | **Time-lapses (T > 1).** Allowed, as today. v1 has no T field; the homogeneity of an imaging unit compares axis semantics, not T counts, so FOVs of one unit with different numbers of time points do not make the unit heterogeneous | Refusing T > 1 in v1 (it runs through every brick today and would remove a working path); a T count in the file (a per-FOV statement, §1) | §1 | none (physical) |
+| SQ8 | **Downstream field names.** Stage 1 fixes `condition_id` and `technical_repeat_id` as the fields that carry the canonical IDs beside the unchanged FOV key, next to `repeat_group` (preprocessing contract §16 records them) | Other spellings (`condition_canonical`, `tech_id`): no gain, and v1 §3.4 already proposed these | §3.4 | none (consumer contracts) |
+
+Consequences recorded with this round:
+
+- The records file is provenance, like the manifest: it carries no identity and no cache key.
 
 ### Histogram representation: candidates and criteria only (not decided)
 
