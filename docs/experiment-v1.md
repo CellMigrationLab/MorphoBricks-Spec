@@ -28,6 +28,8 @@ requests, normalization, statistics, histogram or model settings. Those stay in
 
 v1 analyses 2-D planes only. A Z stack is projected by a recorded preprocessing step
 (preprocessing #176) before it is described; the file has no Z, axes or shared-plane field.
+Time-lapses (T > 1) are allowed: the file has no T field, and the homogeneity of an imaging unit
+(§8, `R_UNIT_NOT_HOMOGENEOUS`) compares what each axis means, never the number of time points.
 
 ## 2. File, encoding and parsing
 
