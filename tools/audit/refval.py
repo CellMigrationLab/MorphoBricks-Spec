@@ -341,6 +341,10 @@ def phase4(doc: dict, r: Report) -> None:
         p = kpath("conditions", cid)
         label_id(cid, p, "conditions")
         label_id(c["source_folder"], p + ".source_folder", "condition_folders")
+        if (cid == "single") != (c["source_folder"] == "single"):
+            r.e("E_SINGLE_MISUSE", p + ".source_folder", c["source_folder"])
+        elif c["source_folder"] == "single" and len(doc["conditions"]) > 1:
+            r.e("E_SINGLE_MISUSE", p + ".source_folder", "single is not the only condition")
         if "reference" in c:
             _nfc(c["reference"], p + ".reference", r)  # a reference is NFC-checked only
     for chid in doc["channels"]:
