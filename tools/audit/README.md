@@ -18,7 +18,7 @@ fixtures of this repository; nothing here is a rule.
 ## Reproduce
 
 ```bash
-python -I tools/audit/refval.py fixtures .          # 36/36, 133/133, 12/12, round trip
+python -I tools/audit/refval.py fixtures .          # 36/36, 134/134, 12/12, round trip
 uv venv venv-mx -p 3.13
 uv pip install -p venv-mx/bin/python --extra-index-url https://download.pytorch.org/whl/cpu \
   --index-strategy unsafe-best-match \

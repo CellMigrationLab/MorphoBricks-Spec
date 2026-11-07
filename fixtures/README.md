@@ -61,11 +61,12 @@ round of owner decisions and again after the fourth (folder labels, `source_fold
 ## Matrix audit fixtures and executable validator (7 November 2026)
 
 The matrix audit ([`docs/audits/matrix-audit-2026-11-07.md`](../docs/audits/matrix-audit-2026-11-07.md))
-adds `v35`, `v36` and `i128`-`i130` (and, with the owner decisions of 7 November 2026, `i131`-`i133`) for structures the catalogue lacked (a flat experiment, a
+adds `v35`, `v36` and `i128`-`i130` for structures the catalogue lacked (a flat experiment, a
 biological-repeat folder named like a forbidden key, `single` rules for condition folders and
-members). Its audit-only validator, [`tools/audit/refval.py`](../tools/audit/refval.py)
+members). The owner decisions of 7 November 2026 (ADR 0001, SQ6) add `i131`-`i133` (the
+`single` rules for conditions) and `i134` (a duplicate key inside an inline table). Its audit-only validator, [`tools/audit/refval.py`](../tools/audit/refval.py)
 (`python -I tools/audit/refval.py fixtures .`), accepts 36 of 36 valid files with exactly the
-listed warnings, refuses 133 of 133 invalid files with exactly the listed code set from the listed
+listed warnings, refuses 134 of 134 invalid files with exactly the listed code set from the listed
 phase, gives the listed `R_*` set for 12 of 12 transitions, and round-trips every valid and
 transition file through the canonical writer. It is an audit tool, not a reader: the conformance
 plan's single reference reader stays preprocessing.
@@ -134,7 +135,7 @@ This is a check of the fixtures against the text, not a conformance claim for an
 
 | Topic | Fixtures |
 |---|---|
-| Duplicate keys | `i03`-`i06` |
+| Duplicate keys | `i03`-`i06`, `i134` (inline table) |
 | Case collisions | `i48`-`i52`, `i68` (no folding when resolving), `i95` |
 | NFC (refused, never normalized) | `v23`, `i78`, `i83`-`i85`; P21 |
 | Display names | `v16`, `v24`, `i53`, `i76`, `i77`, `i86`-`i88` |
@@ -274,7 +275,7 @@ Valid alone; checked against the named published predecessor (refused with the l
 | [`t11_technical_repeat_id_changed_same_folder`](transitions/t11_technical_repeat_id_changed_same_folder.toml) | `valid/v34` | R_CONFIRMED_ID_CHANGED (against predecessor valid/v34, without a recorded re-confirmation) | The folder `files` was confirmed as technical repeat `acq1` in v34 and now carries the ID `acqA` in both members. A confirmed technical repeat ID never changes in place (experiment-v1 4.6, 4.6a). `acq1` stays listed in used_ids. Valid alone. |
 | [`t12_condition_folder_reassigned`](transitions/t12_condition_folder_reassigned.toml) | `valid/v33` | R_CONFIRMED_ID_CHANGED (against predecessor valid/v33, without a recorded confirmation) | The ID `ctrl` held the folder `control` in v33 and now holds the folder `ctl` (a folder renamed on disk and attached to the same ID without a recorded confirmation). A folder change for an existing ID is a reassignment, so a changed entity (experiment-v1 4.6, 7). Valid alone. |
 
-## Invalid fixtures (133)
+## Invalid fixtures (134)
 
 | Fixture | Source | Expected code(s) | Phase | Case |
 |---|---|---|---|---|
@@ -411,3 +412,4 @@ Valid alone; checked against the named published predecessor (refused with the l
 | [`i131_condition_id_single_with_real_folder`](invalid/i131_condition_id_single_with_real_folder.toml) | Owner decision SQ6, matrix audit MS-1 | `E_SINGLE_MISUSE` | 4 | The condition ID `single` names the folder `CTRL`: `single` is the ID of `source_folder = "single"` only (experiment-v1 3.2). |
 | [`i132_condition_single_folder_other_id`](invalid/i132_condition_single_folder_other_id.toml) | Owner decision SQ6, matrix audit MS-1 | `E_SINGLE_MISUSE` | 4 | The condition `flat` has `source_folder = "single"`: a condition ID is `single` if and only if its folder is `single` (experiment-v1 3.2). |
 | [`i133_condition_single_not_alone`](invalid/i133_condition_single_not_alone.toml) | Owner decision SQ6, matrix audit MS-1 | `E_SINGLE_MISUSE` | 4 | The condition `single` (no condition folder level) next to the condition DrugA: it must be the only condition (experiment-v1 3.2). |
+| [`i134_duplicate_key_inline_table`](invalid/i134_duplicate_key_inline_table.toml) | Stage 1 design PR 0, experiment-v1 2.2 | `E_DUPLICATE_KEY` | 1 | `display_name` written twice inside the inline table of the channel DNA: a key declared twice in any spelling, inline tables included, is `E_DUPLICATE_KEY`, not `E_TOML_SYNTAX` (experiment-v1 2.2). |

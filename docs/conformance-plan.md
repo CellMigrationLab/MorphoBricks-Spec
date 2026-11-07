@@ -38,7 +38,7 @@ One parametrised test per fixture file, discovered from `fixtures/valid/*.toml` 
 | Invalid files | Reported error codes equal **exactly** the set in the `Expected` header line, all from the first failing phase; each error carries a table path and the offending value |
 | Header lines | Every fixture has `Fixture`, `Expected`, `Source` header comments; the catalogue lists every file (a test compares the directory with `fixtures/README.md`) |
 | Bytes, not text | Readers are given the raw bytes, so `i01_bom` and `i02_invalid_utf8` reach the encoding check (decoding with BOM stripping would hide them) |
-| Duplicate keys | `tomllib` reports duplicates as `TOMLDecodeError` with "Cannot declare … twice" / "Cannot overwrite a value"; the reader MUST map them to `E_DUPLICATE_KEY` (by its own duplicate detection or by a tested mapping), and other decode errors to `E_TOML_SYNTAX` |
+| Duplicate keys | `tomllib` reports duplicates as `TOMLDecodeError` with "Cannot declare … twice" / "Cannot overwrite a value" (and "Duplicate inline table key" inside an inline table, `i134`); the reader MUST map them to `E_DUPLICATE_KEY` (by its own duplicate detection or by a tested mapping), and other decode errors to `E_TOML_SYNTAX` |
 | Exact types | `i14` (`true` as `schema_version`) passes only if the reader checks `type(x) is int` |
 | Round trip | For every valid file: `parse(write(parse(f))) == parse(f)`; `write` is idempotent; `write(parse(v18)) == write(parse(v01))` byte for byte |
 | Canonical bytes | `write` output is UTF-8, LF, no BOM, final newline, ordered per experiment-v1 §9.1 |

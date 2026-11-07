@@ -110,7 +110,7 @@ def phase1(data: bytes, r: Report):
         return tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
         msg = str(exc)
-        dup = ("Cannot declare" in msg) or ("Cannot overwrite" in msg) or ("twice" in msg)
+        dup = ("Cannot declare" in msg) or ("Cannot overwrite" in msg) or ("twice" in msg) or ("Duplicate" in msg)
         r.e("E_DUPLICATE_KEY" if dup else "E_TOML_SYNTAX", "<file>", msg)
         return None
 
