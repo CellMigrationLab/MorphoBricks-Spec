@@ -1,10 +1,11 @@
 # ADR 0001: experiment description v1 (`morphobricks.toml`)
 
-- **Status:** Accepted (owner decisions of 6 November 2026, four rounds, including the later
+- **Status:** Accepted (owner decisions of 6 and 7 November 2026, five rounds, including the later
   refinement D5). Specification only; nothing is implemented. The fixed-SHA consumer audit
   (roadmap S0.1) is done ([PR #5](https://github.com/CellMigrationLab/MorphoBricks-Spec/pull/5)); the
   third round below answers its questions; the fourth round (FR1, FR2) separates condition and
-  technical-repeat IDs from their folder labels and states the limit of CSV byte-identity.
+  technical-repeat IDs from their folder labels and states the limit of CSV byte-identity; the
+  fifth round (7 November 2026, SQ2, SQ6-SQ8) settles the Stage 1 design questions.
 - **Tracking:** [RFC #1](https://github.com/CellMigrationLab/MorphoBricks-Spec/issues/1);
   [roadmap §2 and §5 Stage 0](../roadmap.md);
   [feasibility audit](../audits/rfc1-feasibility-2026-11-05.md);
@@ -170,6 +171,18 @@ Consequences recorded with this round:
   today; this round adds no code for it.
 - A renamed condition or technical-repeat folder is a removed folder plus a new pending one; giving
   the new folder to the existing ID is a reassignment that needs the recorded confirmation.
+
+### Owner decisions of 7 November 2026, fifth round (Stage 1 design, PR 0; all recommendations accepted)
+
+The numbers are those of the open questions of the Stage 1 design (`SQ2` is its question 2).
+
+| # | Accepted decision | Rejected alternative | Spec | Fixtures / scenarios |
+|---|---|---|---|---|
+| SQ2 | **Where publication records live.** A re-confirmation is made at publication, outside a run, so the run manifest cannot hold it yet. Preprocessing appends each record (old ID, new ID, date, both file SHA-256) to an append-only `morphobricks.records.jsonl` next to `morphobricks.toml`, under the publication lock, and copies the records into the next run manifest | Write the record into `morphobricks.toml` (already rejected, §4.6: nothing about it is stored in the file); hold it only in the next manifest (lost when no run follows, or when the draft is discarded); a records directory per publication (more files, no gain) | §4.6 | none (physical; P16) |
+
+Consequences recorded with this round:
+
+- The records file is provenance, like the manifest: it carries no identity and no cache key.
 
 ### Histogram representation: candidates and criteria only (not decided)
 

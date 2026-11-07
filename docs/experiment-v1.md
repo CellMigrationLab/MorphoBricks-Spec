@@ -375,8 +375,12 @@ stays in the brick that owns it.
   renamed or replaced on disk under an existing ID is a removed folder plus a new pending one
   (§7), and giving the existing ID the new `source_folder` is a reassignment under (c).
 - A mistyped ID is fixed only by an explicit, recorded re-confirmation: a user action that
-  writes a new file and records old ID, new ID, date and both file SHA-256 in the run manifest.
-  Products keyed on that ID are invalidated. Nothing about it is stored in the file.
+  writes a new file and records old ID, new ID, date and both file SHA-256. The record is made
+  at publication, which happens outside a run: preprocessing appends it, under the output
+  folder's publication lock (§10), to the append-only file `morphobricks.records.jsonl` next to
+  `morphobricks.toml`, and copies the records unchanged into the manifest of the next run. The
+  records file is never rewritten or truncated, and nothing about a re-confirmation is stored in
+  `morphobricks.toml`. Products keyed on that ID are invalidated.
 - **A case-only correction needs a new ID (AQ2).** `ACTIN` cannot be corrected to `Actin`: the
   retired spelling stays in `used_ids` and the new one collides with it
   (`E_ID_CASE_COLLISION`, §4.9). The correction is a new, non-colliding ID (for example
