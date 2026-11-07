@@ -93,7 +93,7 @@ reported first (intra-unit discrepancies are detected before channel identity, r
 | P21 | `v01` | Two folders `Cafe\u0301` and `Caf\u00e9` (or one decomposed folder) under a condition on a file system that allows both | `R_FOLDER_NOT_NFC`; nothing renamed or normalized |
 | P22 | `v01` (base), `t05` | Reconciliation after new FOVs in an existing unit (P15) and a run on a later date | Published `confirmed_on` stays `2026-11-06` byte for byte; `t05` offered over `v01`: `R_CONFIRMED_ON_CHANGED`; after a reopening (changed channel list) and a new user confirmation the new date is accepted |
 
-### Scenarios added by the third decision round (AQ1-AQ13) and the fourth (FR1, FR2: P32, P33)
+### Scenarios added by the third decision round (AQ1-AQ13), the fourth (FR1, FR2: P32, P33) and the records decisions (RR1, RR2: P34, P35)
 
 | # | Fixture | Image tree / action | Required outcome |
 |---|---|---|---|
@@ -108,6 +108,8 @@ reported first (intra-unit discrepancies are detected before channel identity, r
 | P31 | `v27` | MorphoCoverage prefills its reagent grouping from `target`; the user confirms inside MorphoCoverage; then `target` is edited in the file | The prefill is shown as a suggestion and only the confirmed grouping is used; an unconfirmed prefill is refused for analysis; the edit changes no confirmed grouping, digest or cache key |
 | P32 | `v33`, `v34` | Discovery of an experiment whose condition folder is `control` and whose technical-repeat folders are `files` and `overrides`; the user confirms the proposed IDs; a second experiment whose folders are `CTRL` and `acquisition_1` | For the first, preprocessing proposes IDs that are not the forbidden names (never `control`, `files`, `overrides`), nothing is adopted before confirmation, `display_name` may be set to the folder label, and the derived `experiment_design.csv` carries `control`, byte-identical to a legacy file for the same folders; for the second the folder label is proposed as the ID. No folder is renamed on disk |
 | P33 | `v33` (base), `t10`-`t12` | Reconciliation after the folder `control` is renamed to `ctl` on disk: (a) the new folder is attached to the existing ID `ctrl` without a recorded confirmation; (b) with it; (c) the new folder gets a new ID and the old one is removed | (a) `R_CONFIRMED_ID_CHANGED` (`t12`); (b) accepted, ID `ctrl` unchanged, `source_folder` now `ctl`, N35 reopened for the affected repeats; (c) accepted only with the removal confirmation; `ctrl` stays in `used_ids` and is never reused (`R_USED_ID_REUSED`) |
+| P34 | `v01` (base) | `v01` published; a later publication of the same file with only one member's `image_count` changed | Accepted; no repeat reopens and `confirmed_on` is byte-identical (C3); one `image_count_changed` line is appended to `morphobricks.records.jsonl` with the keys of experiment-v1 §4.6, the old and new counts and `recorded_on` |
+| P35 | `v25` (base), `t07` | (a) A member removed with the user's confirmation; (b) the last member of a condition removed; (c) a technical repeat, a repeat and a condition removed, each with confirmation | Each accepted removal appends `removed` lines (one `unit` line per imaging unit, then the entity line) whose labels are the published file's; (a) also a `reconfirmation` line where §4.6 requires one; the removed IDs stay in `used_ids`; an unconfirmed removal writes nothing and is refused |
 
 ## 4. Later stages (obligations recorded, not planned in detail)
 

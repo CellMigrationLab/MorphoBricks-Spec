@@ -201,6 +201,24 @@ decision, and the owner may amend or reject any of them (the text and fixtures t
 | C3 | **`image_count` alone does not reopen a confirmation.** New or removed FOVs in an existing unit change `image_count` only; §10 already says they do not reopen N35, so a new `confirmed_on` beside only a changed `image_count` is refused as `R_CONFIRMED_ON_CHANGED`. The behaviour of PR 188, which the first `refval` did not share (it treated a changed `image_count` as reopening and accepted the date) | §10 | `t13`; `refval.transition` |
 | C4 | **Encoding of `morphobricks.records.jsonl`** (SQ2 fixed what a record holds, not the encoding): UTF-8, one JSON object per line ending in LF, keys `type`, `id_kind`, `old_id`, `new_id`, `confirmed_on`, `old_sha256`, `new_sha256`, as PR 188 writes them (`json.dumps(..., ensure_ascii=False, sort_keys=True)`); a torn last line or a non-object line is refused before publication. **Open, not proposed as a rule:** PR 188 appends the records after it replaces `morphobricks.toml`, and a process killed between the two steps leaves a published file without its records; PR 188 does not detect this (its module states that the records file is then the one that cannot be trusted to be complete). Whether, and how, a later publication or run should detect it is for the owner | §4.6 | none (physical; P16) |
 
+### Owner decisions of 7 November 2026 (records file, accepted)
+
+Both decisions extend the encoding of `morphobricks.records.jsonl` (SQ2, clarification C4 above):
+the same encoding, and the existing `type` key (value `reconfirmation` so far) tells the three
+record types apart. An existing records file stays valid unchanged.
+
+| # | Accepted decision | Rejected alternative | Spec | Fixtures / scenarios |
+|---|---|---|---|---|
+| RR1 | **Record type `image_count_changed`.** Written when a confirmed unit's image count changes and nothing else does; nothing reopens (§10: "reported and recorded"). It holds the unit (condition, repeat and technical repeat IDs and source folder labels), the old count, the new count and the date | Leaving the change only in the next run manifest (lost when no run follows, as SQ2 found for re-confirmations) | §4.6, §10 | none (physical; P34) |
+| RR2 | **Record type `removed`.** Written for every removal of a unit, technical repeat, repeat or condition, including those whose IDs are not reused elsewhere. It holds what was removed (kind, IDs, source folder labels), the user's confirmation and the date | Recording only the removals that need a re-confirmation (a removal that drops a whole ID would leave no record that the user confirmed it) | §4.6, §10 | none (physical; P35) |
+
+Modelling choices made when writing the two decisions into the text (not themselves owner
+decisions; the owner may amend them): the discriminator is the existing `type` key, not a new
+`kind` key; `image_count` belongs to a member (condition, source repeat), so `image_count_changed`
+lists the member's technical repeats; a removed member folder is written as one `unit` record per
+imaging unit it held; `image_count_changed` carries `recorded_on` (it is not a confirmation) and
+`removed` carries `confirmed_on`; a line whose `type` is none of the three is refused.
+
 ### Histogram representation: candidates and criteria only (not decided)
 
 | Candidate | Shape | Status |
