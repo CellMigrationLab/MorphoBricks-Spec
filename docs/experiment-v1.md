@@ -82,7 +82,8 @@ Time-lapses (T > 1) are allowed: the file has no T field, and the homogeneity of
   both is reported with both codes (§6, one code per broken rule).
 - **Reserved list** (one list, shared by channel IDs and mask IDs; AQ4). A channel ID or a mask ID
   whose case-folded form (`str.casefold()`) is in the list is `E_ID_RESERVED`; `ring`, `Ring` and
-  `RING` are all refused. The list is closed: a new entry needs a new `schema_version`.
+  `RING` are all refused. An entry of `used_ids.channels` is refused the same way, since a listed
+  ID reserves that ID (§4.9). The list is closed: a new entry needs a new `schema_version`.
 
   | Names | Source |
   |---|---|
@@ -531,6 +532,11 @@ date or a reason.
   repeats, Token for channels; NFC, §3.3), have no duplicates (`E_DUPLICATE_VALUE`), and share the case-collision
   scope of the kind's declared IDs (`E_ID_CASE_COLLISION`): a retired `ctrl` cannot come back as
   `CTRL`. At least one entry per kind (`E_EMPTY`).
+- **Reserved names in `used_ids.channels`** (owner decision UR1, 7 November 2026). A channel entry
+  follows the reserved list of §3.2 like a declared channel ID: an entry whose case-folded form is
+  in the list is `E_ID_RESERVED`. A listed ID reserves that ID, so a name no channel may bear
+  cannot be reserved by being listed. The registry has no list for mask IDs (it holds the four
+  kinds above), so the list applies to channels only; the other three kinds are unchanged.
 - Source folder labels are not IDs and are never listed. Every declared ID of a kind MUST be
   listed (`E_USED_ID_MISSING`). A listed ID that is not
   declared is a **retired** ID: its entity was removed.
@@ -593,7 +599,7 @@ for NFC only (phase 4) before it is resolved (phase 5).
 | 3 | `E_REPEAT_UNCONFIRMED` | `confirmed = false` in a published file |
 | 4 Identity | `E_ID_TEXT` | Label rule violated |
 | 4 | `E_ID_SYNTAX` | Token regular expression violated |
-| 4 | `E_ID_RESERVED` | Name on the reserved list of §3.2 (channel and mask IDs), or a mask ID with an `in` part |
+| 4 | `E_ID_RESERVED` | Name on the reserved list of §3.2 (channel and mask IDs, and entries of `used_ids.channels`, §4.9), or a mask ID with an `in` part |
 | 4 | `E_ID_NOT_NFC` | An identity (key, reference, source repeat, `source_folder`, unit `channels` or `source_channels` entry, `used_ids` entry) is not Unicode NFC; never normalized |
 | 4 | `E_ID_CASE_COLLISION` | Two identities of one scope equal ignoring case (`used_ids` entries share the scope of their kind; source folders have their own scopes, §3.3) |
 | 4 | `E_SINGLE_MISUSE` | `single` in another case or not alone, or a technical repeat ID or condition ID `single` whose `source_folder` is not `single` (or the reverse) |

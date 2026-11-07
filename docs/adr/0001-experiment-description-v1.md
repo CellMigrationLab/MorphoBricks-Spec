@@ -219,6 +219,18 @@ lists the member's technical repeats; a removed member folder is written as one 
 imaging unit it held; `image_count_changed` carries `recorded_on` (it is not a confirmation) and
 `removed` carries `confirmed_on`; a line whose `type` is none of the three is refused.
 
+### Owner decision of 7 November 2026 (reserved names in `used_ids`, accepted)
+
+Closes MorphoBricks-Spec issue 11 (an external review found §3.2 and §4.9 readable two ways).
+
+| # | Accepted decision | Rejected alternative | Spec | Fixtures / scenarios |
+|---|---|---|---|---|
+| UR1 | **`used_ids.channels` entries follow the same reserved list as live channel IDs** (§3.2, case-folded): a listed ID reserves that ID, so a reserved name is `E_ID_RESERVED` there too. `used_ids` has no list for mask IDs, so nothing changes for masks or for the other three kinds | Leaving `used_ids` entries to the Token and NFC rules only (a reader could then accept a file whose registry reserves a name no channel can bear, and the two sections disagreed: `refval` carried an `AMBIGUITY` note) | §3.2, §4.9, §6 | `i135`, `v37`; `refval` |
+
+The decision as given named `used_ids.channels` and `used_ids.masks`; §4.9 has no `masks` list
+(the four kinds are conditions, channels, repeats and technical repeats), so it is written for
+`used_ids.channels` alone. A `masks` list would be a new kind and needs a new `schema_version`.
+
 ### Histogram representation: candidates and criteria only (not decided)
 
 | Candidate | Shape | Status |
