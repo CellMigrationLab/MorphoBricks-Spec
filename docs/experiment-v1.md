@@ -386,6 +386,14 @@ stays in the brick that owns it.
   `morphobricks.toml`, and copies the records unchanged into the manifest of the next run. The
   records file is never rewritten or truncated, and nothing about a re-confirmation is stored in
   `morphobricks.toml`. Products keyed on that ID are invalidated.
+- **Encoding of the records file.** UTF-8, one JSON object per line, each line ending in LF, keys
+  in code point order, non-ASCII characters unescaped. Keys: `type` (`"reconfirmation"`),
+  `id_kind` (`conditions`, `channels`, `repeats` or `technical_repeats`), `old_id`, `new_id`
+  (`null` when the same ID lost or was reassigned something), `confirmed_on` (`YYYY-MM-DD`, the
+  date of the user's action), `old_sha256` (of the published file replaced, or `absent`) and
+  `new_sha256` (of the file written). The records are appended after the file is replaced. A records
+  file whose last line lacks its LF, or that holds a line that is not a JSON object, is refused
+  before anything is published.
 - **A case-only correction needs a new ID (AQ2).** `ACTIN` cannot be corrected to `Actin`: the
   retired spelling stays in `used_ids` and the new one collides with it
   (`E_ID_CASE_COLLISION`, §4.9). The correction is a new, non-colliding ID (for example
