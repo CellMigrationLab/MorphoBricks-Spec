@@ -8,7 +8,7 @@
 - **Tracking:** [RFC #1](https://github.com/CellMigrationLab/MorphoBricks-Spec/issues/1);
   [roadmap §2 and §5 Stage 0](../roadmap.md);
   [feasibility audit](../audits/rfc1-feasibility-2026-11-05.md);
-  [addendum](../audits/rfc1-addendum-2026-11-05.md) (the addendum wins where they differ).
+  [addendum](../audits/rfc1-feasibility-2026-11-05.md#addendum-after-chatgpts-response-5-november-2026) (the addendum wins where they differ).
 - **Normative text:** [experiment-v1.md](../experiment-v1.md). Where this ADR and the normative
   text differ, the normative text wins; this ADR records why.
 

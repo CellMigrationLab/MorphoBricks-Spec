@@ -1,7 +1,7 @@
 # MorphoBricks experiment metadata — implementation roadmap
 
-**Status:** Proposed architecture and staged implementation plan, 5 November 2026. No implementation or runtime verification is implied by this document.  
-**Tracking:** [RFC #1](https://github.com/CellMigrationLab/MorphoBricks-Spec/issues/1); [Claude feasibility audit](audits/rfc1-feasibility-2026-11-05.md); [Claude addendum](audits/rfc1-addendum-2026-11-05.md).  
+**Status:** Proposed architecture and staged implementation plan, 5 November 2026; Stage 0 (specification, fixtures, audits) is done and ADR 0001 is accepted, Stages 1 to 4 are not implemented (7 November 2026). No implementation or runtime verification is implied by this document.  
+**Tracking:** [RFC #1](https://github.com/CellMigrationLab/MorphoBricks-Spec/issues/1); [Claude feasibility audit](audits/rfc1-feasibility-2026-11-05.md); [Claude addendum](audits/rfc1-feasibility-2026-11-05.md#addendum-after-chatgpts-response-5-november-2026).  
 **Release policy:** Documentation/specification work may proceed now; changes to existing bricks are deferred until after their first release tags. No part of this initiative is a blocker for those tags.
 
 ## 1. Objective and non-goals
@@ -149,7 +149,7 @@ Pooling, fitted normalization, CellPatcher exports, MorphoFeature features, Morp
 
 **Gate G0:** owner decisions recorded; normative schema and fixture catalogue reviewed; no runtime changes.
 
-G0 checklist (6 November 2026, awaiting owner review of PR #3): decisions recorded (ADR 0001, four rounds); schema reviewed; fixtures conform to the text (reference-validator cross-check, [fixtures/README.md](../fixtures/README.md)); consumer audit done (PR #5); no runtime changes.
+G0 checklist (6 November 2026; ADR 0001 is Accepted and the matrix audit was merged in PR #6): decisions recorded (ADR 0001, four rounds); schema reviewed; fixtures conform to the text (reference-validator cross-check, [fixtures/README.md](../fixtures/README.md)); consumer audit done (PR #5); no runtime changes.
 
 ### Stage 1 — additive preprocessing authoring, after first tags
 

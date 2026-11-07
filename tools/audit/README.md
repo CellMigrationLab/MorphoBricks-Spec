@@ -13,9 +13,11 @@ fixtures of this repository; nothing here is a rule.
 | `steps.py` | One brick step as a user runs it, executed in the bricks' environment: preprocessing `check`, `design`, `run`, `masks` (CLI); CellPatcher `grid`/`random`/`whole_fov`/`cell` on the preprocessing run (grid with normalization by biological repeat); a MorphoFeature run file per provider (MorphoObjects with a CellPatcher patch set, MorphoRelate, fiberfeatures; MorphoEmbed `check` only); MorphoCoverage `condition_contrast` on MorphoFeature's coverage export. Prints one JSON observation. |
 | `runner.py` | Runs every case (or the named ones): writes the dataset, runs the steps in order (a refusal stops the steps that need its output), records the observations, deletes the dataset. Results are merged into one JSON file so a run can resume. |
 | `classify.py` | Gives every (case, brick) cell a verdict (MATCH, MISMATCH-SPEC, MISMATCH-BRICK, BUG, N/A, SKIP) by fixed rules, with every judgement made by reading an observation listed in `OVERRIDES` with its reason, and prints the case table. |
-| `results/` | The recorded run of 7 November 2026: `matrix-results-2026-11-07.json` (compact observations; paths stripped) and `cases/<case>.toml` (the expected `morphobricks.toml` of each case, headed by its expected outcome). |
+| `results/` | The recorded run of 7 November 2026: `matrix-results-2026-11-07.json` (compact observations; paths stripped) and `cases/<case>.toml` (read by `classify.py`; the expected `morphobricks.toml` of each case, headed by its expected outcome). |
 
 ## Reproduce
+
+The tags below are the pins of 7 November 2026 and will age at the next release.
 
 ```bash
 python -I tools/audit/refval.py fixtures .          # 36/36, 130/130, 12/12, round trip

@@ -72,8 +72,7 @@ plan's single reference reader stays preprocessing.
 
 ## Reference-validator cross-check (6 November 2026, roadmap S0.1)
 
-A throw-away reference validator (Python 3.13, not committed: this repository holds no runtime
-code) implementing experiment-v1 §2-§6 phase by phase, plus the predecessor checks of §4.6,
+A reference validator (Python 3.13; now the audit tool [`tools/audit/refval.py`](../tools/audit/refval.py), not a runtime reader) implementing experiment-v1 §2-§6 phase by phase, plus the predecessor checks of §4.6,
 §4.4a and §4.9 expressible from two files, was run on every fixture after the third round of
 owner decisions and run again after the fourth (folder labels, `source_folder`). The validator
 implements the text as written, including the new rules (`source_folder`, one folder one ID,
