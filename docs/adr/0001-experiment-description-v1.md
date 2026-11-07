@@ -187,6 +187,17 @@ Consequences recorded with this round:
 
 - The records file is provenance, like the manifest: it carries no identity and no cache key.
 
+### Clarifications proposed by the implementation (pending owner review)
+
+The preprocessing implementation of the Stage 1 PRs (morphobricks-preprocessing PRs 187 and 188)
+found places where experiment-v1 is silent. Each row below is a **clarification proposed by the
+implementation**: a short sentence added to the text, **pending owner review**; it is not an owner
+decision, and the owner may amend or reject any of them (the text and fixtures then change with it).
+
+| # | Proposed clarification | Spec | Fixtures / refval |
+|---|---|---|---|
+| C1 | **Bytes of the derived `experiment_design.csv`.** Taken from the preprocessing contract §12 (`docs/contract.md` at `b5a47cb`, line 407 `Rows`: UTF-8, LF, header row, column order, `true`/`false`, sort; line 402: `confirmed_on` is an ISO 8601 date, line 412: `YYYY-MM-DD`). **Open, not settled by the contract:** delimiter, quoting, final line terminator, byte-order mark. The golden files follow today's writer (`design.py:662-679`: `csv.writer`, comma, minimal quoting, `lineterminator="\n"`, so LF after the last row; no BOM) and avoid any value that would need quoting | §11 | `expected/` (`v13`, `v33`, `v34`); `refval.derive_csv` |
+
 ### Histogram representation: candidates and criteria only (not decided)
 
 | Candidate | Shape | Status |

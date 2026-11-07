@@ -774,7 +774,13 @@ deterministically from a published file, with the contract's byte rules:
 | `schema_version` | `1` |
 
 One row per member, sorted by `condition` (the source folder label), then `biological_repeat`, in
-code point order. The CSV carries the **source folder labels exactly as today** and no technical
+code point order. **Bytes** (preprocessing contract §12, rule `Rows`, and the `confirmed_on`
+row): UTF-8, LF line endings, one header row naming the nine columns in the order of the table
+above, booleans written `true` and `false`, `confirmed_on` written as the repeat's `confirmed_on`
+(`YYYY-MM-DD`). The contract does not state the delimiter, the quoting, the final line terminator
+or a byte-order mark, so these four are not yet normative; the golden files use a comma, no
+quoting (no golden value needs it), LF after every row including the last, and no byte-order
+mark, as today's writer does. The CSV carries the **source folder labels exactly as today** and no technical
 repeat or condition ID, so the choice of a condition or technical repeat ID (for example `ctrl` for
 the folder `control`) never changes it. For a legacy dataset whose `repeat_group` values migrate
 to the canonical repeat IDs and whose controls migrate deterministically, the derived file MUST be
@@ -786,8 +792,8 @@ latest, on every row. **Byte-identity is guaranteed only for repeat groups with 
 `confirmed_on`**; for a group with several dates the earlier per-row dates are the only difference
 and are recorded in the migration note, which is their only record.
 
-Expected `experiment_design.csv` outputs (golden files) are **deferred to Stage 1**; Stage 0 fixes
-only the derivation rules above.
+Expected `experiment_design.csv` outputs (golden files) for `v13`, `v33` and `v34` are in
+`fixtures/expected/`; a derived file MUST equal the golden file byte for byte.
 
 ## 12. Drafts
 

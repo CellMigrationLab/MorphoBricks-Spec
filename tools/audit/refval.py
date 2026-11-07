@@ -14,7 +14,9 @@ Usage:
 
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import json
 import re
 import sys
@@ -692,6 +694,36 @@ def section_digests(doc: dict) -> dict[str, str]:
     return out
 
 
+# ------------------------------------------------------------------ derived CSV (section 11)
+CSV_COLUMNS = ("condition", "biological_repeat", "repeat_group", "control", "image_count",
+               "technical_repeat_count", "confirmed", "confirmed_on", "schema_version")
+
+
+def derive_csv(doc: dict) -> bytes:
+    """The derived experiment_design.csv of a valid document (experiment-v1 section 11).
+
+    AMBIGUITY: the contract (section 12) fixes UTF-8, LF, the header row, the column order,
+    `true`/`false` and the sort; it does not state the delimiter, the quoting, a final line
+    terminator or a byte-order mark. Here: comma, minimal quoting, LF after every row including
+    the last, no byte-order mark (as today's writer does).
+    """
+    referenced = {c["reference"] for c in doc["conditions"].values() if "reference" in c}
+    rows = []
+    for rid, cid, m in members(doc):
+        tr = m["technical_repeats"]
+        single = len(tr) == 1 and next(iter(tr.values()))["source_folder"] == "single"
+        rows.append([doc["conditions"][cid]["source_folder"], m["source_repeat"], rid,
+                     "true" if cid in referenced else "false", str(m["image_count"]),
+                     "0" if single else str(len(tr)), "true",
+                     doc["repeats"][rid]["confirmed_on"], "1"])
+    rows.sort(key=lambda r: (r[0], r[1]))
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator="\n")
+    w.writerow(CSV_COLUMNS)
+    w.writerows(rows)
+    return buf.getvalue().encode("utf-8")
+
+
 # ------------------------------------------------------------------ transitions (R_*)
 def transition(old: dict, new: dict) -> set[str]:
     codes: set[str] = set()
@@ -832,6 +864,16 @@ def run_fixtures(root: Path) -> int:
             bad += 1
             print(f"MISMATCH transition {f.stem} vs {pred}: got {sorted(got)} expected {sorted(exp)}")
         counts["transition-checks"] = counts.get("transition-checks", 0) + 1
+    # derived CSV golden files (section 11): each is listed in the README and equals the derivation
+    for f in sorted((fx / "expected").glob("*.csv")):
+        key = f.stem.split("_")[0]
+        if f"`{f.name}`" not in readme:
+            bad += 1
+            print(f"NO-CATALOGUE-ROW expected/{f.name}")
+        if key not in docs or derive_csv(docs[key]) != f.read_bytes():
+            bad += 1
+            print(f"MISMATCH expected/{f.name}: not the derivation of {key}")
+        counts["expected"] = counts.get("expected", 0) + 1
     # round trip and digests
     for k, d in docs.items():
         if k.startswith("v") or k.startswith("t"):

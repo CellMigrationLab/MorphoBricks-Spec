@@ -40,7 +40,8 @@ is executed by this repository.
   plan on a named fixture, listed in the coverage tables below.
 - A copy of this tree vendored by a reader MUST hash to the pinned SHA's `fixtures` tree
   (conformance plan §1).
-- Expected `experiment_design.csv` outputs (golden files) are deferred to Stage 1. The fixed-SHA
+- Expected `experiment_design.csv` outputs (golden files, experiment-v1 §11) are in `expected/`,
+  one per file listed under "Expected outputs" below; the other valid files have none yet. The fixed-SHA
   consumer audit (roadmap S0.1) is done (PR #5); its questions are answered by the third round of
   owner decisions (ADR 0001) and the fixtures `v28`-`v32`, `t06`-`t09`, `i100`-`i119` follow from
   them; the fourth round (FR1, FR2) adds `v33`, `v34`, `t10`-`t12` and `i120`-`i127`.
@@ -254,6 +255,17 @@ This is a check of the fixtures against the text, not a conformance claim for an
 | [`v34_technical_repeat_folder_on_forbidden_list`](valid/v34_technical_repeat_folder_on_forbidden_list.toml) | Owner decision FR1 | pass | yes | Repeat rep1 has two technical-repeat folders, `files` and `overrides`, both forbidden names (experiment-v1 4.7). They are the `source_folder` values; the confirmed IDs are `acq1` and `acq2`, and the same ID carries the same folder in both members. rep2 has no technical-repeat folder level (`single`). Homogeneous. |
 | [`v35_flat_experiment`](valid/v35_flat_experiment.toml) | Matrix audit 2026-11-07, case F01 | pass | yes | The experiment folder is itself the leaf: condition, repeat and technical repeat are all `single`. The condition `single` has `source_folder = "single"` ("no condition folder level", 4.2, 3.2) and is the only condition (owner decision SQ6, matrix audit MS-1). |
 | [`v36_repeat_folder_forbidden_name`](valid/v36_repeat_folder_forbidden_name.toml) | Matrix audit 2026-11-07, case F16 | pass | yes | Biological-repeat folders `z` paired into repeat `R1`; `source_repeat` is never restricted. The folder label `z` is not an allowed repeat ID (`i130`), so no ID is proposed and the user names `R1` (4.6a; owner decision SQ6, matrix audit MS-2). |
+
+## Expected outputs (3)
+
+Golden `experiment_design.csv` files (experiment-v1 §11), byte for byte. Each is the derivation of the
+named valid file by the stated rules; `tools/audit/refval.py` compares them.
+
+| Golden file | Derived from | Notes |
+|---|---|---|
+| [`v13_homogeneous_legacy.experiment_design.csv`](expected/v13_homogeneous_legacy.experiment_design.csv) | `valid/v13` | One control (`CTRL`, referenced by DrugA and DrugB); every `technical_repeat_count` 0 (only `single`). |
+| [`v33_condition_folder_on_forbidden_list.experiment_design.csv`](expected/v33_condition_folder_on_forbidden_list.experiment_design.csv) | `valid/v33` | `condition` holds the folder label `control`, never the ID `ctrl`; `DrugA` sorts before `control` (code point order). |
+| [`v34_technical_repeat_folder_on_forbidden_list.experiment_design.csv`](expected/v34_technical_repeat_folder_on_forbidden_list.experiment_design.csv) | `valid/v34` | Two technical repeats (folders `files`, `overrides`) give `technical_repeat_count` 2; `rep2` has only `single`, so 0. |
 
 ## Transition fixtures (12)
 
