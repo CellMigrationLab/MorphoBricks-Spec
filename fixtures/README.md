@@ -16,7 +16,7 @@ is executed by this repository.
   `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` (lifted at Stage 3).
 - Physical cases that need images (within-unit divergence, header contradictions, mask pixel
   contradictions, reconciliation) cannot be expressed by a TOML file alone; they are listed as
-  scenarios P01-P33 in the [conformance plan](../docs/conformance-plan.md#3-physical-scenarios-preprocessing-owned),
+  scenarios P01-P35 in the [conformance plan](../docs/conformance-plan.md#3-physical-scenarios-preprocessing-owned),
   built on the valid files below.
 - `v18` MUST parse to the same model as `v01` (round trip); `v21` differs from `v01` only in
   `display_name`, `target` and `treatment_key` values and `v16` only in `display_name` values, so
@@ -214,6 +214,8 @@ This is a check of the fixtures against the text, not a conformance claim for an
 | AQ13 | Forbidden names apply to ID keys; NFC of channel references; one code per broken rule | `i113`-`i118` |
 | FR1 | Folder labels are never restricted by the reserved or forbidden names: conditions and technical repeats have a canonical ID separate from the required `source_folder`; one folder, one ID; a folder change for an existing ID is a reassignment; the derived CSV keeps the folder labels | `v33`, `v34`, `i113`, `i115`, `i120`-`i127`, `t10`-`t12`; P32, P33 |
 | FR2 | Derived CSV byte-identity is guaranteed only for repeat groups with a single `confirmed_on`; a legacy group with several dates gets the latest, the migration note keeps the per-row dates | `v13`; P30 |
+| RR1 | Record type `image_count_changed` (a confirmed unit's image count changes and nothing else does; nothing reopens) | P34 |
+| RR2 | Record type `removed` for every confirmed removal of a unit, technical repeat, repeat or condition | P35 |
 
 ## Valid fixtures (36)
 
