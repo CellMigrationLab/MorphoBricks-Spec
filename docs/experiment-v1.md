@@ -740,7 +740,9 @@ silently; edits go to a separate draft and are published atomically after valida
 - **N35 reopening.** The confirmation of a repeat is reopened (draft `confirmed = false`) only when
   channels, layout or grouping change: a new or removed unit or member, a unit's ordered channel
   list, or the pairing of folders into repeats. New FOVs (or removed ones) inside an existing unit
-  whose confirmed layout still holds do **not** reopen it; they are reported and recorded.
+  whose confirmed layout still holds do **not** reopen it; they are reported and recorded. A
+  changed `image_count` alone is therefore not a reopening: a new `confirmed_on` beside only a
+  changed `image_count` is `R_CONFIRMED_ON_CHANGED` (§4.4a).
 - **Adding a member is allowed (AQ1).** A new member folder or unit joins an existing repeat or
   condition without a changed-ID refusal (§4.6); it is a grouping change, so it reopens the N35
   confirmation of that repeat, and it never changes an existing ID. Only removing or reassigning

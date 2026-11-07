@@ -813,10 +813,15 @@ def transition(old: dict, new: dict) -> set[str]:
                 not set(old["channels"][ch].get("header_names", [])) <= \
                 set(new["channels"][ch].get("header_names", [])):
             codes.add("R_CONFIRMED_ID_CHANGED")
-    # confirmed_on of a repeat whose confirmation is not reopened
+    # confirmed_on of a repeat whose confirmation is not reopened (section 10: members, units and
+    # channel lists unchanged; a changed image_count alone does not reopen it)
+    def layout(rep):
+        return {c: {k: v for k, v in _strip(m).items() if k != "image_count"}
+                for c, m in rep["members"].items()}
+
     for rid in set(old["repeats"]) & set(new["repeats"]):
         o, n = old["repeats"][rid], new["repeats"][rid]
-        if _strip(o["members"]) == _strip(n["members"]) and o["confirmed_on"] != n["confirmed_on"]:
+        if layout(o) == layout(n) and o["confirmed_on"] != n["confirmed_on"]:
             codes.add("R_CONFIRMED_ON_CHANGED")
     return codes
 

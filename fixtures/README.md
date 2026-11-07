@@ -28,7 +28,7 @@ is executed by this repository.
   fixtures that do not exercise the rule it equals the ID (the key), `single` for `single`;
   `v33`, `v34` and `t10`-`t12` separate the two. The eight undecodable
   or unparsable phase-1 fixtures (`i01`-`i08`) are unchanged and fail before it matters.
-- `transitions/` holds twelve files that are valid alone and are checked against a named published
+- `transitions/` holds thirteen files that are valid alone and are checked against a named published
   predecessor: refused with an exact set of publication codes (`R_CONFIRMED_ID_CHANGED`,
   `R_USED_ID_REUSED`, `R_USED_ID_DROPPED`, `R_CONFIRMED_ON_CHANGED`; experiment-v1 §4.4a, §4.6,
   §4.9; a changed or reassigned `source_folder` counts, §4.6a) or, for `t06`, **accepted** (adding members is not a changed entity, §4.6). They need the
@@ -267,7 +267,7 @@ named valid file by the stated rules; `tools/audit/refval.py` compares them.
 | [`v33_condition_folder_on_forbidden_list.experiment_design.csv`](expected/v33_condition_folder_on_forbidden_list.experiment_design.csv) | `valid/v33` | `condition` holds the folder label `control`, never the ID `ctrl`; `DrugA` sorts before `control` (code point order). |
 | [`v34_technical_repeat_folder_on_forbidden_list.experiment_design.csv`](expected/v34_technical_repeat_folder_on_forbidden_list.experiment_design.csv) | `valid/v34` | Two technical repeats (folders `files`, `overrides`) give `technical_repeat_count` 2; `rep2` has only `single`, so 0. |
 
-## Transition fixtures (12)
+## Transition fixtures (13)
 
 Valid alone; checked against the named published predecessor (refused with the listed set, or accepted).
 
@@ -285,6 +285,7 @@ Valid alone; checked against the named published predecessor (refused with the l
 | [`t10_condition_id_changed_same_folder`](transitions/t10_condition_id_changed_same_folder.toml) | `valid/v33` | R_CONFIRMED_ID_CHANGED (against predecessor valid/v33, without a recorded re-confirmation) | The folder `control` was confirmed as condition `ctrl` in v33 and now carries the ID `control_cells`. A confirmed ID never changes in place, also when the folder is the same (experiment-v1 4.6, 4.6a). `ctrl` stays listed in used_ids, so only the changed ID is refused. Valid alone. |
 | [`t11_technical_repeat_id_changed_same_folder`](transitions/t11_technical_repeat_id_changed_same_folder.toml) | `valid/v34` | R_CONFIRMED_ID_CHANGED (against predecessor valid/v34, without a recorded re-confirmation) | The folder `files` was confirmed as technical repeat `acq1` in v34 and now carries the ID `acqA` in both members. A confirmed technical repeat ID never changes in place (experiment-v1 4.6, 4.6a). `acq1` stays listed in used_ids. Valid alone. |
 | [`t12_condition_folder_reassigned`](transitions/t12_condition_folder_reassigned.toml) | `valid/v33` | R_CONFIRMED_ID_CHANGED (against predecessor valid/v33, without a recorded confirmation) | The ID `ctrl` held the folder `control` in v33 and now holds the folder `ctl` (a folder renamed on disk and attached to the same ID without a recorded confirmation). A folder change for an existing ID is a reassignment, so a changed entity (experiment-v1 4.6, 7). Valid alone. |
+| [`t13_confirmed_on_with_image_count_only`](transitions/t13_confirmed_on_with_image_count_only.toml) | `valid/v01` | `R_CONFIRMED_ON_CHANGED` (N35 not reopened) | Against v01 only CTRL/rep1 `image_count` (12 to 17, new FOVs) and rep1 `confirmed_on` (2026-11-07) change: new FOVs do not reopen the confirmation (experiment-v1 10), so the new date is refused. |
 
 ## Invalid fixtures (134)
 
