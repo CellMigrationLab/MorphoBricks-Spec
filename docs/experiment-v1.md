@@ -702,7 +702,11 @@ standard/inline/dotted tables, never changes meaning.
 
 The whole-file SHA-256 is provenance. Preprocessing SHOULD also record per-section digests (SHA-256
 of the canonical serialization of `conditions`, `channels`, `repeats`, `masks`) so that consumers
-key derived products only on the sections they use. `source_folder` is part of the `conditions` and
+key derived products only on the sections they use. **The bytes of one section digest** are the
+section's table blocks exactly as the canonical writer emits them in the file (§9.1), each block
+followed by one blank line, with `display_name`, `target` and `treatment_key` left out and nothing
+before or after; a section with no tables (no `masks`) is the SHA-256 of the empty byte string.
+`source_folder` is part of the `conditions` and
 `repeats` digests (it fixes which folder an ID names; a reassignment changes them). Digests are computed with every `display_name`,
 `target` and `treatment_key` omitted (descriptive fields are never cache keys, §4.2a), and
 `used_ids` is not a section: a change to any of them MUST NOT change any digest, a change to `reference` MUST NOT

@@ -627,26 +627,39 @@ def _block(header: str, tbl: dict, order, sort_arrays=()) -> list[str]:
     return lines + [""]
 
 
+def section_lines(doc: dict, sec: str) -> list[str]:
+    """The table blocks of one section, each followed by a blank line (section 9.1)."""
+    out: list[str] = []
+    if sec == "conditions":
+        for cid in sorted(doc["conditions"]):
+            out += _block("conditions." + _key(cid), doc["conditions"][cid], COND)
+    elif sec == "channels":
+        for chid in sorted(doc["channels"]):
+            out += _block("channels." + _key(chid), doc["channels"][chid], CHAN,
+                          ("header_names",))
+    elif sec == "repeats":
+        for rid in sorted(doc["repeats"]):
+            rep = doc["repeats"][rid]
+            rh = "repeats." + _key(rid)
+            out += _block(rh, rep, REP)
+            for cid in sorted(rep["members"]):
+                m = rep["members"][cid]
+                mh = rh + ".members." + _key(cid)
+                out += _block(mh, m, MEM)
+                for tid in sorted(m["technical_repeats"]):
+                    out += _block(mh + ".technical_repeats." + _key(tid),
+                                  m["technical_repeats"][tid], UNIT)
+    else:
+        for mid in sorted(doc.get("masks", {})):
+            out += _block("masks." + _key(mid), doc["masks"][mid], MASK, ("source_channels",))
+    return out
+
+
 def write(doc: dict) -> bytes:
     """Canonical bytes of a valid document (experiment-v1 section 9.1)."""
     out = [f"schema = {_str(doc['schema'])}", f"schema_version = {doc['schema_version']}", ""]
-    for cid in sorted(doc["conditions"]):
-        out += _block("conditions." + _key(cid), doc["conditions"][cid], COND)
-    for chid in sorted(doc["channels"]):
-        out += _block("channels." + _key(chid), doc["channels"][chid], CHAN, ("header_names",))
-    for rid in sorted(doc["repeats"]):
-        rep = doc["repeats"][rid]
-        rh = "repeats." + _key(rid)
-        out += _block(rh, rep, REP)
-        for cid in sorted(rep["members"]):
-            m = rep["members"][cid]
-            mh = rh + ".members." + _key(cid)
-            out += _block(mh, m, MEM)
-            for tid in sorted(m["technical_repeats"]):
-                out += _block(mh + ".technical_repeats." + _key(tid),
-                              m["technical_repeats"][tid], UNIT)
-    for mid in sorted(doc.get("masks", {})):
-        out += _block("masks." + _key(mid), doc["masks"][mid], MASK, ("source_channels",))
+    for sec in ("conditions", "channels", "repeats", "masks"):
+        out += section_lines(doc, sec)
     out.append("[used_ids]")
     for k in USED:
         out.append(f"{k} = {_val(sorted(doc['used_ids'][k]))}")
@@ -679,19 +692,15 @@ def _strip(x):
 
 
 def section_digests(doc: dict) -> dict[str, str]:
-    """SHA-256 of the canonical serialization of each stripped section.
+    """SHA-256 of one section's table blocks as the canonical writer emits them (section 9.3).
 
-    AMBIGUITY: section 9.3 does not define the byte form of a section alone; the canonical writer
-    is applied to a document holding only that section (other required sections empty).
+    The blocks of the stripped section (no `display_name`, `target`, `treatment_key`), each
+    followed by one blank line, nothing before or after; an absent section is the empty bytes.
     """
-    out = {}
     s = _strip(doc)
-    for sec in ("conditions", "channels", "repeats", "masks"):
-        part = {"schema": "", "schema_version": 1, "conditions": {}, "channels": {},
-                "repeats": {}, "masks": {}, "used_ids": {k: [] for k in USED}}
-        part[sec] = s.get(sec, {})
-        out[sec] = hashlib.sha256(write(part)).hexdigest()
-    return out
+    return {sec: hashlib.sha256("".join(f"{line}\n" for line in section_lines(s, sec))
+                                .encode("utf-8")).hexdigest()
+            for sec in ("conditions", "channels", "repeats", "masks")}
 
 
 # ------------------------------------------------------------------ derived CSV (section 11)
