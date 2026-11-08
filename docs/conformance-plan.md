@@ -98,7 +98,7 @@ reported first (intra-unit discrepancies are detected before channel identity, r
 | # | Fixture | Image tree / action | Required outcome |
 |---|---|---|---|
 | P23 | `v28`, `v01` | (a) A unit declared `rgb` whose images are 2-channel grayscale; (b) an RGB TIFF in a `v01` unit that does not declare it; (c) an image of an undeclared type whose pixels look like RGB | (a), (b) `R_IMAGE_TYPE_CONTRADICTS_HEADER` (both directions); (c) no refusal and no inference: pixels are never examined |
-| P24 | `v28` | A request through a brick that does not declare RGB support; the same request through one that does | `A_RGB_NOT_SUPPORTED` for the first (no grey conversion, no channel split); the second proceeds and the brick owns the meaning |
+| P24 | `v28` | A request on the described run through a brick whose provider manifest has (a) no `rgb_support` key, (b) `rgb_support = false`; the same request through a brick whose manifest has (c) `rgb_support = true`; (d) a manifest whose `rgb_support` is not a boolean (e.g. the string `"true"`) | (a), (b) `A_RGB_NOT_SUPPORTED` (no grey conversion, no channel split); (c) proceeds and the brick owns the meaning; (d) a manifest error, never read as support. The refusal needs no pixel read. An undescribed run is not covered (brick behaviour, RC1) |
 | P25 | `v03`, `v30` | `RunInputs` FOVs of `v03` and `v30` | Each FOV carries the key with `biological_repeat` = the source label (`rep1`, `experiment_23`) and the added `repeat_group` (`Day1`); patch IDs, scaling keys, caches and exports keep the source label; pairing and pooling use `repeat_group`; in `v30` the two `rep1` folders are in different repeats; falling back to grouping by `biological_repeat` fails a test |
 | P26 | `v11`, `v31` | C0 header ` DAPI` (leading space) against `v11`; against `v31`; a decomposed header `Cafe\u0301 488` against a composed entry (and the reverse) | `R_HEADER_CONTRADICTION` against `v11` (no trimming); accepted against `v31` (the confirmed alias ` DAPI`); NFC of both sides matches the decomposed and composed spellings; the manifest records the header name as read (untrimmed) |
 | P27 | `v08` | `TumorRegion` requested as an object set: (a) plainly; (b) with the per-request conversion `binary_mask_policy="connected_components"`; (c) a later request without it | (a) `A_MASK_NOT_INSTANCES`; (b) accepted, the conversion recorded in the run manifest with mask ID, method and parameters; (c) `A_MASK_NOT_INSTANCES` again; no setting is written to `morphobricks.toml` (`i112`) |
@@ -116,7 +116,8 @@ reported first (intra-unit discrepancies are detected before channel identity, r
 - **Stage 2:** each consumer's tests use `RunInputs` built from `v03`, `v08`, `v13`, `v17`, `v28`: canonical
   repeat IDs reach MorphoCoverage as `repeat_group` beside the unchanged source label (`v03`, `v30`, P25);
   RGB support is declared or refused per brick (`v28`, P24); `A_MASK_NOT_INSTANCES` (`v08`); `A_SCOPE_INCOMPLETE`
-  and full/partial/unavailable classification (`v17`); legacy parity (`v13`); the added `condition_id` and `technical_repeat_id` beside the unchanged source labels (`v33`, `v34`, P32).
+  and full/partial/unavailable classification (`v17`), the same code for a requested channel that no
+  image has (a canonical channel ID absent from `v17` or `v01` altogether: "present in 0 of n acquisitions", SI1); legacy parity (`v13`); the added `condition_id` and `technical_repeat_id` beside the unchanged source labels (`v33`, `v34`, P32).
 - **Stage 3:** the end-to-end adversarial suite (roadmap S3.4) on trees for `v04`, `v05`, `v06`,
   `v17`: no channel mixed by C index, biological N unchanged, serial/parallel/resume identical.
 
