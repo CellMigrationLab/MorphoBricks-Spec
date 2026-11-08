@@ -231,6 +231,20 @@ The decision as given named `used_ids.channels` and `used_ids.masks`; §4.9 has 
 (the four kinds are conditions, channels, repeats and technical repeats), so it is written for
 `used_ids.channels` alone. A `masks` list would be a new kind and needs a new `schema_version`.
 
+### Owner decision of 8 November 2026 (image-count records, accepted)
+
+| # | Accepted decision | Rejected alternative | Spec | Fixtures / scenarios |
+|---|---|---|---|---|
+| RR3 | **`image_count_changed` is written for every confirmed member whose `image_count` changed at a publication**, also when the same publication changes other things (a removal, a new member, an ID correction). A count change alone still reopens nothing and needs no confirmation (`R_CONFIRMED_ON_CHANGED` unchanged). Replaces the "and nothing else changes" condition of RR1 | Writing the record only when the count is the sole change (RR1 as first worded: a count change that shared a publication with another change left no record) | §4.6, §10 | none (physical; P34) |
+
+Confirmed choices for `removed` records, written as clarifications because the text was silent or
+contradicted itself (§4.6 said unit lines follow their entity, P35 said they precede it): one
+entity line per vanished ID; `unit` lines written once after all entity lines; an entity takes the
+date of the first removal answer touching it; published IDs are used when a removal is combined
+with an ID correction. No transition fixture was added: a transition fixture states only the
+`R_*` set against its predecessor (`fixtures/README.md`), records are not part of that format, and
+`refval` does not model the records file; P34 covers the combined case physically.
+
 ### Histogram representation: candidates and criteria only (not decided)
 
 | Candidate | Shape | Status |
