@@ -245,6 +245,24 @@ with an ID correction. No transition fixture was added: a transition fixture sta
 `R_*` set against its predecessor (`fixtures/README.md`), records are not part of that format, and
 `refval` does not model the records file; P34 covers the combined case physically.
 
+### Owner decisions of 8 November 2026 (Stage 2 design, PR 3; recommendations accepted)
+
+Evidence: the Stage 2 design (questions 2 and 4) and matrix audit item 8
+(`docs/audits/matrix-audit-2026-11-07.md`): §4.4b asked bricks to declare RGB support in "documented
+capabilities", but no provider manifest could carry it, so `A_RGB_NOT_SUPPORTED` could not be
+implemented as written.
+
+| # | Accepted decision | Rejected alternative | Spec | Fixtures / scenarios |
+|---|---|---|---|---|
+| RC1 | **RGB support is a machine-readable capability.** A brick's provider manifest may carry the optional boolean `rgb_support`; absent or `false` = unsupported. A **described** run whose request includes an RGB unit's channels is refused with `A_RGB_NOT_SUPPORTED` by a brick that does not declare `true`. **Undescribed** RGB runs keep working as today, with a warning: that is brick behaviour, not a Spec rule | Leaving the declaration in prose (nothing to test); making the key required (every existing manifest would break); refusing undescribed runs too (breaks v0.4 RGB runs) | §4.4b, §8 | P24; `v28` |
+| SI1 | **One scope rule.** A requested channel ID that no FOV has and one that only some FOVs lack are the same refusal, `A_SCOPE_INCOMPLETE`, naming the channel (or mask) and the images that lack it ("present in k of n acquisitions", k may be 0) | A separate code or message for "absent from all" (two rules to learn, and a typo in a channel ID would read differently from a partial scope) | §8 (`A_SCOPE_INCOMPLETE`) | `v17`, `v01` (request for an ID no unit lists); conformance §4 |
+
+Modelling choices made when writing these into the text (not themselves owner decisions; the owner
+may amend them): the key is top-level in the provider manifest and boolean only, and a non-boolean
+value is a manifest error rather than being read as `false` or `true`; a brick with no provider
+manifest states the declaration in its documented capabilities, as §4.4b already said; the Spec
+does not define the manifest file itself (each brick owns its format), only this one key.
+
 ### Histogram representation: candidates and criteria only (not decided)
 
 | Candidate | Shape | Status |
