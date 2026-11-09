@@ -62,6 +62,7 @@ an adversarial self-audit; the owner decided on 10 November 2026 as recorded bel
 | AR7 | **Ownership split.** The resolver **classifies** (what exists: present / absent per image, full / partial / unavailable per repeat). MorphoFeature **decides** provider capability (`rgb_support`, devices, the provider API) and **records** the scope and the device in the run manifest. The bricks own their kernels and their direct-run tables | The resolver deciding capability (it would import provider manifests); MorphoFeature re-classifying scope (a second copy of the rules) | roadmap §6 | conformance §4 "Resolver", "Scope record" |
 | AR8 | **Versioned resolver contract.** The resolver has a small contract with a **version number** (`RESOLVER_VERSION`, 1 at first) and its own conformance suite driven by the Spec fixtures through `RunInputs`. Preprocessing **v0.5.1** = `Fov.image_type`, the partial-mask test helper, the lab-tool links input (`--lab-links` JSON, as decided) and the resolver, **only** | Shipping the resolver in v0.5.0 (the release candidate is under review; preprocessing is the release bottleneck); an unversioned method (a consumer could not state which rules it was tested against) | conformance §4 "Resolver" | the resolver suite (`test_spec_resolve_request.py` in preprocessing) |
 | AR9 | **Explicit device, recorded.** The user, or the notebook's default, chooses `cpu` or `cuda`; `cuda` without a GPU is **refused**, never switched silently; the device is recorded in the provenance on both routes (the resolver carries it in the request it records; the consumer refuses). fiberfeatures replaces its automatic CUDA selection in an early PR | An implicit device per route (fiberfeatures direct auto-selects CUDA, the provider defaults to CPU: no conformance test can cover a GPU machine, and "no implicit CPU/GPU fallback" is a MorphoFeature rule) | conformance §4 "Device" | the cross-route test fixes the device, or states a tolerance for a CPU-vs-GPU comparison |
+| AR10 | **Description required for every run; no backward compatibility** (owner policy, 10 November 2026: nobody uses the current code, so go clean). A published experiment description (`morphobricks.toml`) is **required** for every run, on every route. **Dropped, closed list:** (1) undescribed runs; (2) the legacy `experiment_design.csv` route as an input to grouping (the derived CSV stays an output, written by preprocessing); (3) IDs derived from folder or file names; (4) MorphoFeature's BY_NAME grouping and its interim 0/1 mask labelling (#180); (5) CellPatcher's empty-ID path for undescribed runs (D47 stays only as the `instances` rule: an `instances` mask holding 0 and 1 is one object); (6) the v0.4.0 parity tests and the legacy-parity gate rows; (7) version migrations: an old version is refused, never converted. **Unchanged:** no guessing, no silent fallback, explicit refusals. **Every consumer refuses a run without a published description** (`A_DESCRIPTION_REQUIRED`, a resolver-contract code like `A_VOLUME_NOT_SUPPORTED`), naming the fix: run the notebook or `describe`. **Timing:** the removal starts right **after** the owner tags preprocessing v0.5.0, as the first change of v0.5.1 together with the resolver; v0.5.0 ships as reviewed | Keeping the undescribed path beside the resolver (two interpretations of a run, a parity burden on code nobody uses); converting old versions (a migration guesses what the old data meant) | roadmap §5 Stage 2, Gate G2, §6; conformance §4 | none removed: no fixture exists only for an undescribed run (`v13`, `v33`, `v34` are described) |
 
 ### The resolver contract, version 1 (normative for the consumers)
 
@@ -82,7 +83,8 @@ Output (a `ResolvedRequest`, immutable and picklable):
 - the refusals, **all** that apply, each with its code, subject, message and files:
   `A_SCOPE_INCOMPLETE` ("present in k of n acquisitions", k may be 0, one rule for channels and
   masks; an undeclared mask ID is 0 of n), `A_MASK_UNCHECKED` ("k of n files"),
-  `A_MASK_NOT_INSTANCES`, `A_RGB_NOT_SUPPORTED`, `A_VOLUME_NOT_SUPPORTED`;
+  `A_MASK_NOT_INSTANCES`, `A_RGB_NOT_SUPPORTED`, `A_VOLUME_NOT_SUPPORTED`; a run without a
+  published description has no selection at all and one refusal, `A_DESCRIPTION_REQUIRED`;
 - a refused request has **no selections**: no subset is taken for the user (experiment-v1 §8);
 - the coverage of every biological repeat per channel and mask (full / partial / unavailable),
   given whether or not the request is refused, for the orchestrator's scope record;
@@ -94,11 +96,11 @@ run's SHA-256) and the mask step's status file only; it never reads a pixel, lab
 chooses a device or imports a brick, CellPatcher or provider module (a test scans its modules).
 A malformed request (an ID twice; an unknown role, policy, plane kind or device; a policy on a
 mask that is not `binary` or in a `region` role) is a programming error (`ValueError`), not a
-refusal. A run without a description is refused by the resolver and is otherwise unchanged: every
-consumer keeps today's header-name path for it.
+refusal. A run without a published description is refused by the resolver with `A_DESCRIPTION_REQUIRED`,
+naming the fix (run the notebook or `describe`); there is no header-name path (AR10).
 
-Codes: `A_VOLUME_NOT_SUPPORTED` is defined by this contract, not by experiment-v1 §8, whose `A_*`
-list stays as it is until the 3-D ADR (an owner question below). Every other code is ADR 0001's.
+Codes: `A_VOLUME_NOT_SUPPORTED` and `A_DESCRIPTION_REQUIRED` are defined by this contract, not by
+experiment-v1 §8, whose `A_*` list stays as it is until the 3-D ADR (an owner question below). Every other code is ADR 0001's.
 
 ### Consequences
 
@@ -110,9 +112,9 @@ list stays as it is until the 3-D ADR (an owner question below). Every other cod
   the consumer; MorphoFeature reads provider manifests, the direct runners read their own.
 - The FOV key keeps the source labels everywhere (experiment-v1 §3.4): the selection adds the
   canonical IDs beside it and never replaces them.
-- MorphoFeature's #180 relabelling of 0/1 masks stays for undescribed runs (owner answer 5 of
-  8 November 2026) and is off on described runs; CellPatcher's D47 ("an integer 0/1 mask is one
-  object") stays for undescribed runs.
+- AR10 supersedes owner answer 5 of 8 November 2026: MorphoFeature's #180 relabelling of 0/1
+  masks is **removed** (not only off) with the undescribed route, and CellPatcher's empty-ID path
+  for undescribed runs is removed; no run is undescribed. Version migrations are not provided.
 - 3-D: "fiberfeatures direct only, under a future ADR" is recorded in roadmap §9. No 3-D field,
   code or fixture is added now.
 

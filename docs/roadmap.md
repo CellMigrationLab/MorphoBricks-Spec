@@ -181,6 +181,8 @@ resolver** and interprets nothing itself. Direct brick runs and the MorphoFeatur
 no brick depends on MorphoFeature. Each two-route brick proves cross-route conformance on the
 shared 2-D capabilities ([conformance plan §4](conformance-plan.md#4-later-stages-obligations-recorded-not-planned-in-detail)).
 
+**No backward compatibility (owner policy, 10 November 2026, [ADR 0002](adr/0002-shared-request-resolver.md) AR10).** A published description (`morphobricks.toml`) is required for every run. Dropped, closed list: undescribed runs; `experiment_design.csv` as an input to grouping; IDs derived from folder or file names; MorphoFeature's BY_NAME grouping and interim 0/1 mask labelling; CellPatcher's empty-ID path; the v0.4.0 parity tests and the legacy-parity gate rows; version migrations (old versions are refused, never converted). Every consumer refuses a run without a published description, naming the fix (run the notebook or `describe`). The science rules are unchanged. The removal starts right after the owner tags preprocessing v0.5.0, as the first change of v0.5.1 with the resolver; v0.5.0 ships as reviewed.
+
 **S2.0 Preprocessing request resolver (v0.5.1; resolver contract version 1)**
 - `RunInputs.resolve_request(request)`: channels by canonical ID per FOV; scope classification (present / absent per image, full / partial / unavailable per biological repeat); the declared image type against the consumer's `rgb_support`; the declared mask representation against the requested role and the explicit `binary_mask_policy`; a plane or a Z-volume selection, volumes refused unless the consumer declares `volume_support`; the explicit device recorded.
 - Returns an immutable per-FOV selection plus every applicable refusal (`A_SCOPE_INCOMPLETE` "k of n", `A_MASK_UNCHECKED`, `A_MASK_NOT_INSTANCES`, `A_RGB_NOT_SUPPORTED`, `A_VOLUME_NOT_SUPPORTED`) and provenance; a refused request selects nothing.
@@ -193,7 +195,7 @@ shared 2-D capabilities ([conformance plan §4](conformance-plan.md#4-later-stag
 - Preserve provider feature-request semantics; the resolver's refusals stop a run before any provider computes (no subset unless the user selects and records one).
 - **Decide** provider capability (`rgb_support`, devices, the provider API) and **record** the resolver's scope classification and the explicit device in the run manifest; the resolver only classifies (ADR 0002 AR7).
 - Apply a recorded `binary_mask_policy` with CellPatcher's labeller, the one shared labeller (ADR 0002 AR5); the automatic 0/1-mask relabelling is off on described runs.
-- Migrate repeat grouping from raw source labels/CSV where safe, retaining compatibility paths.
+- Take repeat grouping from the description only: remove BY_NAME grouping and `experiment_design.csv` as a grouping input (ADR 0002 AR10); no compatibility path.
 
 **S2.2 MorphoRelate**
 - Provider route continues receiving named channel planes and explicit analysis mask roles.
@@ -224,7 +226,7 @@ shared 2-D capabilities ([conformance plan §4](conformance-plan.md#4-later-stag
 - Provide the one shared labeller for a recorded `binary_mask_policy` (ADR 0002 AR5): the routes call it, the resolver returns the decision.
 - Preserve patch-set, FOV, t/z, position_id, object_set and provider API v3 identity contracts.
 
-**Gate G2:** all relevant consumers accept semantic identity through the resolver without independently interpreting experiment TOML; homogeneous legacy parity and explicit missing-channel refusals pass; each two-route brick's cross-route conformance test passes on the shared 2-D capabilities with the device recorded; the mask rule and the statistics rule are tested.
+**Gate G2:** all relevant consumers accept semantic identity through the resolver without independently interpreting experiment TOML; no legacy or undescribed parity is required (ADR 0002 AR10), and every consumer refuses a run without a published description, naming the fix (run the notebook or `describe`); explicit missing-channel refusals pass; each two-route brick's cross-route conformance test passes on the shared 2-D capabilities with the device recorded; the mask rule and the statistics rule are tested.
 
 ### Stage 3 — coordinated heterogeneous-channel enablement
 
@@ -232,12 +234,12 @@ shared 2-D capabilities ([conformance plan §4](conformance-plan.md#4-later-stag
 - Evaluate **semantic-wide one-row-per-plane** as preferred candidate versus **long one-row-per-plane-channel**.
 - Test storage size, parser complexity, deterministic serialization, per-plane identity, pooling and grouping, absent channels, resume/parallel parity and existing N41/N42 behavior.
 - Define explicit channel presence and distinguish absent from failed measurement; never fabricate zero/NaN histograms for absent channels.
-- Freeze a versioned migration/compatibility policy only after evidence-backed review.
+- Freeze a versioned histogram-contract policy only after evidence-backed review; old versions are refused, not migrated (ADR 0002 AR10).
 
 **S3.2 Normalization migration**
 - Fit/select/transform by canonical channel, not C index; preserve FOV/plane/biological repeat sampling units.
 - Audit all histogram readers/writers, fitted parameters, caching, scaling, global/repeat pooling, and missing-channel error paths.
-- Compare numeric outputs against legacy homogeneous datasets with documented tolerances.
+- Verify numeric outputs on described fixtures with documented tolerances (no comparison against v0.4.0 or legacy datasets, ADR 0002 AR10).
 
 **S3.3 Preprocessing and CellPatcher migration**
 - Replace experiment-global channel-count/name refusals with per-imaging-unit validation only when all downstream consumers are ready.
@@ -248,7 +250,7 @@ shared 2-D capabilities ([conformance plan §4](conformance-plan.md#4-later-stag
 - Mixed source order, mixed counts, missing optional channels, partial technical-repeat coverage, serial/parallel/resume, corrupted headers, single discrepant FOV, cache reuse, direct/provider parity.
 - Verify biological N remains biological N and technical-repeat weights are never silently changed.
 
-**Gate G3:** no wrong-channel measurements, no silent data loss/imputation, no pseudoreplication, full provenance and legacy parity; only then enable heterogeneous processing.
+**Gate G3:** no wrong-channel measurements, no silent data loss/imputation, no pseudoreplication, full provenance (no legacy parity gate, ADR 0002 AR10); only then enable heterogeneous processing.
 
 ### Stage 4 — progressive masks and final scientific regression
 
@@ -292,7 +294,7 @@ shared 2-D capabilities ([conformance plan §4](conformance-plan.md#4-later-stag
 
 **Masks:** instances versus binary, missing/in-progress masks, mask source provenance, forbidden 2-D shared/Z behavior, direct/provider object-set refusal for incompatible representation.
 
-**Compatibility:** legacy homogeneous outputs, `experiment_design.csv`, N35 confirmation, calibration.csv authority, existing FOV/position_id/patch-set identity, metadata-only cache reuse, channel-mapping cache invalidation.
+**Compatibility:** none is kept for undescribed or old-version inputs (ADR 0002 AR10: refused, never converted); tested: the derived `experiment_design.csv` as an output, N35 confirmation, calibration.csv authority, existing FOV/position_id/patch-set identity, metadata-only cache reuse, channel-mapping cache invalidation.
 
 **Execution:** deterministic serial/parallel/resume, no missing/failed measurement treated as biology, exact manifest schema hash, no silent fallback or imputation, actionable errors with paths and identity.
 

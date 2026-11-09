@@ -124,7 +124,7 @@ This is a check of the fixtures against the text, not a conformance claim for an
 | 1 | Two technical repeats of different counts/orders stay ONE biological replicate | `v06` | Stage 2-3: N per repeat in normalization, embeddings, MorphoCoverage |
 | 2 | One deviating FOV in a technical repeat refused with image/C-index evidence | `i20`; P01, P02 | Stage 1: `R_UNIT_NOT_HOMOGENEOUS` |
 | 3 | Swapped C order never mixes ACTIN and DNA in normalization or CellPatcher | `v04`, `v06` | Stage 1 refusal; Stage 3 pooling by canonical ID |
-| 4 | Homogeneous legacy datasets keep numerical parity and existing refusals | `v13` | Stage 1: byte-identical derived CSV; Stage 3 parity |
+| 4 | A homogeneous described dataset (folder-name IDs confirmed by the user) keeps the existing refusals; no parity against v0.4.0 (ADR 0002 AR10) | `v13` | Stage 1: byte-identical derived CSV (as reviewed for v0.5.0); no legacy numerical parity gate |
 | 5 | `DNA` with confirmed header `DAPI` passes; unconfirmed contradiction refuses | `v11`; P03 | Stage 1: `R_HEADER_CONTRADICTION` |
 | 6 | A binary region mask never becomes an instance object set | `v08` | Stage 2: `A_MASK_NOT_INSTANCES` |
 | 7 | N35 confirmation survives migration and reopens on discovery changes | `v13`, `i37`; P07 | Stage 1 migration and reconciliation |
