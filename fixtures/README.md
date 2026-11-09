@@ -129,7 +129,7 @@ This is a check of the fixtures against the text, not a conformance claim for an
 | 6 | A binary region mask never becomes an instance object set | `v08` | Stage 2: `A_MASK_NOT_INSTANCES` |
 | 7 | N35 confirmation survives migration and reopens on discovery changes | `v13`, `i37`; P07 | Stage 1 migration and reconciliation |
 | 8 | Distinct source repeat names paired by the user give one canonical ID in MorphoCoverage | `v03` | Stage 2 (S2.5) |
-| 9 | Missing channels in requested scope: refusal or recorded user subset, never silent drop; a channel no image has is the same refusal (SI1) | `v05`, `v17` | `A_SCOPE_INCOMPLETE`, shown at Stage 3 / gate G3 for both: their layouts are refused at Stages 1-2 (P04); `v17` per owner decision GS2, `v05` per conformance §4 |
+| 9 | Missing channels in requested scope: refusal or recorded user subset, never silent drop; a channel no image has is the same refusal (SI1) | `v05`, `v17` | `A_SCOPE_INCOMPLETE`, shown at Stage 3 / gate G3 for both: their layouts are refused at Stages 1-2 (P04); owner decision GS2 for both |
 | 10 | Metadata-only changes keep valid pixel-derived caches | `v01` vs `v21` | Stage 1: section digests |
 
 **Further required cases:**
@@ -150,7 +150,7 @@ This is a check of the fixtures against the text, not a conformance claim for an
 | Implicit-conversion traps | `i07`, `i08`, `i12`-`i14`, `i19`, `i27`-`i30`, `i33`, `i34`, `i36`, `i38`, `i39`; valid side `v15` |
 | Reference DAG | `i64`-`i68`, `i41`; `v10`, `v19` |
 | Swapped channel order | `v04`, `v06` |
-| Extra / missing channel | `v05`, `v17` (both Stage 3 / G3: P04 refuses their layouts at Stages 1-2), `v22`, `i69` |
+| Extra / missing channel | `v05`, `v17` (both Stage 3 / G3, GS2: P04 refuses their layouts at Stages 1-2), `v22`, `i69` |
 | Within-unit divergence | `i20`; P01, P02 |
 | Instance vs binary masks | `v07`, `v08`, `i42`, `i43`, `i111`, `i112`; P05, P27, P28 |
 | Partial masks | `v09` |

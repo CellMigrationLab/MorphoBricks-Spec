@@ -127,14 +127,17 @@ gate, not at G1 (§5); the Stage 2 bullet below lists them.
   full or unavailable per repeat, never partial): full on `v01` (a channel every image has); unavailable on `v01`
   (the absent channel: every repeat unavailable, k = 0); partial for a mask request only, on `v09` (its single
   repeat `rep1` while the `Nuclei` masks cover 300 of 1000 FOVs, P11; the completeness is read from the run
-  manifest). Partial for a channel request has no fixture at G2: it is the `v17` case at G3 (see the Stage 3 bullet); legacy parity (`v13`); the added `condition_id` and `technical_repeat_id` beside the unchanged source labels (`v33`, `v34`, P32).
+  manifest). Partial for a channel request has no fixture at G2: it is the `v17` and `v05` case at G3 (see the Stage 3 bullet); legacy parity (`v13`); the added `condition_id` and `technical_repeat_id` beside the unchanged source labels (`v33`, `v34`, P32).
 - **Stage 3:** the end-to-end adversarial suite (roadmap S3.4) on trees for `v04`, `v05`, `v06`,
   `v17`: no channel mixed by C index, biological N unchanged, serial/parallel/resume identical.
-  Also at Stage 3, gate G3 (owner ruling of 9 November 2026, GS2): the channel case of `v17` (PHASE present
-  only in `CTRL/R002/acquisition_1`; for a PHASE request R002 partially represented and R001 unavailable),
-  shown as `A_SCOPE_INCOMPLETE` and full / partial / unavailable classification per repeat. Preprocessing
-  refuses that layout until Stage 3 (`R_HETEROGENEOUS_LAYOUT_NOT_ENABLED`, P04), so the Stage 2 gate cannot
-  show it. Only this channel case of `v17` moves; no other Stage 2 obligation, fixture or scenario changes.
+  Also at Stage 3, gate G3 (owner ruling of 9 November 2026, GS2): the channel cases of `v17` and `v05`.
+  `v17`: PHASE present only in `CTRL/R002/acquisition_1`; for a PHASE request R002 is partially represented and
+  R001 unavailable. `v05` (variable channel count): PHASE present only in `DrugA/rep1`, while `CTRL/rep1` lists
+  only DNA and ACTIN; `rep1` is the only repeat, so for a PHASE request `rep1` is partially represented (DrugA
+  yes, CTRL no) and no repeat is unavailable. Both are shown as `A_SCOPE_INCOMPLETE` and full / partial /
+  unavailable classification per repeat. Preprocessing refuses both layouts until Stage 3
+  (`R_HETEROGENEOUS_LAYOUT_NOT_ENABLED`, P04), so the Stage 2 gate cannot show them. The list is closed: only
+  these two channel cases move; nothing else is deferred and no other Stage 2 obligation, fixture or scenario changes.
 
 ## 5. Exit criteria
 
