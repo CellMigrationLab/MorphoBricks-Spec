@@ -23,6 +23,13 @@ reproduces its `PIN.toml` format and hashing exactly. Principles: [conformance p
 
 It also writes `PIN.toml` (the full commit SHA and those hashes), a `README.md` ("do not edit;
 regenerate with vendor.py") and `.gitattributes` (`* -text`, so git never rewrites line endings).
+`vendor.py` manages the **whole destination folder**, `README.md` included: it writes the same
+generic README for every brick and `--check` compares it byte for byte, like `PIN.toml` and
+`.gitattributes`. morphobricks-preprocessing's `README.md` is still brick-specific (it also
+documents its skipped-test gate). Preprocessing adopts the generic README in a later PR, after its
+v0.5.0 tag; until then its folder differs from `vendor.py`'s output in that one file, so it must
+not run `--check` (or re-run `vendor.py`, which replaces the README) before that PR. Everything
+else in its folder is identical to what the tool writes for its pinned commit `1bed024`.
 Content comes from git objects of the commit (never the working tree) and is written in binary
 mode: copies are byte-exact on every platform.
 
@@ -46,7 +53,10 @@ Two layers:
   `fixtures/` as a git tree) and fails on one changed, added or missing byte. A skipped pin test must be
   treated as a failure by the brick's gate.
 - **Against the Spec.** The offline test trusts `PIN.toml`. To also prove `PIN.toml` is what the Spec says at
-  that commit, run `vendor.py --check` in CI. It exits 1 and names each differing file:
+  that commit, run `vendor.py --check` in CI. It changes nothing, exits 1 and names each difference:
+an edited, missing or extra file, a symbolic link, a `PIN.toml`, `README.md` or `.gitattributes`
+that is not byte for byte what `vendor.py` writes, and a pinned commit that is not in the Spec
+checkout (fetch the full history, as below):
 
 ```yaml
 - uses: actions/checkout@v4
@@ -61,7 +71,17 @@ Copy [`tools/brick_templates/spec-freshness.yml`](../tools/brick_templates/spec-
 the git hash at the pin with the hash at Spec main. If any differ it opens or updates one issue,
 **"Spec pin is behind MorphoBricks-Spec main"**, listing the changed paths and commits. Docs-only
 Spec changes outside the pinned paths do not trigger it. The step uses `continue-on-error` and
-only needs `issues: write`. It does not close the issue; close it after re-pinning.
+only needs `issues: write`. It does not close the issue; close it after re-pinning (a closed issue
+is not reused: the next run that finds the pin behind opens a new one).
+
+**Private Spec.** The Spec is public today (checked 2026-11-09 without credentials), so the
+default `GITHUB_TOKEN` can check it out. The workflow token only reads the brick's own repository
+for a private Spec. In that case add a read-only token for the Spec as the brick's repository
+secret `SPEC_READ_TOKEN`; the workflow uses it when it exists. The same applies to the
+`--check` snippet above (`token: ${{ secrets.SPEC_READ_TOKEN }}`). Without it the weekly job's
+checkout fails, the compare step is skipped, and the run shows a `spec-freshness` warning
+annotation; the job stays green and blocks nothing. `--check` in the brick's regular CI fails then,
+by design: it cannot prove the copy.
 
 ## Tests of the tooling
 

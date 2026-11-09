@@ -8,6 +8,11 @@ brick pins which Spec commit. Workflow: [vendoring.md](vendoring.md).
 `tools/audit/refval.py` and `tools/audit/refrecords.py`, plus `PIN.toml`, `README.md` and
 `.gitattributes`.
 
+**README.** `vendor.py` manages the whole destination folder, `README.md` included, and writes a
+generic one. morphobricks-preprocessing's current `README.md` is brick-specific; it adopts the
+generic one in a later PR, after its v0.5.0 tag, and until then must not run `vendor.py --check`
+([vendoring.md](vendoring.md)).
+
 Update a row in the same Spec pull request (or a follow-up) whenever a brick's re-pin merges.
 
 | Brick | Pinned Spec commit | Date | PR | File set |

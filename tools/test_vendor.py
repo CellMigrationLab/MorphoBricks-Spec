@@ -256,6 +256,37 @@ class VendorTest(unittest.TestCase):
         self.assertEqual(done.returncode, 1)
         self.assertIn("40-digit", done.stdout)
 
+    def test_check_fails_on_an_edited_readme_or_an_extra_pin_line(self):
+        self.vendor()
+        with open(self.dest / "README.md", "ab") as handle:
+            handle.write(b"edited\n")
+        done = self.check()
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("README.md: differs", done.stdout)
+        self.vendor()
+        self.assertEqual(self.check().returncode, 0)
+        for extra in (b"# a comment\n", b'extra = "1"\n'):
+            with open(self.dest / "PIN.toml", "ab") as handle:
+                handle.write(extra)
+            done = self.check()
+            self.assertEqual(done.returncode, 1, extra)
+            self.assertIn("PIN.toml", done.stdout)
+            self.vendor()
+
+    def test_check_fails_on_a_symbolic_link_with_the_right_bytes(self):
+        self.vendor()
+        target = self.dest / "tools/audit/refval.py"
+        copy = self.dest / "tools/audit/refval_real.py"
+        copy.write_bytes(target.read_bytes())
+        target.unlink()
+        try:
+            target.symlink_to(copy.name)
+        except OSError as error:
+            self.fail(f"cannot create a link to test the refusal: {error}")
+        done = self.check()
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("refval.py: is a symbolic link", done.stdout)
+
     def test_check_fails_without_a_copy(self):
         done = self.check()
         self.assertEqual(done.returncode, 1)
@@ -307,6 +338,18 @@ class PureTest(unittest.TestCase):
             spec = make_spec(Path(tmp) / "s")
             files = {p[len("fixtures/"):]: d for p, d in AWKWARD.items() if p.startswith("fixtures/")}
             self.assertEqual(vendor.tree_id_from_blobs(files), git(spec, "rev-parse", "HEAD:fixtures"))
+
+    def test_tree_id_matches_git_for_unusual_names(self):
+        names = ["a b", "a!x", "a+b", "a0", "A", "\u00e9", "z/\u00e9/q", "z/\u00e9.x", "z/e", "\u00fc/n",
+                 "\u00fc.t", "\u00fc0", "sp ace/x y", "q$'z", "-dash", 'qu"ote', "t\tab"]
+        files = {n: f"c{i}\r\n".encode() for i, n in enumerate(names)}
+        with tempfile.TemporaryDirectory() as tmp:
+            spec = make_spec(Path(tmp) / "s", {f"fixtures/{n}": d for n, d in files.items()} | {
+                "docs/experiment-v1.md": b"x", "tools/audit/refval.py": b"y",
+                "tools/audit/refrecords.py": b"z"})
+            self.assertEqual(vendor.tree_id_from_blobs(files), git(spec, "rev-parse", "HEAD:fixtures"))
+            self.assertEqual(set(vendor.spec_files(spec, "HEAD")),
+                             {f"fixtures/{n}" for n in names} | set(vendor.FILES))
 
     def test_tree_id_known_answer_shared_with_the_brick_template(self):
         files = {"a.txt": b"hello\n", "b/c": b"x", "a.b": b"y", "a-b": b"z", "a/f": b"w"}

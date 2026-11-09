@@ -30,12 +30,22 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # While the Spec is public the default token reads it. If the Spec becomes private, add a
+      # read-only token for it as the repository secret SPEC_READ_TOKEN (docs/vendoring.md).
+      # A failed checkout must not fail the job: the next step reports it as a warning.
+      - name: Check out Spec main
+        id: spec
+        continue-on-error: true
+        uses: actions/checkout@v4
         with:
           repository: ${{ env.SPEC_REPO }}
           ref: main
           path: spec-main
           fetch-depth: 0
+          persist-credentials: false
+          token: ${{ secrets.SPEC_READ_TOKEN || github.token }}
       - name: Compare the pinned paths with Spec main
         # A warning, never a failure: a problem here must not block a brick's merges.
         continue-on-error: true
@@ -45,6 +55,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Any failure below is reported as a warning annotation; continue-on-error keeps the
+          # job green, so this check can never block a brick.
+          trap 'rc=$?; if [ "$rc" -ne 0 ]; then echo "::warning title=spec-freshness::The freshness check could not run (exit $rc). See the log. If the Spec repository is private, add the secret SPEC_READ_TOKEN (docs/vendoring.md in the Spec)."; fi' EXIT
+          if [ "${{ steps.spec.outcome }}" != "success" ]; then
+            echo "Could not check out $SPEC_REPO main (private repository without SPEC_READ_TOKEN, or an outage)." >&2
+            exit 1
+          fi
           spec=spec-main
           # Line 1: the pinned commit. Other lines: the pinned paths (fixtures, then the files).
           mapfile -t pin < <(python3 - "$PIN_FILE" <<'PY'
@@ -57,6 +74,7 @@ jobs:
               print(path)
           PY
           )
+          if [ "${#pin[@]}" -lt 2 ]; then echo "Could not read the pin from $PIN_FILE." >&2; exit 1; fi
           pinned=${pin[0]}
           paths=("${pin[@]:1}")
           main=$(git -C "$spec" rev-parse HEAD)
@@ -93,12 +111,12 @@ jobs:
               echo "Changed files (\`git diff --name-status ${pinned:0:7} ${main:0:7}\`):"
               echo
               echo '```'
-              git -C "$spec" diff --name-status "$pinned" "$main" -- "${changed[@]}" | head -100
+              git -C "$spec" diff --name-status "$pinned" "$main" -- "${changed[@]}" | sed -n '1,100p'
               echo '```'
               echo
               echo "Spec commits touching them:"
               echo
-              git -C "$spec" log --format="- [\`%h\`]($url/commit/%H) %s" "$pinned..$main" -- "${changed[@]}" | head -50
+              git -C "$spec" log --format="- [\`%h\`]($url/commit/%H) %s" "$pinned..$main" -- "${changed[@]}" | sed -n '1,50p'
             fi
             echo
             echo "To re-pin: run \`tools/vendor.py\` from a Spec checkout, run this brick's tests, open a"
@@ -109,7 +127,7 @@ jobs:
 
           # One issue: the open one with this exact title, else a new one (REST through gh).
           number=$(gh api --paginate "repos/$GH_REPO/issues?state=open&per_page=100" \
-            --jq '.[] | select(.pull_request == null) | select(.title == env.ISSUE_TITLE) | .number' | head -n 1)
+            --jq '.[] | select(.pull_request == null) | select(.title == env.ISSUE_TITLE) | .number' | sed -n '1p')
           if [ -n "$number" ]; then
             gh api -X PATCH "repos/$GH_REPO/issues/$number" -F body=@"$body" --silent
             echo "Updated issue #$number."

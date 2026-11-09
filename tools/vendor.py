@@ -166,7 +166,10 @@ def spec_files(repo: Path, commit: str) -> dict[str, bytes]:
                 continue
             meta, _, raw_name = entry.partition(b"\t")
             mode, kind, _sha = meta.decode("ascii").split()
-            name = raw_name.decode("utf-8")
+            try:
+                name = raw_name.decode("utf-8")
+            except UnicodeDecodeError as error:
+                raise VendorError(f"a path in {commit} is not valid UTF-8: {raw_name!r}") from error
             if kind != "blob" or mode != "100644":
                 raise VendorError(f"{name} in {commit} has mode {mode} ({kind}); only plain files")
             if name in found:
@@ -320,7 +323,9 @@ def check_copy(dest: Path, repo: Path) -> list[str]:
     """Return one line per difference between the copy, its PIN.toml and the Spec at the pin.
 
     An empty list means the copy is exactly what ``vendor.py`` writes for the pinned commit
-    (``README.md`` is not compared: it is documentation, not Spec content).
+    ``PIN.toml``, ``README.md`` and ``.gitattributes`` are compared byte for byte with what
+    ``vendor.py`` writes (the tool manages the whole destination folder), and a symbolic link
+    anywhere in the copy is a difference.
     """
     problems: list[str] = []
     pin_path = dest / "PIN.toml"
@@ -351,7 +356,14 @@ def check_copy(dest: Path, repo: Path) -> list[str]:
         if pinned_files.get(path) != blob:
             problems.append(f"PIN.toml: {path} is {pinned_files.get(path)}, the Spec has {blob}")
 
+    expected_pin = render_pin(SPEC_REPOSITORY, commit, tree, blobs).encode("utf-8")
+    if pin_path.read_bytes() != expected_pin:
+        problems.append("PIN.toml: differs from what vendor.py writes for the pinned commit")
+
     existing = {p for p in _existing(dest)}
+    for relative in sorted(existing):
+        if (dest / relative).is_symlink():
+            problems.append(f"{relative}: is a symbolic link")
     for path, data in sorted(spec.items()):
         relative = path
         if relative not in existing:
@@ -366,8 +378,11 @@ def check_copy(dest: Path, repo: Path) -> list[str]:
         problems.append(".gitattributes: missing")
     elif attributes.read_bytes() != GITATTRIBUTES.encode("utf-8"):
         problems.append(".gitattributes: differs from what vendor.py writes")
-    if not (dest / "README.md").is_file():
+    readme = dest / "README.md"
+    if not readme.is_file():
         problems.append("README.md: missing")
+    elif readme.read_bytes() != README.format(repository=SPEC_REPOSITORY).encode("utf-8"):
+        problems.append("README.md: differs from what vendor.py writes")
     return problems
 
 
