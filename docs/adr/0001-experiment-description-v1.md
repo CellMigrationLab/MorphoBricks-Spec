@@ -278,7 +278,7 @@ ASCII character is refused as `E_RECORDS_FORM`.
 
 | # | Accepted decision | Rejected alternative | Spec | Fixtures / scenarios |
 |---|---|---|---|---|
-| GS2 | **The channel case of `v17` is checked at gate G3, not at gate G2.** Preprocessing refuses the layout until Stage 3, so Stage 2 cannot show it. At G2 the channel-scope refusal is shown by `A_SCOPE_INCOMPLETE` on `v01` for a channel no image has, by partial masks on `v09`, and by full / partial / unavailable coverage recorded per repeat. Only the channel case of `v17` moves: no other fixture, scenario or Stage 2 item is deferred, and no fixture, golden or validator changes | Keeping `v17` at G2 (a gate that cannot pass); dropping the `v17` channel case; deferring further Stage 2 items with it | conformance §4 | `v17`, `v01`, `v09`; SI1 |
+| GS2 | **The channel case of `v17` is checked at gate G3, not at gate G2.** Preprocessing refuses the layout until Stage 3, so Stage 2 cannot show it. At G2 the channel-scope refusal is shown by `A_SCOPE_INCOMPLETE` on `v01` for a channel no image has, and by full / unavailable coverage recorded per repeat on `v01`; partial coverage is shown for a mask request only, on `v09` (single repeat `rep1`, partially masked). Layouts are homogeneous at G2, so a partial channel request has no G2 fixture: it is the `v17` case at G3. Only the channel case of `v17` moves: no other fixture, scenario or Stage 2 item is deferred, and no fixture, golden or validator changes | Keeping `v17` at G2 (a gate that cannot pass); dropping the `v17` channel case; deferring further Stage 2 items with it | conformance §4 | `v17`, `v01`, `v09`; SI1 |
 
 ### Owner decisions of 8 November 2026 (Stage 2 design, PR 3; recommendations accepted)
 
