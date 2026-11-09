@@ -20,8 +20,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
-DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-SHA256 = re.compile(r"^[0-9a-f]{64}$")  # lower-case hex (RF4)
+DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")  # matched with fullmatch
+SHA256 = re.compile(r"[0-9a-f]{64}")  # lower-case hex (RF4); matched with fullmatch, not `$`
 ID_KINDS = ("conditions", "channels", "repeats", "technical_repeats")
 ENTITIES = ("unit", "technical_repeat", "repeat", "condition")
 RECONFIRMATION = ("type", "id_kind", "old_id", "new_id", "confirmed_on", "old_sha256", "new_sha256")
@@ -142,7 +142,7 @@ def _text(v: object) -> bool:
 
 
 def _date(v: object) -> bool:
-    if type(v) is not str or not DATE.match(v):
+    if type(v) is not str or not DATE.fullmatch(v):
         return False
     try:
         date.fromisoformat(v)
@@ -166,9 +166,9 @@ def _bad_reconfirmation(rec: dict) -> list[str]:
     if not _date(rec["confirmed_on"]):
         bad.append("confirmed_on")
     old = rec["old_sha256"]
-    if not (old == "absent" or (type(old) is str and SHA256.match(old))):
+    if not (old == "absent" or (type(old) is str and SHA256.fullmatch(old))):
         bad.append("old_sha256")
-    if not (type(rec["new_sha256"]) is str and SHA256.match(rec["new_sha256"])):
+    if not (type(rec["new_sha256"]) is str and SHA256.fullmatch(rec["new_sha256"])):
         bad.append("new_sha256")
     return bad
 

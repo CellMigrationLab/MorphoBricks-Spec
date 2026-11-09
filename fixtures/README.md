@@ -3,7 +3,8 @@
 Normative test data for [experiment-v1.md](../docs/experiment-v1.md). Each file starts with a
 comment header (`Fixture`, `Expected`, `Source`, description). How these become executable tests
 in preprocessing is described in the [conformance plan](../docs/conformance-plan.md); the audit tool
-`tools/audit/refval.py` runs them here. The records files in `records/` have no header; see their section.
+`tools/audit/refval.py` runs them here. The records files in `records/` have no header; see
+their section.
 
 ## Rules
 
@@ -221,7 +222,7 @@ This is a check of the fixtures against the text, not a conformance claim for an
 | RF1 | Records file separators are `, ` and `: `; other whitespace refused | `ri25`, `ri27`, `ri30` |
 | RF2 | Every records-file violation is a refusal (key set, order, escapes, duplicates, values) | `ri01`-`ri24` |
 | RF3 | One code, `R_RECORDS_FILE_INVALID`, with `E_RECORDS_*` reasons | all `ri` records files |
-| RF4 | Empty records file accepted; BOM and CR before LF refused; lower-case SHA hex | `rv06`, `ri13`, `ri24`, `ri26` |
+| RF4 | Empty records file accepted; BOM and CR before LF refused; lower-case SHA hex | `rv06`, `ri13`, `ri24`, `ri26`, `ri31` |
 | RF5 | `technical_repeats` not empty; `old_image_count` differs from `new_image_count` | `ri28`, `ri29` |
 | RF6 | Line order within one publication stated; checked by writer tests, not by the file | P34, P35 |
 
@@ -438,15 +439,15 @@ Valid alone; checked against the named published predecessor (refused with the l
 | [`i134_duplicate_key_inline_table`](invalid/i134_duplicate_key_inline_table.toml) | Stage 1 design PR 0, experiment-v1 2.2 | `E_DUPLICATE_KEY` | 1 | `display_name` written twice inside the inline table of the channel DNA: a key declared twice in any spelling, inline tables included, is `E_DUPLICATE_KEY`, not `E_TOML_SYNTAX` (experiment-v1 2.2). |
 | [`i135_used_id_channel_reserved`](invalid/i135_used_id_channel_reserved.toml) | Owner decision UR1 (Spec issue 11) | `E_ID_RESERVED` | 4 | The retired channel ID `Nucleus` in `used_ids.channels`: a listed ID reserves the ID, so it follows the reserved list of 3.2 (case-folded) like a declared channel ID (experiment-v1 4.9). |
 
-## Records fixtures (36)
+## Records fixtures (37)
 
-Byte-exact test data for `morphobricks.records.jsonl` (experiment-v1 §4.6, owner decisions RF1-RF6 of
-9 November 2026). Unlike the TOML fixtures a JSONL file has no comment header, so each case is listed
-here. Every file is checked by `tools/audit/refrecords.py` through `refval.py fixtures`: an `accepted`
-file gives no error and is byte-identical to the canonical encoding of its records; a `refused` file
-gives exactly the listed reason and its first error is on the listed line. A reader MUST accept the
-`rv` files and refuse the `ri` files with `R_RECORDS_FILE_INVALID`; the `E_RECORDS_*` names are its
-reasons (experiment-v1 §8).
+Byte-exact test data for `morphobricks.records.jsonl` (experiment-v1 §4.6, owner decisions RF1-RF6
+of 9 November 2026). Unlike the TOML fixtures a JSONL file has no comment header, so each case is
+listed here. Every file is checked by `tools/audit/refrecords.py` through `refval.py fixtures`: an
+`accepted` file gives no error and is byte-identical to the canonical encoding of its records; a
+`refused` file gives exactly the listed reason and its first error is on the listed line. A reader
+MUST accept the `rv` files and refuse the `ri` files with `R_RECORDS_FILE_INVALID`; the
+`E_RECORDS_*` names are its reasons (experiment-v1 §8).
 
 | Fixture | Expected | Case |
 |---|---|---|
@@ -486,3 +487,4 @@ reasons (experiment-v1 §8).
 | [`ri28_technical_repeats_empty`](records/ri28_technical_repeats_empty.jsonl) | refused: `E_RECORDS_VALUE` (line 2) | An `image_count_changed` line with `technical_repeats` `[]` (RF5). |
 | [`ri29_image_count_unchanged`](records/ri29_image_count_unchanged.jsonl) | refused: `E_RECORDS_VALUE` (line 2) | `old_image_count` equals `new_image_count`: the record states no change (RF5). |
 | [`ri30_extra_whitespace`](records/ri30_extra_whitespace.jsonl) | refused: `E_RECORDS_FORM` (line 2) | A space after `{` and a trailing space before the LF (RF1). |
+| [`ri31_sha256_trailing_newline`](records/ri31_sha256_trailing_newline.jsonl) | refused: `E_RECORDS_VALUE` (line 2) | `new_sha256` is 64 lower-case hex digits followed by an escaped LF (`\n`): the line is canonical bytes, but the value is not 64 hex digits (RF4). Regression for a `$` anchor that matched before a final LF. |
