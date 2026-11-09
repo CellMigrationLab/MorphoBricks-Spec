@@ -116,15 +116,25 @@ reported first (intra-unit discrepancies are detected before channel identity, r
 P24, P27, P31 and the lab-tool-links part of the §2 "Provenance" row are checked at the Stage 2
 gate, not at G1 (§5); the Stage 2 bullet below lists them.
 
-- **Stage 2:** each consumer's tests use `RunInputs` built from `v03`, `v08`, `v13`, `v17`, `v28`: canonical
+- **Stage 2:** each consumer's tests use `RunInputs` built from `v03`, `v08`, `v13`, `v28`: canonical
   repeat IDs reach MorphoCoverage as `repeat_group` beside the unchanged source label (`v03`, `v30`, P25);
   RGB support is declared or refused per brick (`v28`, P24); `A_MASK_NOT_INSTANCES` and the per-request
   `binary_mask_policy` conversion (`v08`, P27); MorphoCoverage prefill of its reagent grouping from `target`, confirmed
-  inside MorphoCoverage (`v27`, P31); lab-tool links recorded in the run manifest (the "Provenance" row of §2); `A_SCOPE_INCOMPLETE`
-  and full/partial/unavailable classification (`v17`), the same code for a requested channel that no
-  image has (a canonical channel ID absent from `v17` or `v01` altogether: "present in 0 of n acquisitions", SI1); legacy parity (`v13`); the added `condition_id` and `technical_repeat_id` beside the unchanged source labels (`v33`, `v34`, P32).
+  inside MorphoCoverage (`v27`, P31); lab-tool links recorded in the run manifest (the "Provenance" row of §2); the channel-scope refusal
+  (SI1, GS2): `A_SCOPE_INCOMPLETE` on `v01` for a requested channel that no image has (a canonical channel ID
+  absent from `v01` altogether: "present in 0 of n acquisitions"); and full / partial / unavailable coverage recorded per repeat, shown
+  by the fixtures that can show each class at this gate (layouts are homogeneous, so a channel request is
+  full or unavailable per repeat, never partial): full on `v01` (a channel every image has); unavailable on `v01`
+  (the absent channel: every repeat unavailable, k = 0); partial for a mask request only, on `v09` (its single
+  repeat `rep1` while the `Nuclei` masks cover 300 of 1000 FOVs, P11; the completeness is read from the run
+  manifest). Partial for a channel request has no fixture at G2: it is the `v17` case at G3 (see the Stage 3 bullet); legacy parity (`v13`); the added `condition_id` and `technical_repeat_id` beside the unchanged source labels (`v33`, `v34`, P32).
 - **Stage 3:** the end-to-end adversarial suite (roadmap S3.4) on trees for `v04`, `v05`, `v06`,
   `v17`: no channel mixed by C index, biological N unchanged, serial/parallel/resume identical.
+  Also at Stage 3, gate G3 (owner ruling of 9 November 2026, GS2): the channel case of `v17` (PHASE present
+  only in `CTRL/R002/acquisition_1`; for a PHASE request R002 partially represented and R001 unavailable),
+  shown as `A_SCOPE_INCOMPLETE` and full / partial / unavailable classification per repeat. Preprocessing
+  refuses that layout until Stage 3 (`R_HETEROGENEOUS_LAYOUT_NOT_ENABLED`, P04), so the Stage 2 gate cannot
+  show it. Only this channel case of `v17` moves; no other Stage 2 obligation, fixture or scenario changes.
 
 ## 5. Exit criteria
 
