@@ -5,10 +5,8 @@ rules of docs/experiment-v1.md section 4.6: the three typed record forms (`recon
 `image_count_changed`, `removed`, with RR3) and the byte rules of the file. It sits beside
 `refval.py` (which stays the validator of `morphobricks.toml`) and is run by `refval.py fixtures`.
 
-The text names no error codes for the records file ("refused before anything is published"). The
-`E_RECORDS_*` and `W_RECORDS_*` names below are local to this tool; they are not Spec codes.
-Where the text is silent the choice made here is marked "AMBIGUITY" and reported to the owner in
-the pull request that added this file.
+A refused file is `R_RECORDS_FILE_INVALID` (section 8, owner decision RF3); the `E_RECORDS_*`
+names below are its reasons, named by this tool (owner decisions RF1-RF5 of 9 November 2026).
 
 Usage:
     python -I refrecords.py check FILE [--json]
@@ -23,7 +21,7 @@ from datetime import date
 from pathlib import Path
 
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-SHA256 = re.compile(r"^[0-9a-f]{64}$")  # AMBIGUITY: the text does not say lower-case hex
+SHA256 = re.compile(r"^[0-9a-f]{64}$")  # lower-case hex (RF4)
 ID_KINDS = ("conditions", "channels", "repeats", "technical_repeats")
 ENTITIES = ("unit", "technical_repeat", "repeat", "condition")
 RECONFIRMATION = ("type", "id_kind", "old_id", "new_id", "confirmed_on", "old_sha256", "new_sha256")
@@ -64,34 +62,24 @@ ESCAPE = re.compile(r'\\(?:u([0-9a-fA-F]{4})|.)', re.DOTALL)
 
 
 class Report:
-    """Errors and warnings of one records file: (code, line number or 0, detail)."""
+    """Errors of one records file: (reason, line number, detail)."""
 
     def __init__(self) -> None:
         self.errors: list[tuple[str, int, str]] = []
-        self.warnings: list[tuple[str, int, str]] = []
         self.records: list[dict] = []
 
     def e(self, code: str, line: int, detail: str = "") -> None:
         self.errors.append((code, line, detail))
 
-    def w(self, code: str, line: int, detail: str = "") -> None:
-        self.warnings.append((code, line, detail))
-
     @property
     def codes(self) -> set[str]:
         return {c for c, _, _ in self.errors}
-
-    @property
-    def warning_codes(self) -> set[str]:
-        return {c for c, _, _ in self.warnings}
 
     def as_dict(self) -> dict:
         return {
             "records": len(self.records),
             "errors": [list(map(str, x)) for x in self.errors],
-            "warnings": [list(map(str, x)) for x in self.warnings],
             "error_codes": sorted(self.codes),
-            "warning_codes": sorted(self.warning_codes),
         }
 
 
@@ -99,10 +87,9 @@ class Report:
 
 
 def encode_record(record: dict) -> bytes:
-    """Return the canonical bytes of one record: keys in code point order, non-ASCII unescaped,
-    one LF. AMBIGUITY: the text fixes no whitespace; this encoder writes the separators `, ` and
-    `: ` of Python's `json.dumps` default, which is what every line written so far has
-    (preprocessing `_append_records`, which the unchanged `reconfirmation` lines come from).
+    """Return the canonical bytes of one record (section 4.6, RF1): keys in code point order,
+    non-ASCII unescaped, the separators `, ` and `: `, the minimal string escapes, one LF. This is
+    Python's `json.dumps(ensure_ascii=False, sort_keys=True)`, which wrote every line so far.
     """
     return (json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
 
@@ -215,9 +202,11 @@ def _bad_units(units: object) -> bool:
 def _bad_image_count(rec: dict) -> list[str]:
     names = ("condition_id", "condition_source_folder", "repeat_id", "source_repeat")
     bad = [k for k in names if not _text(rec[k])]
-    if _bad_units(rec["technical_repeats"]):
-        bad.append("technical_repeats")
+    if _bad_units(rec["technical_repeats"]) or not rec["technical_repeats"]:
+        bad.append("technical_repeats")  # an array of {id, source_folder}, sorted, not empty
     bad += [k for k in ("old_image_count", "new_image_count") if not _count(rec[k])]
+    if not bad and rec["old_image_count"] == rec["new_image_count"]:
+        bad.append("new_image_count")  # the record states a change (RF5)
     if not _date(rec["recorded_on"]):
         bad.append("recorded_on")
     return bad
@@ -267,18 +256,17 @@ def _check_line(raw: bytes, number: int, r: Report) -> None:
         return
     r.records.append(rec)
     if raw + b"\n" != encode_record(rec):
-        # AMBIGUITY: whitespace, optional escapes of ASCII and a CR before the LF are not
-        # fixed by the text; they are reported, never refused.
-        r.w("W_RECORDS_FORM_NOT_REFERENCE", number)
+        r.e("E_RECORDS_FORM", number, "not the canonical bytes (whitespace, CR, optional escape)")
+        return
 
 
 def validate_records(data: bytes) -> Report:
     """Validate the bytes of a `morphobricks.records.jsonl`; every line is checked."""
     r = Report()
     if not data:
-        return r  # AMBIGUITY: an empty file holds no record and no torn line; accepted
+        return r  # an empty file holds no record and is accepted (RF4)
     if data.startswith(b"\xef\xbb\xbf"):
-        r.e("E_RECORDS_ENCODING", 1, "byte-order mark")  # AMBIGUITY: as for morphobricks.toml
+        r.e("E_RECORDS_ENCODING", 1, "byte-order mark")  # RF4
     parts = data.split(b"\n")  # LF only: U+2028, U+0085 and CR do not end a line
     if parts[-1] != b"":
         r.e("E_RECORDS_NO_FINAL_LF", len(parts), "last line lacks its LF")
@@ -291,7 +279,7 @@ def validate_records(data: bytes) -> Report:
     return r
 
 
-CODE = re.compile(r"\b([EW]_RECORDS_[A-Z_]+)\b")
+CODE = re.compile(r"\b(E_RECORDS_[A-Z_]+)\b")
 ROW = re.compile(r"\| \[`(r[vi]\d+[^`]*)`\]\([^)]+\) \|([^|]*)\|")
 
 
@@ -314,18 +302,16 @@ def run_fixtures(root: Path) -> tuple[int, int]:
         cell = rows[name]
         codes = set(CODE.findall(cell))
         if name.startswith("rv"):
-            ok = not r.errors and r.warning_codes == codes
-            # a file without a warning is the canonical encoding of what it holds
-            ok = ok and (bool(codes) or encode_records(r.records) == data)
-            want = f"accepted {sorted(codes)}"
+            # an accepted file is the canonical encoding of the records it holds
+            ok = not r.errors and encode_records(r.records) == data
+            want = "accepted"
         else:
             line = re.search(r"\(line (\d+)\)", cell)
             ok = r.codes == codes and bool(line) and r.errors[0][1] == int(line.group(1))
             want = f"refused {sorted(codes)} first at line {line and line.group(1)}"
         if not ok:
             bad += 1
-            print(f"MISMATCH records/{name}: got errors={r.errors[:3]} "
-                  f"warnings={sorted(r.warning_codes)}; expected {want}")
+            print(f"MISMATCH records/{name}: got errors={r.errors[:3]}; expected {want}")
     return len(files), bad
 
 
@@ -337,8 +323,6 @@ def main(argv: list[str]) -> int:
         else:
             for e in r.errors:
                 print("ERROR", *e)
-            for w in r.warnings:
-                print("WARN ", *w)
             print(len(r.records), "records", "OK" if not r.errors else "REFUSED")
         return 1 if r.errors else 0
     print(__doc__)
