@@ -245,6 +245,29 @@ with an ID correction. No transition fixture was added: a transition fixture sta
 `R_*` set against its predecessor (`fixtures/README.md`), records are not part of that format, and
 `refval` does not model the records file; P34 covers the combined case physically.
 
+### Owner decisions of 9 November 2026 (records file byte and refusal rules, accepted)
+
+Evidence: Spec issue 14. The reference validator `tools/audit/refrecords.py` and its goldens
+(`fixtures/records/`) found that §4.6 fixed the key order and the unescaped non-ASCII text but not
+the whitespace, listed only three refusals, named no code, and was silent on several byte cases;
+the preprocessing reader (`read_records`) checked only the key set. All six recommendations of the
+audit were accepted.
+
+| # | Accepted decision | Rejected alternative | Spec | Fixtures / scenarios |
+|---|---|---|---|---|
+| RF1 | **The separators are `, ` and `: `**, with no other whitespace outside strings (what every line written so far has). Any other whitespace is refused | Accepting any JSON whitespace (two spellings of one record, so no byte-stable file) | §4.6 | `ri25`, `ri27`, `ri30` |
+| RF2 | **Every violation is a refusal**, not only the three first listed: torn last line, non-object line, unknown `type`, wrong key set, key order at every level, escaped non-ASCII, duplicate keys and invalid values | Refusing only the key set (the preprocessing reader at the time) | §4.6 | `ri01`-`ri24` |
+| RF3 | **One catalogue code, `R_RECORDS_FILE_INVALID`**, for a refused records file; the reasons are the reference validator's `E_RECORDS_*` names | One Spec code per reason | §4.6, §8 | all `ri` files |
+| RF4 | **An empty file is accepted** (no record). **A byte-order mark, or a CR before the LF, is refused. A SHA-256 is lower-case hex** | Treating an empty file as torn; tolerating a BOM or CRLF | §4.6 | `rv06`, `ri13`, `ri24`, `ri26`, `ri31` |
+| RF5 | **`technical_repeats` is not empty and `old_image_count` differs from `new_image_count`** | Accepting a count record that states no change | §4.6 | `ri28`, `ri29` |
+| RF6 | **The line order within one publication is stated**: `reconfirmation` lines, then `removed` lines, then `image_count_changed` lines by `condition_id` then `repeat_id`, as preprocessing writes them. It is checked by the writer tests (P34, P35), not by a reader of the file alone (the file has no publication boundary) | Adding a publication marker to the file | §4.6 | P34, P35 |
+
+Modelling choice made when writing RF1 into the text (not itself an owner decision; the owner may
+amend it): the escapes inside a string are fixed to the minimal set (`\"`, `\\`, `\b`, `\f`, `\n`,
+`\r`, `\t`, `\u00xx` for other control characters), so that a line has exactly one spelling and the
+whitespace rule can be checked as "the bytes are the canonical bytes". An optional escape of an
+ASCII character is refused as `E_RECORDS_FORM`.
+
 ### Owner decisions of 8 November 2026 (Stage 2 design, PR 3; recommendations accepted)
 
 Evidence: the Stage 2 design (questions 2 and 4) and matrix audit item 8
