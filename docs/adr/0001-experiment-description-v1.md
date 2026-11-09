@@ -274,6 +274,12 @@ ASCII character is refused as `E_RECORDS_FORM`.
 |---|---|---|---|---|
 | GS1 | **Gate G1 is met by every §2 row and every §3 scenario of the conformance plan, except exactly four items, which are checked at the Stage 2 gate.** The four are P24 (`rgb_support`), P27 (`binary_mask_policy`), P31 (MorphoCoverage prefill) and the lab-tool-links part of the §2 "Provenance" row (no lab-tool input in Stage 1); their required outcomes belong to the bricks or MorphoCoverage. Nothing else is deferred, and preprocessing's own §2 rows on the same subjects stay in G1. A scenario that names fixtures is shown on those fixtures; extra fixtures do not replace them | Requiring G1 to run brick and MorphoCoverage outcomes in preprocessing's suite; deferring any outcome judged to belong to a brick; letting added fixtures stand in for the named ones | conformance §4, §5 | P24, P27, P31; §2 Provenance |
 
+### Owner decision of 9 November 2026 (v17 channel case moves to gate G3, accepted)
+
+| # | Accepted decision | Rejected alternative | Spec | Fixtures / scenarios |
+|---|---|---|---|---|
+| GS2 | **The channel case of `v17` is checked at gate G3, not at gate G2.** Preprocessing refuses the layout until Stage 3, so Stage 2 cannot show it. At G2 the channel-scope refusal is shown by `A_SCOPE_INCOMPLETE` on `v01` for a channel no image has, by partial masks on `v09`, and by full / partial / unavailable coverage recorded per repeat. Only the channel case of `v17` moves: no other fixture, scenario or Stage 2 item is deferred, and no fixture, golden or validator changes | Keeping `v17` at G2 (a gate that cannot pass); dropping the `v17` channel case; deferring further Stage 2 items with it | conformance §4 | `v17`, `v01`, `v09`; SI1 |
+
 ### Owner decisions of 8 November 2026 (Stage 2 design, PR 3; recommendations accepted)
 
 Evidence: the Stage 2 design (questions 2 and 4) and matrix audit item 8
