@@ -1,6 +1,6 @@
 # MorphoBricks experiment metadata — implementation roadmap
 
-**Status:** Proposed architecture and staged implementation plan, 5 November 2026; Stage 0 (specification, fixtures, audits) is done and ADR 0001 is accepted, Stages 1 to 4 are not implemented (7 November 2026). No implementation or runtime verification is implied by this document.  
+**Status:** Proposed architecture and staged implementation plan, 5 November 2026; Stage 0 (specification, fixtures, audits) is done and ADR 0001 is accepted, Stages 1 to 4 are not implemented (7 November 2026). Stage 2's architecture (one shared request resolver in preprocessing, both routes kept) was decided on 10 November 2026 ([ADR 0002](adr/0002-shared-request-resolver.md)). No implementation or runtime verification is implied by this document.  
 **Tracking:** [RFC #1](https://github.com/CellMigrationLab/MorphoBricks-Spec/issues/1); [Claude feasibility audit](audits/rfc1-feasibility-2026-11-05.md); [Claude addendum](audits/rfc1-feasibility-2026-11-05.md#addendum-after-chatgpts-response-5-november-2026).  
 **Release policy:** Documentation/specification work may proceed now; changes to existing bricks are deferred until after their first release tags. No part of this initiative is a blocker for those tags.
 
@@ -174,20 +174,40 @@ G0 checklist (6 November 2026; ADR 0001 is Accepted and the matrix audit was mer
 
 ### Stage 2 — downstream semantic adapters
 
+**Architecture (owner, 10 November 2026, [ADR 0002](adr/0002-shared-request-resolver.md)):** one
+shared request resolver in preprocessing, both routes kept. `RunInputs.resolve_request(...)` is the
+only interpreter of an experiment description for a run; every consumer below **consumes the
+resolver** and interprets nothing itself. Direct brick runs and the MorphoFeature route both stay;
+no brick depends on MorphoFeature. Each two-route brick proves cross-route conformance on the
+shared 2-D capabilities ([conformance plan §4](conformance-plan.md#4-later-stages-obligations-recorded-not-planned-in-detail)).
+
+**S2.0 Preprocessing request resolver (v0.5.1; resolver contract version 1)**
+- `RunInputs.resolve_request(request)`: channels by canonical ID per FOV; scope classification (present / absent per image, full / partial / unavailable per biological repeat); the declared image type against the consumer's `rgb_support`; the declared mask representation against the requested role and the explicit `binary_mask_policy`; a plane or a Z-volume selection, volumes refused unless the consumer declares `volume_support`; the explicit device recorded.
+- Returns an immutable per-FOV selection plus every applicable refusal (`A_SCOPE_INCOMPLETE` "k of n", `A_MASK_UNCHECKED`, `A_MASK_NOT_INSTANCES`, `A_RGB_NOT_SUPPORTED`, `A_VOLUME_NOT_SUPPORTED`) and provenance; a refused request selects nothing.
+- Imports no brick, CellPatcher or provider module; runs no kernel; reads no pixel; writes nothing; never guesses. Its own conformance suite runs on the Spec fixtures through `RunInputs`.
+- Ships in preprocessing v0.5.1 with `Fov.image_type`, the partial-mask test helper and the lab-tool links input, and nothing else.
+
 **S2.1 MorphoFeature**
-- Populate existing per-FOV `ChannelCatalogue` from validated RunInputs; remove global run-level channel mapping assumption for preprocessing-backed runs.
+- Consume the resolver: the per-FOV `ChannelCatalogue` comes from the selection's channel indices; the global run-level channel mapping assumption is removed for described runs.
 - Separate confirmed canonical channel ID from raw header label.
-- Preserve provider feature-request semantics; refuse missing required channels/masks before computation unless scope explicitly excludes them.
+- Preserve provider feature-request semantics; the resolver's refusals stop a run before any provider computes (no subset unless the user selects and records one).
+- **Decide** provider capability (`rgb_support`, devices, the provider API) and **record** the resolver's scope classification and the explicit device in the run manifest; the resolver only classifies (ADR 0002 AR7).
+- Apply a recorded `binary_mask_policy` with CellPatcher's labeller, the one shared labeller (ADR 0002 AR5); the automatic 0/1-mask relabelling is off on described runs.
 - Migrate repeat grouping from raw source labels/CSV where safe, retaining compatibility paths.
 
 **S2.2 MorphoRelate**
 - Provider route continues receiving named channel planes and explicit analysis mask roles.
-- Direct preprocessing-run mode resolves channel index per FOV through RunInputs, not one global `{name:index}` mapping.
+- Direct preprocessing-run mode consumes the resolver: channel indices per FOV from the selection, not one global `{name:index}` mapping; the mask representation and the recorded `binary_mask_policy` from the selection, applied with CellPatcher's labeller.
 - Preserve explicit array-input mappings for independent in-memory runs.
+- Cross-route conformance test against the MorphoFeature route on the shared 2-D capabilities (ADR 0002 AR4); direct-only: the whole-FOV table and one time point per run.
 
 **S2.3 FiberFeatures**
 - Provider route remains named-channel based.
-- Direct preprocessing-run reader switches from raw header channel names to canonical RunInputs names/index resolution.
+- Direct preprocessing-run reader consumes the resolver: canonical channel IDs and per-FOV indices from the selection instead of raw header names; the recorded `binary_mask_policy` applied with CellPatcher's labeller.
+- The statistics rule (ADR 0002 AR6, fiberfeatures #195): inferential outputs name the biological unit (`repeat_group`); FOV and position scores are labelled exploratory; the default scoring unit changes with a release note.
+- The device is explicit and recorded (ADR 0002 AR9): the automatic CUDA selection is replaced by a `cpu` / `cuda` choice, `cuda` refused without a GPU.
+- Cross-route conformance test against the MorphoFeature route on the shared 2-D capabilities (ADR 0002 AR4); direct-only: the 137-column table against the provider's 9, the statistics and Optuna layer.
+- 3-D (a Z-volume selection) is the fiberfeatures direct route's only, under a future ADR; `volume_support` is not declared in Stage 2.
 - Verify FOV-aware and technical-repeat-aware grouping and metadata exports.
 
 **S2.4 MorphoObjects and MorphoEmbed**
@@ -200,10 +220,11 @@ G0 checklist (6 November 2026; ADR 0001 is Accepted and the matrix audit was mer
 - Preserve correct pairing when source folder repeat labels differ across conditions.
 
 **S2.6 CellPatcher**
-- Audit and adapt every channel-selection/patch-export path that assumes one source C index has the same meaning across FOVs.
+- Audit and adapt every channel-selection/patch-export path that assumes one source C index has the same meaning across FOVs; consume the resolver for described runs.
+- Provide the one shared labeller for a recorded `binary_mask_policy` (ADR 0002 AR5): the routes call it, the resolver returns the decision.
 - Preserve patch-set, FOV, t/z, position_id, object_set and provider API v3 identity contracts.
 
-**Gate G2:** all relevant consumers accept semantic identity without independently interpreting experiment TOML; homogeneous legacy parity and explicit missing-channel refusals pass.
+**Gate G2:** all relevant consumers accept semantic identity through the resolver without independently interpreting experiment TOML; homogeneous legacy parity and explicit missing-channel refusals pass; each two-route brick's cross-route conformance test passes on the shared 2-D capabilities with the device recorded; the mask rule and the statistics rule are tested.
 
 ### Stage 3 — coordinated heterogeneous-channel enablement
 
@@ -251,13 +272,13 @@ G0 checklist (6 November 2026; ADR 0001 is Accepted and the matrix audit was mer
 | Repository | Responsibilities | Must not do |
 |---|---|---|
 | MorphoBricks-Spec | Normative schema, ADRs, fixtures, conformance contract | Image IO, duplicate runtime engine |
-| morphobricks-preprocessing | Discover/preview/confirm/reconcile; reference validator; RunInputs; provenance | Guess channel biology; silently reassign IDs |
+| morphobricks-preprocessing | Discover/preview/confirm/reconcile; reference validator; RunInputs; **the request resolver** (`resolve_request`: channels by ID per FOV, scope classification, mask-representation, RGB and volume refusals, provenance; ADR 0002); provenance | Guess channel biology; silently reassign IDs; label or convert masks; run a kernel; choose a device; decide a provider's capability; import a brick |
 | morphobricks-normalization | Canonical channel-aware histogram/fits/transform; preserve plane/FOV sampling | Pool by C index across heterogeneous units |
-| CellPatcher | Canonical channel-aware patch selection/export; patch/FOV identity | Infer axes/channels or invent missing patches |
-| MorphoFeature | Per-FOV catalogue; request applicability/scope; provider orchestration | Require global channel list for preprocessing runs |
-| MorphoRelate | Named provider inputs; direct-run semantic adapter; analysis roles | Parse schema separately or assume global C mapping |
+| CellPatcher | Canonical channel-aware patch selection/export; patch/FOV identity; **the one shared labeller** for a recorded `binary_mask_policy` (ADR 0002 AR5) | Infer axes/channels or invent missing patches; label a binary mask as objects without the recorded policy |
+| MorphoFeature | Per-FOV catalogue **from the resolver's selection**; **decides** provider capability (`rgb_support`, devices) and **records** scope and device in the run manifest; provider orchestration, shared fits, caching, exports | Require global channel list for preprocessing runs; interpret the description itself; be a dependency of any brick |
+| MorphoRelate | Named provider inputs; direct run **consuming the resolver**; analysis roles; cross-route conformance test; explicit device | Parse schema separately or assume global C mapping; label masks with its own rule |
 | MorphoObjects | Consume named arrays and valid object sets | Own experiment schema/channel mapping |
-| fiberfeatures | Named provider inputs; direct-run canonical adapter; FOV-aware statistics | Use raw header names as canonical identities |
+| fiberfeatures | Named provider inputs; direct run **consuming the resolver**; statistics naming the biological unit (FOV scores exploratory); explicit device; cross-route conformance test; the only 3-D (volume) route, under a future ADR | Use raw header names as canonical identities; score FOVs or position stems as biological N; select a device implicitly |
 | MorphoEmbed | Named channel/object-set provider; biological-repeat-aware fits | Treat technical repeats as biological replicates |
 | MorphoCoverage | Condition/repeat/control metadata and explicit statistical choices | Infer missing replicates or silently rebalance |
 
@@ -285,4 +306,4 @@ G0 checklist (6 November 2026; ADR 0001 is Accepted and the matrix audit was mer
 
 ## 9. Deferred work
 
-Optional LabChronicle import/prefill is interoperability, **not** a prerequisite. Optional image-based channel anomaly detection is advisory and must not override confirmed semantics. Optional harmonized OME-TIFF/OME-Zarr export is for external tools, not a required canonical copy. Future 3-D mask/plane semantics need a separate versioned decision aligned with preprocessing and MorphoFeature; do not anticipate them with contradictory v1 fields.
+Optional LabChronicle import/prefill is interoperability, **not** a prerequisite. Optional image-based channel anomaly detection is advisory and must not override confirmed semantics. Optional harmonized OME-TIFF/OME-Zarr export is for external tools, not a required canonical copy. Future 3-D mask/plane semantics need a separate versioned decision aligned with preprocessing and MorphoFeature; do not anticipate them with contradictory v1 fields. **3-D: fiberfeatures direct only, under a future ADR** (owner, 10 November 2026, [ADR 0002](adr/0002-shared-request-resolver.md) AR3): the resolver already distinguishes a plane from a Z-volume selection and refuses volumes unless a consumer declares `volume_support`; no consumer declares it, MorphoFeature stays 2-D, and nothing enables 3-D before that ADR.

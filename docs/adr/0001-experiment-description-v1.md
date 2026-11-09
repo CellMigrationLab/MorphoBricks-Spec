@@ -298,6 +298,15 @@ value is a manifest error rather than being read as `false` or `true`; a brick w
 manifest states the declaration in its documented capabilities, as §4.4b already said; the Spec
 does not define the manifest file itself (each brick owns its format), only this one key.
 
+### Stage 2 architecture (10 November 2026): recorded in ADR 0002
+
+The owner's decision on **who interprets a description for a run** (one shared request resolver
+in morphobricks-preprocessing, both routes kept, mandatory cross-route conformance, one mask
+rule, one statistics rule, `volume_support`, the explicit device) is a runtime contract between
+repositories rather than a rule of the description, so it is recorded in
+[ADR 0002](0002-shared-request-resolver.md) (AR1-AR9). Nothing in this ADR changes: RC1, SI1,
+GS1 and GS2 stand, and the resolver implements them.
+
 ### Histogram representation: candidates and criteria only (not decided)
 
 | Candidate | Shape | Status |
