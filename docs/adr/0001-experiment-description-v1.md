@@ -272,7 +272,7 @@ ASCII character is refused as `E_RECORDS_FORM`.
 
 | # | Accepted decision | Rejected alternative | Spec | Fixtures / scenarios |
 |---|---|---|---|---|
-| GS1 | **Gate G1 is met by preprocessing's own part of each §3 scenario.** Scenarios whose required outcomes belong to the bricks or MorphoCoverage (P24 `rgb_support`, P27 `binary_mask_policy`, P31 MorphoCoverage prefill) and the lab-tool-links part of the §2 "Provenance" row (no lab-tool input in Stage 1) are deferred to Stage 2, as conformance §4 already assigns them, and are checked at the Stage 2 gate. A scenario that names fixtures is shown on those fixtures; extra fixtures do not replace them | Requiring G1 to run brick and MorphoCoverage outcomes in preprocessing's suite; letting added fixtures stand in for the named ones | conformance §4, §5 | P24, P27, P31; §2 Provenance |
+| GS1 | **Gate G1 is met by every §2 row and every §3 scenario of the conformance plan, except exactly four items, which are checked at the Stage 2 gate.** The four are P24 (`rgb_support`), P27 (`binary_mask_policy`), P31 (MorphoCoverage prefill) and the lab-tool-links part of the §2 "Provenance" row (no lab-tool input in Stage 1); their required outcomes belong to the bricks or MorphoCoverage. Nothing else is deferred, and preprocessing's own §2 rows on the same subjects stay in G1. A scenario that names fixtures is shown on those fixtures; extra fixtures do not replace them | Requiring G1 to run brick and MorphoCoverage outcomes in preprocessing's suite; deferring any outcome judged to belong to a brick; letting added fixtures stand in for the named ones | conformance §4, §5 | P24, P27, P31; §2 Provenance |
 
 ### Owner decisions of 8 November 2026 (Stage 2 design, PR 3; recommendations accepted)
 

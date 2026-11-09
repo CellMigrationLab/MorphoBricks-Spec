@@ -113,12 +113,14 @@ reported first (intra-unit discrepancies are detected before channel identity, r
 
 ## 4. Later stages (obligations recorded, not planned in detail)
 
-Scenarios P24, P27 and P31 and the lab-tool-links part of the §2 "Provenance" row are checked at the
-Stage 2 gate, not at G1 (§5).
+P24, P27, P31 and the lab-tool-links part of the §2 "Provenance" row are checked at the Stage 2
+gate, not at G1 (§5); the Stage 2 bullet below lists them.
 
 - **Stage 2:** each consumer's tests use `RunInputs` built from `v03`, `v08`, `v13`, `v17`, `v28`: canonical
   repeat IDs reach MorphoCoverage as `repeat_group` beside the unchanged source label (`v03`, `v30`, P25);
-  RGB support is declared or refused per brick (`v28`, P24); `A_MASK_NOT_INSTANCES` (`v08`); `A_SCOPE_INCOMPLETE`
+  RGB support is declared or refused per brick (`v28`, P24); `A_MASK_NOT_INSTANCES` and the per-request
+  `binary_mask_policy` conversion (`v08`, P27); MorphoCoverage prefill of its reagent grouping from `target`, confirmed
+  inside MorphoCoverage (`v27`, P31); lab-tool links recorded in the run manifest (the "Provenance" row of §2); `A_SCOPE_INCOMPLETE`
   and full/partial/unavailable classification (`v17`), the same code for a requested channel that no
   image has (a canonical channel ID absent from `v17` or `v01` altogether: "present in 0 of n acquisitions", SI1); legacy parity (`v13`); the added `condition_id` and `technical_repeat_id` beside the unchanged source labels (`v33`, `v34`, P32).
 - **Stage 3:** the end-to-end adversarial suite (roadmap S3.4) on trees for `v04`, `v05`, `v06`,
@@ -131,13 +133,16 @@ runs (no skips) and passes on the preprocessing release candidate, with the pinn
 test run recorded. Until then, no document may describe any reader as conforming.
 
 Scope of G1 (owner ruling of 9 November 2026, [ADR 0001](adr/0001-experiment-description-v1.md), GS1).
-G1 is met by preprocessing's own part of each §3 scenario. A scenario, or a part of one, whose
-required outcome belongs to a brick or to MorphoCoverage is deferred to Stage 2, as §4 already assigns
-it, and is checked at the Stage 2 gate, not at G1. These are P24 (a provider manifest `rgb_support`),
-P27 (a per-request `binary_mask_policy`) and P31 (MorphoCoverage prefill). The same applies to the §2
-"Provenance" row as far as it concerns lab-tool links: preprocessing has no lab-tool input in Stage 1,
-so that part is checked at the Stage 2 gate. The deferral never widens what a scenario requires of
-preprocessing, and it does not apply to any other scenario or row.
+Exactly these items are checked at the Stage 2 gate and not at G1, and the "no skips" rule above does
+not count them: P24 (a provider manifest `rgb_support`), P27 (a per-request `binary_mask_policy`),
+P31 (MorphoCoverage prefill) and the lab-tool-links part of the §2 "Provenance" row (the run manifest
+test; preprocessing has no lab-tool input in Stage 1). §4 records them under Stage 2. Nothing else is
+deferred: every other §3 scenario and §2 row, and the `i99` assertion of the "Provenance" row, runs at
+G1 in full, with every outcome it states.
+
+Deferring them does not reduce what preprocessing shows in its own §2 rows on the same subjects: "RGB"
+(`v28`, `i100`-`i106`, `i119`), "Mask fields" (`i111`, `i112`), "Descriptive keys" and "Section
+digests" (editing `target` or `treatment_key` of `v27` changes no digest).
 
 A scenario that names fixtures is shown on those fixtures. Further fixtures may be added, but they do
 not replace the named ones.
