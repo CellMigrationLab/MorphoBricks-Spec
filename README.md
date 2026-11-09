@@ -19,9 +19,10 @@ brick, mask kinds in a manifest. Each tool asked again, or guessed. A guess abou
 a repeat is the kind of mistake that is invisible in the output and wrong in the statistics.
 
 The experiment description fixes this. You answer the questions once, in the preprocessing
-notebook. The answers are saved as `morphobricks.toml` next to your results, and every brick
-reads that file. Nothing is inferred from file names, pixel values or header spelling: what the
-file does not say, no tool assumes.
+notebook. The answers are saved as `morphobricks.toml` next to your results. Today the
+preprocessing brick reads that file; the other bricks will read it too as they reach Stage 2
+(see [Status and roadmap](#status-and-roadmap)). Nothing is inferred from file names, pixel
+values or header spelling: what the file does not say, no tool assumes.
 
 ## Who it is for
 
