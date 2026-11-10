@@ -1,7 +1,8 @@
 # ADR 0003: `plane_histograms.csv` schema version 5 (semantic-wide, by canonical channel ID)
 
 - **Status:** Accepted (owner decisions of 10 November 2026, items 1-3 of that day's batch, taken
-  on the S3.1 benchmark). Specification only: it changes no fixture, golden or validator
+  on the S3.1 benchmark, and the owner's answers of the same day on the points the benchmark left
+  open). Specification only: it changes no fixture, golden or validator
   (`python -I tools/audit/refval.py fixtures .` unchanged) and implements nothing. The format text
   itself is brick-owned (below); the bricks change in Stage 3 (roadmap S3.2, S3.3).
 - **Tracking:** [roadmap §5 Stage 3, S3.1](../roadmap.md#stage-3--coordinated-heterogeneous-channel-enablement);
@@ -57,35 +58,27 @@ the scope of the N42 amendment). The owner decided on 10 November 2026 as record
 
 | # | Accepted decision | Rejected alternative | Spec | Fixtures / scenarios |
 |---|---|---|---|---|
-| HV1 | **Schema version 5 is WIDE: one row per XYC plane**, columns by **canonical channel ID**, with **explicit presence columns**; **absent is not failed**. A channel the plane's imaging unit does not list is **absent**: its cells are blank, never a zero or NaN histogram, and a reader refuses any value there. The row stays the sampling unit: the row count is the plane count | (B) long, one row per plane and channel (N41 reversed, rows are not sampling units, +18-20 % at the default bins, IDs such as `NA` read as missing by default pandas); (C) long on disk, wide in memory (keeps B's size and N41 costs, two shapes to explain); (D) defer, keeping version 4 and N43 (Stage 3 cannot start; the `v05`/`v17` cases of G3 cannot be shown) | roadmap S3.1; conformance §4 Stage 3 "Histogram table v5" | trees built from `v13`, `v04`, `v05`, `v06`, `v17` |
-| HV2 | **N41 is kept. N42's channel-token rule is amended** for this table: the per-channel token is the **canonical channel ID** instead of the C index (`Intensity_MinIntensity_DNA`, `Histogram_Count_DNA_00042`). Because a channel ID may contain `_` (`PAX_488`), column names no longer split on `_`: a reader takes the set of IDs from the parameter-less feature `Histogram_ValidPixelCount_<ID>` and the bin index from the last `_NNNNN`. N43 (every image has the same channel count) is replaced by the per-row presence of HV1 | Keeping the C-index token (one column names different biology on `v04`) | roadmap S3.1; normalization contract §6.1 (brick text, amended in S3.2) | the heterogeneous trees above; one tree with a channel ID containing `_` (no Spec fixture has one) |
-| HV3 | **A failed channel measurement fails the whole file.** Nothing partial is written, and the run names the plane and the channel. The table therefore has no "failed" state: every channel a row lists as present carries a measured histogram (an empty histogram, a measured channel with no finite pixel, stays a measurement as today) | Writing the failure into the table (blank cells with a `failed_channels` list, as the benchmark's wide candidate did): a partial table every reader must filter, and a state new to the pipeline | roadmap S3.1; conformance §4 Stage 3 | an injected measurement failure on one channel of one plane |
+| HV1 | **Schema version 5 is WIDE: one row per XYC plane**, columns by **canonical channel ID**, with **one explicit presence column, `channels`**, listing the canonical channel IDs present in that plane, `;`-separated; there is **no `failed_channels` column**; **absent is not failed**. A channel the plane's imaging unit does not list is **absent**: its cells are blank, never a zero or NaN histogram, and a reader refuses any value there. **The header lists every channel ID of the experiment, taken from the description, sorted.** The row stays the sampling unit: the row count is the plane count | (B) long, one row per plane and channel (N41 reversed, rows are not sampling units, +18-20 % at the default bins, IDs such as `NA` read as missing by default pandas); (C) long on disk, wide in memory (keeps B's size and N41 costs, two shapes to explain); (D) defer, keeping version 4 and N43 (Stage 3 cannot start; the `v05`/`v17` cases of G3 cannot be shown) | roadmap S3.1; conformance §4 Stage 3 "Histogram table v5" | trees built from `v13`, `v04`, `v05`, `v06`, `v17` |
+| HV2 | **N41 is kept. N42's channel-token rule is amended, for ALL per-channel tables, not for this table only:** the per-channel token is the **canonical channel ID** instead of the C index. This covers `plane_histograms.csv` (`Intensity_MinIntensity_DNA`, `Histogram_Count_DNA_00042`), the fitted-parameter columns (`Normalization_Offset_C<i>` and `Normalization_Scale_C<i>`, N46/N47), CellPatcher's patch columns and the summary columns. The columns of the other tables change in the Stage 3 migration PRs (S3.2, S3.3), not in this ADR. Because a channel ID may contain `_` (`PAX_488`), column names no longer split on `_`: a reader takes the set of IDs from the parameter-less feature `Histogram_ValidPixelCount_<ID>` and the bin index from the last `_NNNNN`. N43 (every image has the same channel count) is replaced by the per-row presence of HV1 | Keeping the C-index token (one column names different biology on `v04`); switching the histogram table only and leaving the other per-channel tables on the C index (two naming rules for one run) | roadmap S3.1; normalization contract §6.1 (brick text, amended in S3.2) | the heterogeneous trees above; one tree with a channel ID containing `_` (no Spec fixture has one); the parameter, patch and summary columns on the same trees |
+| HV3 | **A failed channel measurement fails the whole file, meaning `plane_histograms.csv` only:** that table is not written, and the run reports the plane and the channel that failed. The other outputs of the run follow their own rules; this row does not change them. The table therefore has no "failed" state: every channel a row lists as present carries a measured histogram (an empty histogram, a measured channel with no finite pixel, stays a measurement as today) | Writing the failure into the table (blank cells with a `failed_channels` column, as the benchmark's wide candidate did): a partial table every reader must filter, and a state new to the pipeline (the owner also decided against a `failed_channels` column) | roadmap S3.1; conformance §4 Stage 3 | an injected measurement failure on one channel of one plane (no `plane_histograms.csv`; the failing plane and channel are reported) |
 | HV4 | **Version 4 is a hard cut.** A version 5 reader refuses a version 4 table, with a message that names schema version 5 and how to recompute it; there is **no converter** and no reader of both versions. This applies ADR 0002 AR10 (old versions are refused, never converted): the canonical IDs come from the confirmed description, not from the table | A converter from version 4 (it works only for homogeneous runs with a confirmed description, and a migration guesses what old data meant); a transition release reading both versions (two readers for a format nobody uses yet) | roadmap S3.1; conformance §4 Stage 3; ADR 0002 AR10 | a version 4 table given to a version 5 reader |
 
-### Modelling choices made when writing these into the text (not themselves owner decisions; the owner may amend them)
-
-These come from the benchmark's wide candidate (its §2.1), minus what HV3 removes:
+### Details written into the text (not owner decisions; ordinary format detail)
 
 - The 15 plane columns of version 4 stay, in the same order and meaning, with
   `schema_version` = `5` and `channel_count` = the number of channels of the source image.
-- The presence column is `channels`: the canonical channel IDs of the source's C0, C1, … in source
-  order (the imaging unit's confirmed `channels` list), `;`-separated (`;` cannot occur in a
-  Token). The benchmark's second presence column, `failed_channels`, is **not** part of version 5:
-  under HV3 it would always be blank.
-- The per-channel column groups cover every channel ID of the experiment, from the description,
-  in sorted order; every writer of a parallel shard is given that list, so shards share one header.
+- Within the `channels` cell the IDs follow the source order of the imaging unit's confirmed
+  `channels` list. `;` separates them (`;` cannot occur in a Token).
+- Every writer of a parallel shard is given the experiment's channel-ID list, so shards share one
+  header.
 - Row order, number formatting, blanks for missing values, UTF-8, the atomic write and the row key
   `plane_id` are those of version 4.
 
-### Not decided by this ADR
+### Not a Spec decision
 
-- **The token of the other per-channel tables** (the fitted parameters `Normalization_Offset_C<i>`
-  and `Normalization_Scale_C<i>`, N46/N47, CellPatcher's patch columns, the image-summary columns):
-  HV2 amends N42 for `plane_histograms.csv` only. Whether those tables also switch to the ID token
-  is an open question for the owner (benchmark §5 and §8 item 5); until it is decided they keep
-  N42 as written.
-- How old installs word their refusal of a version 5 table (the benchmark's outline proposed a last
-  normalization 0.3.x patch release naming version 5). HV4 binds the version 5 reader only.
+How old installs word their refusal of a version 5 file is an implementation detail. The benchmark
+proposed a last normalization 0.3.x patch release naming version 5; it is a note in the roadmap
+(S3.2), not a row here. HV4 binds the version 5 reader only.
 
 ## Consequences
 

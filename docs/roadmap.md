@@ -234,18 +234,21 @@ shared 2-D capabilities ([conformance plan §4](conformance-plan.md#4-later-stag
 
 **S3.1 Histogram contract benchmark** (done; decided by the owner on 10 November 2026, [ADR 0003](adr/0003-plane-histograms-v5.md))
 - Evaluated **semantic-wide one-row-per-plane** (the preferred candidate) against **long one-row-per-plane-channel** on storage size, parser complexity, deterministic serialization, per-plane identity, pooling and grouping, absent channels, resume/parallel parity and N41/N42 behaviour. Both passed every correctness criterion; they differ in shape, not in science.
-- Decision, `plane_histograms.csv` **schema version 5 is WIDE** (ADR 0003 HV1): one row per plane, per-channel columns by canonical channel ID, an explicit presence column; an absent channel is blank, never a zero/NaN histogram, and a value there is refused; absent is not failed.
-- **N41 kept; N42's channel-token rule amended** for this table (HV2): the token is the canonical channel ID, the reader takes the IDs from `Histogram_ValidPixelCount_<ID>` and the bin index from the last `_NNNNN`; N43 is replaced by per-row presence. The token of the other per-channel tables (N46/N47 parameters, summaries) is not decided.
-- **A failed channel measurement fails the whole file** (HV3): nothing partial is written and the run names the plane and the channel.
+- Decision, `plane_histograms.csv` **schema version 5 is WIDE** (ADR 0003 HV1): one row per plane, per-channel columns by canonical channel ID, one presence column `channels` (no `failed_channels` column; the header lists every channel ID of the description, sorted); an absent channel is blank, never a zero/NaN histogram, and a value there is refused; absent is not failed.
+- **N41 kept; N42's channel-token rule amended for all per-channel tables** (HV2): the token is the canonical channel ID, the reader takes the IDs from `Histogram_ValidPixelCount_<ID>` and the bin index from the last `_NNNNN`; N43 is replaced by per-row presence. The same ID-token rule applies to **all** per-channel tables: the N46/N47 parameter columns, CellPatcher's patch columns and the summary columns, changed in S3.2 and S3.3.
+- **A failed channel measurement fails the whole file** (HV3), meaning `plane_histograms.csv` only: that table is not written and the run reports the plane and the channel; other run outputs follow their own rules.
 - **Version 4 is a hard cut** (HV4): a version 5 reader refuses version 4, naming version 5 and how to recompute; no converter (ADR 0002 AR10).
 
 **S3.2 Normalization migration**
 - Fit/select/transform by canonical channel, not C index; preserve FOV/plane/biological repeat sampling units.
 - Audit all histogram readers/writers, fitted parameters, caching, scaling, global/repeat pooling, and missing-channel error paths.
 - Verify numeric outputs on described fixtures with documented tolerances (no comparison against v0.4.0 or legacy datasets, ADR 0002 AR10).
+- Implement histogram table v5 (reader, writer, ID-named columns) and the ID naming of the fitted-parameter columns (N46/N47) (ADR 0003).
+- Implementation note, not a Spec decision: how old installs word their refusal of a version 5 file (the benchmark proposed a last 0.3.x patch release naming version 5).
 
 **S3.3 Preprocessing and CellPatcher migration**
 - Replace experiment-global channel-count/name refusals with per-imaging-unit validation only when all downstream consumers are ready.
+- Name CellPatcher's patch columns and the summary columns by canonical channel ID (ADR 0003 HV2).
 - Ensure patch extraction/export never selects the wrong semantic channel after a source order swap.
 - Record per-unit and per-repeat channel coverage; scope partial repeats explicitly.
 
@@ -253,7 +256,7 @@ shared 2-D capabilities ([conformance plan §4](conformance-plan.md#4-later-stag
 - Mixed source order, mixed counts, missing optional channels, partial technical-repeat coverage, serial/parallel/resume, corrupted headers, single discrepant FOV, cache reuse, direct/provider parity.
 - Verify biological N remains biological N and technical-repeat weights are never silently changed.
 
-**Gate G3:** no wrong-channel measurements, no silent data loss/imputation, no pseudoreplication, full provenance (no legacy parity gate, ADR 0002 AR10); only then enable heterogeneous processing.
+**Gate G3:** the histogram table v5 row of [conformance plan §4](conformance-plan.md#4-later-stages-obligations-recorded-not-planned-in-detail) passes; no wrong-channel measurements, no silent data loss/imputation, no pseudoreplication, full provenance (no legacy parity gate, ADR 0002 AR10); only then enable heterogeneous processing.
 
 ### Stage 4 — progressive masks and final scientific regression
 
