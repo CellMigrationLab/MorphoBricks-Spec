@@ -194,7 +194,7 @@ shared 2-D capabilities ([conformance plan §4](conformance-plan.md#4-later-stag
 - Separate confirmed canonical channel ID from raw header label.
 - Preserve provider feature-request semantics; the resolver's refusals stop a run before any provider computes (no subset unless the user selects and records one).
 - **Decide** provider capability (`rgb_support`, devices, the provider API) and **record** the resolver's scope classification and the explicit device in the run manifest; the resolver only classifies (ADR 0002 AR7).
-- Apply a recorded `binary_mask_policy` with CellPatcher's labeller, the one shared labeller (ADR 0002 AR5); the automatic 0/1-mask relabelling is off on described runs.
+- Apply a recorded `binary_mask_policy` with CellPatcher's labeller, the one shared labeller (ADR 0002 AR5); the automatic 0/1-mask relabelling is removed (ADR 0002 AR10, AR11).
 - Take repeat grouping from the description only: remove BY_NAME grouping and `experiment_design.csv` as a grouping input (ADR 0002 AR10); no compatibility path.
 
 **S2.2 MorphoRelate**

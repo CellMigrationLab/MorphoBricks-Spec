@@ -304,7 +304,7 @@ The owner's decision on **who interprets a description for a run** (one shared r
 in morphobricks-preprocessing, both routes kept, mandatory cross-route conformance, one mask
 rule, one statistics rule, `volume_support`, the explicit device) is a runtime contract between
 repositories rather than a rule of the description, so it is recorded in
-[ADR 0002](0002-shared-request-resolver.md) (AR1-AR10). Nothing in this ADR changes: RC1, SI1,
+[ADR 0002](0002-shared-request-resolver.md) (AR1-AR11). Nothing in this ADR changes: RC1, SI1,
 GS1 and GS2 stand, and the resolver implements them.
 
 ### Histogram representation: candidates and criteria only (not decided)
