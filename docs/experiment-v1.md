@@ -296,10 +296,10 @@ accepted, **declared** image type, per imaging unit:
   brick without a provider manifest states the same declaration in its documented capabilities.
   The key declares support only; it gives RGB no meaning (the bullet above), and it does not
   change a description: `image_type = "rgb"` is still user-declared and never inferred.
-- The refusal applies to a **described** run (one opened from a published description). A run
-  without a description has no declared image type to refuse on; what a brick does with colour
-  images there is the brick's own behaviour (owner decision RC1: such runs keep working as today,
-  with a warning), not a Spec rule.
+- The refusal applies to a **described** run (one opened from a published description). There is
+  no other run: a run without a published description is refused with `A_DESCRIPTION_REQUIRED`
+  before any capability is checked (ADR 0002 AR10, which supersedes owner decision RC1's clause
+  that such runs keep working with a warning).
 - A file MAY hold RGB and non-RGB units; their lists differ, so that layout is heterogeneous
   (`R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` in Stage 1-2). A unit's `image_type` is part of the
   `repeats` section digest (§9.3).

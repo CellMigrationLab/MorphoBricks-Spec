@@ -121,8 +121,8 @@ code is ADR 0001's.
   for undescribed runs is removed; no run is undescribed. Version migrations are not provided, nor is the migration of a legacy
   `experiment_design.csv` (AR10 (9)).
 - AR10 supersedes the clause of ADR 0001 RC1 that undescribed RGB runs "keep working as today,
-  with a warning" (repeated as brick behaviour in experiment-v1 §4.4b, whose text this ADR does
-  not change): no run is undescribed, and a run without a published description is refused with
+  with a warning" (repeated as brick behaviour in experiment-v1 §4.4b, whose text was amended on
+  10 November 2026 to match): no run is undescribed, and a run without a published description is refused with
   `A_DESCRIPTION_REQUIRED` before any capability is checked.
 - AR11 records the owner rulings of 10 November 2026 that bind the consumers (the confirmed code
   name, `position_id` = the file stem, `repeat_group` from the description, the 0/1 labelling
