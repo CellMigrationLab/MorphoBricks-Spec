@@ -181,21 +181,22 @@ resolver** and interprets nothing itself. Direct brick runs and the MorphoFeatur
 no brick depends on MorphoFeature. Each two-route brick proves cross-route conformance on the
 shared 2-D capabilities ([conformance plan §4](conformance-plan.md#4-later-stages-obligations-recorded-not-planned-in-detail)).
 
-**No backward compatibility before the first pipeline release (owner policy, 10 November 2026, [ADR 0002](adr/0002-shared-request-resolver.md) AR10).** Obsolete compatibility code is removed wherever that simplifies, and old versions are refused, not converted. The first concrete item: a published description (`morphobricks.toml`) is required for every run. Dropped, closed list of the concrete items: undescribed runs; `experiment_design.csv` as an input to grouping; IDs derived from folder or file names; MorphoFeature's BY_NAME grouping and interim 0/1 mask labelling; CellPatcher's empty-ID path; the v0.4.0 parity tests and the legacy-parity gate rows; version migrations (old versions are refused, never converted). Beyond the list, any aspect kept only for compatibility goes where that simplifies (old manifest, draft and histogram version readers, deprecated aliases and parameters, shims, fallback readers, legacy notebook paths, old CLI flags), as one obsolete-code sweep PR per repository after the v0.5.0 tag, driven by an inventory, keeping the science tests. Every consumer refuses a run without a published description, naming the fix (run the notebook or `describe`). The science rules are unchanged. The removal starts right after the owner tags preprocessing v0.5.0, as the first change of v0.5.1 with the resolver; v0.5.0 ships as reviewed.
+**No backward compatibility before the first pipeline release (owner policy, 10 November 2026, [ADR 0002](adr/0002-shared-request-resolver.md) AR10).** Obsolete compatibility code is removed wherever that simplifies, and old versions are refused, not converted. The first concrete item: a published description (`morphobricks.toml`) is required for every run. Dropped, closed list of the concrete items: undescribed runs; `experiment_design.csv` as an input to grouping; IDs derived from folder or file names (`position_id` stays the image file stem, AR11); MorphoFeature's BY_NAME grouping and interim 0/1 mask labelling; CellPatcher's empty-ID path; the v0.4.0 parity framing (the legacy-parity gate rows and the tests that only compare with v0.4.0; science parity tests stay as goldens, AR11); version migrations (old versions are refused, never converted); MorphoFeature's `WAVE_1` strict expected-failure markers. The owner's rulings on these removals are ADR 0002 AR11. Beyond the list, any aspect kept only for compatibility goes where that simplifies (old manifest, draft and histogram version readers, deprecated aliases and parameters, shims, fallback readers, legacy notebook paths, old CLI flags), as one obsolete-code sweep PR per repository after the v0.5.0 tag, driven by an inventory, keeping the science tests. Every consumer refuses a run without a published description, naming the fix (run the notebook or `describe`). The science rules are unchanged. The removal starts right after the owner tags preprocessing v0.5.0, as the first change of v0.5.1 with the resolver; v0.5.0 ships as reviewed.
 
 **S2.0 Preprocessing request resolver (v0.5.1; resolver contract version 1)**
 - `RunInputs.resolve_request(request)`: channels by canonical ID per FOV; scope classification (present / absent per image, full / partial / unavailable per biological repeat); the declared image type against the consumer's `rgb_support`; the declared mask representation against the requested role and the explicit `binary_mask_policy`; a plane or a Z-volume selection, volumes refused unless the consumer declares `volume_support`; the explicit device recorded.
-- Returns an immutable per-FOV selection plus every applicable refusal (`A_SCOPE_INCOMPLETE` "k of n", `A_MASK_UNCHECKED`, `A_MASK_NOT_INSTANCES`, `A_RGB_NOT_SUPPORTED`, `A_VOLUME_NOT_SUPPORTED`) and provenance; a refused request selects nothing.
+- Returns an immutable per-FOV selection plus every applicable refusal (`A_SCOPE_INCOMPLETE` "k of n", `A_MASK_UNCHECKED`, `A_MASK_NOT_INSTANCES`, `A_RGB_NOT_SUPPORTED`, `A_VOLUME_NOT_SUPPORTED`; a run without a published description: `A_DESCRIPTION_REQUIRED` alone) and provenance; a refused request selects nothing. `A_VOLUME_NOT_SUPPORTED` and `A_DESCRIPTION_REQUIRED` are resolver-contract codes (ADR 0002), not experiment-v1 §8 codes.
 - Imports no brick, CellPatcher or provider module; runs no kernel; reads no pixel; writes nothing; never guesses. Its own conformance suite runs on the Spec fixtures through `RunInputs`.
-- Ships in preprocessing v0.5.1 with `Fov.image_type`, the partial-mask test helper and the lab-tool links input, and nothing else.
+- Ships in preprocessing v0.5.1 with `Fov.image_type`, the partial-mask test helper and the lab-tool links input, and nothing else besides the AR10 removals, which are the first change of v0.5.1.
 
 **S2.1 MorphoFeature**
-- Consume the resolver: the per-FOV `ChannelCatalogue` comes from the selection's channel indices; the global run-level channel mapping assumption is removed for described runs.
+- Consume the resolver: the per-FOV `ChannelCatalogue` comes from the selection's channel indices; the global run-level channel mapping assumption is removed.
 - Separate confirmed canonical channel ID from raw header label.
 - Preserve provider feature-request semantics; the resolver's refusals stop a run before any provider computes (no subset unless the user selects and records one).
 - **Decide** provider capability (`rgb_support`, devices, the provider API) and **record** the resolver's scope classification and the explicit device in the run manifest; the resolver only classifies (ADR 0002 AR7).
 - Apply a recorded `binary_mask_policy` with CellPatcher's labeller, the one shared labeller (ADR 0002 AR5); the automatic 0/1-mask relabelling is removed (ADR 0002 AR10, AR11).
-- Take repeat grouping from the description only: remove BY_NAME grouping and `experiment_design.csv` as a grouping input (ADR 0002 AR10); no compatibility path.
+- Take repeat grouping (`repeat_group`) from the description through the resolver only: remove BY_NAME grouping and `experiment_design.csv` as a grouping input (ADR 0002 AR10, AR11); no compatibility path.
+- Provider API v3 only: v2 is removed and the providers' `patches`, `calibration` and `context` arguments are required (ADR 0002 AR11).
 
 **S2.2 MorphoRelate**
 - Provider route continues receiving named channel planes and explicit analysis mask roles.
@@ -220,9 +221,10 @@ shared 2-D capabilities ([conformance plan §4](conformance-plan.md#4-later-stag
 - Export/prefill canonical biological repeats, condition references/reference chains, target/treatment key and source provenance.
 - Keep contrast selection, normalization strategy, readouts, FDR and stopping rules inside MorphoCoverage.
 - Preserve correct pairing when source folder repeat labels differ across conditions.
+- The old `repeat` column alias is removed, in its own reviewed PR (ADR 0002 AR11).
 
 **S2.6 CellPatcher**
-- Audit and adapt every channel-selection/patch-export path that assumes one source C index has the same meaning across FOVs; consume the resolver for described runs.
+- Audit and adapt every channel-selection/patch-export path that assumes one source C index has the same meaning across FOVs; consume the resolver (every run is described, ADR 0002 AR10), and read `repeat_group` through it, not from the derived `experiment_design.csv` (AR11).
 - Provide the one shared labeller for a recorded `binary_mask_policy` (ADR 0002 AR5): the routes call it, the resolver returns the decision.
 - Preserve patch-set, FOV, t/z, position_id, object_set and provider API v3 identity contracts.
 
