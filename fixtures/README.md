@@ -36,8 +36,8 @@ their section.
   predecessor file and are not part of the single-file valid/invalid rules. Publication-base and
   folder-name rules need no TOML of their own: they run on named fixtures in scenarios P17-P22.
 - Rules that need images, a run or a consumer (header matching, image type against the header,
-  mask checks and conversions, mask type names, the FOV key, the `target` prefill, legacy
-  migration dates) have no single-file TOML form: each is a scenario P23-P33 of the conformance
+  mask checks and conversions, mask type names, the FOV key, the `target` prefill, derived-CSV
+  dates) have no single-file TOML form: each is a scenario P23-P33 of the conformance
   plan on a named fixture, listed in the coverage tables below.
 - A copy of this tree vendored by a reader MUST hash to the pinned SHA's `fixtures` tree
   (conformance plan §1).
@@ -127,7 +127,7 @@ This is a check of the fixtures against the text, not a conformance claim for an
 | 4 | A homogeneous described dataset (folder-name IDs confirmed by the user) keeps the existing refusals; no parity against v0.4.0 (ADR 0002 AR10) | `v13` | Stage 1: byte-identical derived CSV (as reviewed for v0.5.0); no legacy numerical parity gate |
 | 5 | `DNA` with confirmed header `DAPI` passes; unconfirmed contradiction refuses | `v11`; P03 | Stage 1: `R_HEADER_CONTRADICTION` |
 | 6 | A binary region mask never becomes an instance object set | `v08` | Stage 2: `A_MASK_NOT_INSTANCES` |
-| 7 | N35 confirmation survives migration and reopens on discovery changes | `v13`, `i37`; P07 | Stage 1 migration and reconciliation |
+| 7 | N35 confirmation survives reconciliation and reopens on discovery changes (the legacy-CSV migration is removed, ADR 0002 AR10 (9)) | `v13`, `i37`; P07 | Stage 1 reconciliation |
 | 8 | Distinct source repeat names paired by the user give one canonical ID in MorphoCoverage | `v03` | Stage 2 (S2.5) |
 | 9 | Missing channels in requested scope: refusal or recorded user subset, never silent drop; a channel no image has is the same refusal (SI1) | `v05`, `v17` | `A_SCOPE_INCOMPLETE`, shown at Stage 3 / gate G3 for both: their layouts are refused at Stages 1-2 (P04); owner decision GS2 for both |
 | 10 | Metadata-only changes keep valid pixel-derived caches | `v01` vs `v21` | Stage 1: section digests |
@@ -167,7 +167,7 @@ This is a check of the fixtures against the text, not a conformance claim for an
 | FOV key keeps the source label, `repeat_group` added | `v03`, `v30`; P25 |
 | Mask checks: when, unchecked masks, type names | `v09`; P05, P28, P29 |
 | Descriptive keys prefill only | `v27`; P31 |
-| Legacy migration dates (byte-identity only for a single `confirmed_on`) | `v13`; P30 |
+| Derived CSV dates (every row carries its repeat's one `confirmed_on`; no clock read) | `v13`; P30 |
 | Derived CSV keeps the source folder labels | `v13`, `v33`; P32 |
 | Aliases (header evidence) | `v11`, `v12`, `v31`, `i46`, `i81`, `i110`; P03, P26 |
 | Versioning (offline constant, no default) | `i09`-`i15` |
@@ -212,10 +212,10 @@ This is a check of the fixtures against the text, not a conformance claim for an
 | AQ9 | Binary-as-instances only by an explicit, per-request, recorded conversion | `v08`, `i112`; P27 |
 | AQ10 | Mask representation checked in the mask step; publication records "not yet checked"; unchecked masks refuse | `v09`; P05, P28 |
 | AQ11 | A discovered mask type breaking the Label rules: `R_MASK_TYPE_NAME_INVALID` | P29 |
-| AQ12 | Legacy groups with different `confirmed_on` take the latest date, with a note | `v13`; P30 |
+| AQ12 | Legacy groups with different `confirmed_on` take the latest date, with a note. **Superseded 10 November 2026** (ADR 0002 AR10 (9): no legacy-CSV migration) | none (P30 now tests the derived output only) |
 | AQ13 | Forbidden names apply to ID keys; NFC of channel references; one code per broken rule | `i113`-`i118` |
 | FR1 | Folder labels are never restricted by the reserved or forbidden names: conditions and technical repeats have a canonical ID separate from the required `source_folder`; one folder, one ID; a folder change for an existing ID is a reassignment; the derived CSV keeps the folder labels | `v33`, `v34`, `i113`, `i115`, `i120`-`i127`, `t10`-`t12`; P32, P33 |
-| FR2 | Derived CSV byte-identity is guaranteed only for repeat groups with a single `confirmed_on`; a legacy group with several dates gets the latest, the migration note keeps the per-row dates | `v13`; P30 |
+| FR2 | Derived CSV byte-identity is guaranteed only for repeat groups with a single `confirmed_on`; a legacy group with several dates gets the latest, the migration note keeps the per-row dates. **Superseded 10 November 2026** (ADR 0002 AR10 (9): no legacy-CSV migration; every published repeat has one `confirmed_on`) | none (P30 now tests the derived output only) |
 | RR1 | Record type `image_count_changed` (a confirmed member's image count changes; nothing reopens) | P34 |
 | RR3 | `image_count_changed` is written for every confirmed member whose count changed, also when the publication changes other things | P34 |
 | RR2 | Record type `removed` for every confirmed removal of a unit, technical repeat, repeat or condition | P35 |
