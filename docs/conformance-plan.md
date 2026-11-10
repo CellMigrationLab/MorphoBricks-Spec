@@ -153,6 +153,12 @@ gate, not at G1 (§5); the Stage 2 bullet below lists them.
   unavailable classification per repeat. Preprocessing refuses both layouts until Stage 3
   (`R_HETEROGENEOUS_LAYOUT_NOT_ENABLED`, P04), so the Stage 2 gate cannot show them. The list is closed: only
   these two channel cases move; nothing else is deferred and no other Stage 2 obligation, fixture or scenario changes.
+- **Stage 3, the histogram table ([ADR 0003](adr/0003-plane-histograms-v5.md), owner decisions of 10 November
+  2026).** A Stage 3 obligation of its own (it moves nothing from Stage 2), shown with the test run recorded at G3.
+
+  | Row | Where | Assertion |
+  |---|---|---|
+  | Histogram table v5 | morphobricks-normalization (reader, writer); preprocessing (staging, `RunInputs`); CellPatcher and MorphoFeature (readers) | On image trees built from `v13`, `v04`, `v05`, `v06` and `v17`: `plane_histograms.csv` has `schema_version` 5 and **one row per plane** (row count = plane count, N41); per-channel columns by canonical channel ID, also on one tree whose channel ID contains `_` (none of these fixtures has one, so the test renames a channel, e.g. `PAX_488`); each row's presence column lists the unit's confirmed channel IDs in source order; an absent channel's cells are blank and a value there, or a zero/NaN histogram for it, is refused; pooling is by `repeat_group` and channel ID, never by C index (`v04`: ACTIN and DNA never mixed); the bytes are identical serially, in parallel shards and on resume. An injected measurement failure on one channel of one plane fails the whole file: nothing partial is written and the run names the plane and the channel. A version 4 table is refused by the version 5 reader with a message naming version 5 and how to recompute; no converter exists |
 
 ## 5. Exit criteria
 

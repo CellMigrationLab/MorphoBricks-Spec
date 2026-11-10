@@ -25,10 +25,10 @@ Keep the spec repository lightweight: normative documents, fixtures, conformance
 | Calibration | Remains in authoritative `calibration.csv` | Do not copy into experiment metadata | Accepted earlier, kept ([ADR 0001](adr/0001-experiment-description-v1.md)) |
 | Compatibility | Keep `experiment_design.csv` as a derived compatibility output | Define deterministic export and migration behavior | Accepted earlier, kept ([ADR 0001](adr/0001-experiment-description-v1.md)) |
 | Comparability | Preserve N35 user confirmation | Reopen only when channels, layout or grouping change; new FOVs with the same confirmed layout do not reopen it (ADR D6); log decision provenance | Accepted earlier, kept ([ADR 0001](adr/0001-experiment-description-v1.md)) |
-| Histogram representation | Benchmark semantic-wide (preferred candidate) versus long/channel-keyed | Freeze only after legacy parity, pooling, missingness and pseudoreplication tests | Deferred to benchmark; candidates and criteria in [ADR 0001](adr/0001-experiment-description-v1.md) |
+| Histogram representation | Benchmark semantic-wide (preferred candidate) versus long/channel-keyed | Freeze only after legacy parity, pooling, missingness and pseudoreplication tests | **Accepted** 2026-11-10 after the benchmark: semantic-wide, schema version 5 ([ADR 0003](adr/0003-plane-histograms-v5.md)); candidates and criteria in [ADR 0001](adr/0001-experiment-description-v1.md) |
 | Statistical references | Optional primary `condition.reference` edge; graph acyclic | Additional contrasts belong to MorphoCoverage | **Accepted** 2026-11-06, scope ([ADR 0001](adr/0001-experiment-description-v1.md)) |
 
-**Stage 0 outcome (6 November 2026):** field spelling, header-alias representation (`header_names`) and the error catalogue are now normative in [experiment-v1.md](experiment-v1.md), with [fixtures](../fixtures/README.md) and a [conformance plan](conformance-plan.md). Per-mask applicability is an analysis-layer check (`A_*` codes). The eleven open questions of the Stage 0 pull request were decided on 6 November 2026 (ADR 0001, D1-D11). **Still open:** the physical histogram schema (benchmark); the fixed-SHA consumer audit of S0.1 (TODO before Gate G0); golden `experiment_design.csv` outputs (deferred to Stage 1).
+**Stage 0 outcome (6 November 2026):** field spelling, header-alias representation (`header_names`) and the error catalogue are now normative in [experiment-v1.md](experiment-v1.md), with [fixtures](../fixtures/README.md) and a [conformance plan](conformance-plan.md). Per-mask applicability is an analysis-layer check (`A_*` codes). The eleven open questions of the Stage 0 pull request were decided on 6 November 2026 (ADR 0001, D1-D11). **Still open:** the physical histogram schema (benchmark; decided 10 November 2026, [ADR 0003](adr/0003-plane-histograms-v5.md)); the fixed-SHA consumer audit of S0.1 (TODO before Gate G0); golden `experiment_design.csv` outputs (deferred to Stage 1).
 
 ## 3. Minimal conceptual schema
 
@@ -232,11 +232,12 @@ shared 2-D capabilities ([conformance plan §4](conformance-plan.md#4-later-stag
 
 ### Stage 3 — coordinated heterogeneous-channel enablement
 
-**S3.1 Histogram contract benchmark**
-- Evaluate **semantic-wide one-row-per-plane** as preferred candidate versus **long one-row-per-plane-channel**.
-- Test storage size, parser complexity, deterministic serialization, per-plane identity, pooling and grouping, absent channels, resume/parallel parity and existing N41/N42 behavior.
-- Define explicit channel presence and distinguish absent from failed measurement; never fabricate zero/NaN histograms for absent channels.
-- Freeze a versioned histogram-contract policy only after evidence-backed review; old versions are refused, not migrated (ADR 0002 AR10).
+**S3.1 Histogram contract benchmark** (done; decided by the owner on 10 November 2026, [ADR 0003](adr/0003-plane-histograms-v5.md))
+- Evaluated **semantic-wide one-row-per-plane** (the preferred candidate) against **long one-row-per-plane-channel** on storage size, parser complexity, deterministic serialization, per-plane identity, pooling and grouping, absent channels, resume/parallel parity and N41/N42 behaviour. Both passed every correctness criterion; they differ in shape, not in science.
+- Decision, `plane_histograms.csv` **schema version 5 is WIDE** (ADR 0003 HV1): one row per plane, per-channel columns by canonical channel ID, an explicit presence column; an absent channel is blank, never a zero/NaN histogram, and a value there is refused; absent is not failed.
+- **N41 kept; N42's channel-token rule amended** for this table (HV2): the token is the canonical channel ID, the reader takes the IDs from `Histogram_ValidPixelCount_<ID>` and the bin index from the last `_NNNNN`; N43 is replaced by per-row presence. The token of the other per-channel tables (N46/N47 parameters, summaries) is not decided.
+- **A failed channel measurement fails the whole file** (HV3): nothing partial is written and the run names the plane and the channel.
+- **Version 4 is a hard cut** (HV4): a version 5 reader refuses version 4, naming version 5 and how to recompute; no converter (ADR 0002 AR10).
 
 **S3.2 Normalization migration**
 - Fit/select/transform by canonical channel, not C index; preserve FOV/plane/biological repeat sampling units.
