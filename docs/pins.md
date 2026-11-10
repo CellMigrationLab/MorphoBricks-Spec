@@ -25,7 +25,7 @@ Update a row in the same Spec pull request (or a follow-up) whenever a brick's r
 | MorphoRelate | not pinned; pinned with its Stage 2 PR | | | canonical-channel adapter |
 | MorphoObjects | not pinned; pinned with its Stage 2 PR | | | P27 (`A_MASK_NOT_INSTANCES`) |
 | MorphoEmbed | not pinned; pinned with its Stage 2 PR | | | P24, P27 (has a `provider_manifest` module) |
-| CellPatcher | not pinned; pinned with its Stage 2 PR | | | P32 `condition_id`/`technical_repeat_id`, P25, P27 |
+| CellPatcher | not pinned yet: draft [CellPatcher #97](https://github.com/CellMigrationLab/CellPatcher/pull/97) vendors [`6d22761`](https://github.com/CellMigrationLab/MorphoBricks-Spec/commit/6d2276128ddb050fcd54de53b46d6a293c5fe135) | draft PR, pin to v0.5.0 at merge | [CellPatcher #97](https://github.com/CellMigrationLab/CellPatcher/pull/97) (draft, not merged; at merge its preprocessing pin moves to v0.5.0, and this row gets the merged Spec commit and date) | Standard (P32 `condition_id`/`technical_repeat_id` and P25 tests; P27 later) |
 
 For the unpinned bricks the last column is the Stage 2 item that will make the brick read a
 Spec-defined artefact (per the 2026-11-09 survey, preprocessing is the only brick that reads one
