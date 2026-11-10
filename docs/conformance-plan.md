@@ -153,6 +153,12 @@ gate, not at G1 (§5); the Stage 2 bullet below lists them.
   unavailable classification per repeat. Preprocessing refuses both layouts until Stage 3
   (`R_HETEROGENEOUS_LAYOUT_NOT_ENABLED`, P04), so the Stage 2 gate cannot show them. The list is closed: only
   these two channel cases move; nothing else is deferred and no other Stage 2 obligation, fixture or scenario changes.
+- **Stage 3, the histogram table ([ADR 0003](adr/0003-plane-histograms-v5.md), owner decisions of 10 November
+  2026).** A Stage 3 obligation of its own (it moves nothing from Stage 2), shown with the test run recorded at G3.
+
+  | Row | Where | Assertion |
+  |---|---|---|
+  | Histogram table v5 | morphobricks-normalization (reader, writer); preprocessing (staging, `RunInputs`); CellPatcher and MorphoFeature (readers) | On image trees built from `v13`, `v04`, `v05`, `v06` and `v17`: `plane_histograms.csv` has `schema_version` 5 and **one row per plane** (row count = plane count, N41); per-channel columns by canonical channel ID, also on one tree whose channel ID contains `_` (none of these fixtures has one, so the test renames a channel, e.g. `PAX_488`); the header lists every channel ID of the description, sorted, with one presence column `channels` (`;`-separated, the IDs present in that plane, in source order) and no `failed_channels` column; an absent channel's cells are blank and a value there, or a zero/NaN histogram for it, is refused; pooling is by `repeat_group` and channel ID, never by C index (`v04`: ACTIN and DNA never mixed); the bytes are identical serially, in parallel shards and on resume. An injected measurement failure on one channel of one plane fails `plane_histograms.csv` only: that table is not written and the run reports the plane and the channel that failed. A version 4 table is refused by the version 5 reader with a message naming version 5 and how to recompute; no converter exists. The same channel-ID naming rule holds on the same trees for the fitted-parameter columns (N46/N47), CellPatcher's patch columns and the summary columns (N42 amended for all per-channel tables, ADR 0003 HV2) |
 
 ## 5. Exit criteria
 

@@ -309,7 +309,11 @@ implements them; RC1 stands for described runs, and its clause on undescribed ru
 by ADR 0002 AR10 (every run needs a published description; a run without one is refused,
 `A_DESCRIPTION_REQUIRED`).
 
-### Histogram representation: candidates and criteria only (not decided)
+### Histogram representation: candidates and criteria only (decided in ADR 0003)
+
+Decided by the owner on 10 November 2026 after the S3.1 benchmark and recorded in
+[ADR 0003](0003-plane-histograms-v5.md): the semantic-wide candidate is `plane_histograms.csv`
+schema version 5 (HV1-HV4). The candidates and criteria below are kept as they were written.
 
 | Candidate | Shape | Status |
 |---|---|---|
