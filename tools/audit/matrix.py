@@ -419,7 +419,8 @@ def ofat() -> list[Case]:
              grid(), references={"DrugA": "CTRL"}, mask_decl="binary"))
     add(Case("A14", "grouped (parent_labels) mask declared instances", {"A": "mask-grouped"},
              grid(mask="grouped"), references={"DrugA": "CTRL"},
-             spec_note="v1 cannot describe a grouped mask (4.5b); declaring it `instances` is "
+             spec_note="v1 describes a grouped mask as `parent_labels` (4.5b, owner decision PL1 of "
+                       "11 November 2026, which superseded AQ8); declaring it `instances` instead is "
                        "not detectable from the file and pixels cannot prove instances (4.5a)."))
     add(Case("N01", "NaN probe: a one-pixel object and an object flat in one channel", {"A": "nan-probe"},
              grid(mask="tiny"), references={"DrugA": "CTRL"}))

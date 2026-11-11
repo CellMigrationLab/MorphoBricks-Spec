@@ -2,8 +2,10 @@
 
 - **Status:** Accepted (owner, 10 November 2026: the architecture AR1-AR9 with its audit, the
   no-compatibility policy AR10 and the rulings AR11; the three questions of the first draft were
-  answered the same day, [below](#owner-answers-10-november-2026)). Specification only: it
-  changes no fixture, golden or validator (`python -I tools/audit/refval.py fixtures .` unchanged).
+  answered the same day, [below](#owner-answers-10-november-2026)). Amended on 11 November 2026
+  for parent-label masks (resolver contract version 2,
+  [below](#resolver-contract-version-2-parent-label-masks-11-november-2026); ADR 0001 PL1).
+  Specification only: it changes no fixture, golden or validator (`python -I tools/audit/refval.py fixtures .` unchanged).
   The first implementation is a **draft** pull request in morphobricks-preprocessing
   (`claude/resolve-request`, target v0.5.1), unmerged until after the v0.5.0 tag.
 - **Tracking:** [roadmap §5 Stage 2 and §6](../roadmap.md);
@@ -105,6 +107,24 @@ naming the fix (run the notebook or `describe`); there is no header-name path (A
 Codes: `A_VOLUME_NOT_SUPPORTED` and `A_DESCRIPTION_REQUIRED` are defined by this contract, not by
 experiment-v1 §8, whose `A_*` list is unchanged (owner answer 1 below; AR11 (1)). Every other
 code is ADR 0001's.
+
+### Resolver contract version 2: parent-label masks (11 November 2026)
+
+ADR 0001 PL1 (owner decision of 11 November 2026) adds `parent_labels` to the description's
+`representation` (experiment-v1 §4.5b). The contract changes in three places, so it is version 2
+(`RESOLVER_VERSION = 2`, AR8); everything else above stands.
+
+- **Input.** `Capabilities` gains `parent_labels_support` (false by default), beside
+  `rgb_support` and `volume_support`. MorphoFeature reads it from a provider manifest's
+  `parent_labels_support` key; a direct runner passes its own declaration (AR7).
+- **Refusal.** A requested mask declared `parent_labels`, in either role, for a consumer without
+  `parent_labels_support` is refused with `A_MASK_PARENT_LABELS_NOT_SUPPORTED` (an experiment-v1
+  §8 code, like `A_RGB_NOT_SUPPORTED`), naming the mask ID. In the role `objects` it is also
+  `A_MASK_NOT_INSTANCES` (all refusals are reported). A `binary_mask_policy` on it is a malformed
+  request (`ValueError`), as for any mask that is not `binary`.
+- **Output.** With the capability, a `parent_labels` mask in the role `region` is selected with
+  `representation = "parent_labels"` and `conversion` none; the resolver never splits or
+  relabels it, and the consumer measures it by its own rules.
 
 ### Consequences
 
