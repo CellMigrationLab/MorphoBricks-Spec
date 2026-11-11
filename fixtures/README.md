@@ -70,10 +70,10 @@ The matrix audit ([`docs/audits/matrix-audit-2026-11-07.md`](../docs/audits/matr
 adds `v35`, `v36` and `i128`-`i130` for structures the catalogue lacked (a flat experiment, a
 biological-repeat folder named like a forbidden key, `single` rules for condition folders and
 members). The owner decisions of 7 November 2026 (ADR 0001, SQ6) add `i131`-`i133` (the
-`single` rules for conditions) and `i134` (a duplicate key inside an inline table); the owner decision of 7 November 2026 on reserved names in `used_ids` (UR1) adds `v37` and `i135`. Its audit-only validator, [`tools/audit/refval.py`](../tools/audit/refval.py)
-(`python -I tools/audit/refval.py fixtures .`), accepts 37 of 37 valid files with exactly the
-listed warnings, refuses 135 of 135 invalid files with exactly the listed code set from the listed
-phase, gives the listed `R_*` set for 12 of 12 transitions, and round-trips every valid and
+`single` rules for conditions) and `i134` (a duplicate key inside an inline table); the owner decision of 7 November 2026 on reserved names in `used_ids` (UR1) adds `v37` and `i135`; the owner decision PL1 of 11 November 2026 moves `i111` to `v38` and adds `v39` and `i136`-`i139`. Its audit-only validator, [`tools/audit/refval.py`](../tools/audit/refval.py)
+(`python -I tools/audit/refval.py fixtures .`), accepts 39 of 39 valid files with exactly the
+listed warnings, refuses 138 of 138 invalid files with exactly the listed code set from the listed
+phase, gives the listed `R_*` set for 13 of 13 transitions, and round-trips every valid and
 transition file through the canonical writer. It is an audit tool, not a reader: the conformance
 plan's single reference reader stays preprocessing.
 

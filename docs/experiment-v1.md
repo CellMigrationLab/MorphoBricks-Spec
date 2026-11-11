@@ -350,14 +350,14 @@ set in the run manifest, the status `checked` (with the checked files and their 
 (`A_MASK_UNCHECKED`, §8); it never checks implicitly and never assumes. A new batch of files is
 `not yet checked` until the mask step has read it. Pixels cannot prove `instances` (an integer
 mask holding only 0 and 1 is accepted as declared) or `parent_labels`: a file of either is
-`checked` once the mask step has read it and its labels are in range.
+`checked` once the mask step has read it.
 
 **§4.5b Parent-label (grouped) masks (owner decision PL1, 11 November 2026; supersedes AQ8).**
 `representation = "parent_labels"` declares a mask whose non-zero values each name **one group**,
-for example the mitochondria of one cell, and whose pixels of one value may be in any number of
+for example the mitochondria of one cell, and whose pixels of one value can be in any number of
 separate pieces. 0 is background. It is MorphoRelate's `parent_labels` representation and what
 preprocessing's mask step suggests as the kind `grouped` (evidence only, never a pre-filled
-answer: §4.5a, AQ10).
+answer: the representation is user-confirmed, §4.5).
 
 - **Identity.** A group is identified by the FOV key (§3.4), the mask ID and the value. A value is
   never an identity on its own: the same number in another mask or another FOV is not the same
@@ -368,14 +368,16 @@ answer: §4.5a, AQ10).
   components, relabels it or converts it to `instances` or `binary`, and the per-request
   conversion of §4.5c applies to `binary` masks only. What a brick measures inside a group (for
   example its connected pieces) is that brick's own numerical rule.
-- **Declared wrongly.** A grouped mask declared `binary` holds more than two values and is refused
-  by the mask step (`R_MASK_CONTRADICTS_REPRESENTATION`, §4.5a). Declared `instances` it cannot be
-  refused, because pixels cannot prove `instances`: the user's declaration is the guard, and the
-  mask step SHOULD show its `grouped` evidence when the user answers.
-- **The parent.** The file names no mask that the values refer to. A consumer MAY read a value as
-  the label of an object of another mask of the **same FOV** only when its own request names that
-  parent; it then reports the pixels whose value disagrees with that mask and never reassigns
-  them.
+- **Declared wrongly.** A grouped mask declared `binary` is refused by the mask step when it holds
+  more than two distinct values (`R_MASK_CONTRADICTS_REPRESENTATION`, §4.5a); with one group (0 and
+  one value) it cannot be told from a `binary` mask. Declared `instances` it cannot be refused,
+  because pixels cannot prove `instances`. In both cases the user's declaration is the guard, and
+  the mask step's `grouped` kind is the evidence for it.
+- **The parent.** The file names no mask that the values refer to. A consumer reads a value as
+  the label of an object only when its own request names that parent: an object set of the **same
+  FOV** (an `instances` mask, or a set the brick derives from one, such as MorphoRelate's
+  `cytoplasm`). It then reports the pixels whose value disagrees with that parent and never
+  reassigns them.
 - **Capability (`parent_labels_support`).** A brick accepts a `parent_labels` mask only if it
   declares so. A brick that publishes a provider manifest declares it there as the optional
   top-level key `parent_labels_support`, a boolean, with the rules of `rgb_support` (§4.4b): `true`
