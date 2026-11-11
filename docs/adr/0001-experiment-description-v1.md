@@ -345,14 +345,24 @@ Evidence, read at these commits:
 
 | # | Accepted decision | Rejected alternative | Spec | Fixtures / scenarios |
 |---|---|---|---|---|
-| PL1 | **`representation = "parent_labels"` is a v1 value.** Each non-zero value names one group whose pixels may be in several pieces; 0 is background; a group is identified by FOV key, mask ID and value, never by the value alone. It is not instances: never an object set (`A_MASK_NOT_INSTANCES`), never split, relabelled or converted by a reader, the resolver or the labeller. A brick accepts it only if it declares `parent_labels_support = true` (provider manifest key with the rules of `rgb_support`); otherwise a request that uses it, in any role, is refused, `A_MASK_PARENT_LABELS_NOT_SUPPORTED`. The file names no parent mask: a consumer reads a value as a parent's label only when its own request names that parent, and reports disagreeing pixels. Made as an amendment of v1, not a new `schema_version` | Keeping AQ8 (MorphoRelate's parity, HPMEC and JUMP datasets stay on an in-memory route); a new `schema_version` 2 (no valid v1 file changes meaning, a reader pinned to an earlier commit refuses the value as `E_ENUM`, and with no migration (ADR 0002 AR10) every published v1 file would be refused); a required `grouped_by` / parent-mask field (MorphoRelate names the parent in its request as a role, `cytoplasm` included, which is not a mask of the file); per-feature rules in the Spec (each brick owns its feature table); accepting it in the `region` role without the capability (a brick that does not know the value would read labels it cannot interpret) | §4.5, §4.5a, §4.5b, §4.5c, §7, §8 | `v38` (was `i111`), `v39`, `i136`-`i139`; conformance §4 "Parent labels" |
+| PL1 | **`representation = "parent_labels"` is a v1 value.** Each non-zero value names one group whose pixels may be in several pieces; 0 is background; a group is identified by FOV key, mask ID and value, never by the value alone. It is not instances: never an object set (`A_MASK_NOT_INSTANCES`), never split, relabelled or converted by a reader, the resolver or the labeller; as objects it is `A_MASK_NOT_INSTANCES` with or without the capability. In the role `region` every consumer can use it: one that declares `parent_labels_support = true` (provider manifest key with the rules of `rgb_support`) receives the groups; one that does not reads it as an area (every non-zero pixel inside, 0 outside, the groups not kept), never silently: the resolver returns the marker `conversion = "parent_labels_as_area"` and the consumer records it in its run provenance or output and shows it to the user (owner decision of 11 November 2026: "if a mask is provided it should be used even if the link cannot be maintained. it should be used as another area"). The file names no parent mask: a consumer reads a value as a parent's label only when its own request names that parent, and reports disagreeing pixels. Made as an amendment of v1, not a new `schema_version` | Keeping AQ8 (MorphoRelate's parity, HPMEC and JUMP datasets stay on an in-memory route); a new `schema_version` 2 (no valid v1 file changes meaning, a reader pinned to an earlier commit refuses the value as `E_ENUM`, and with no migration (ADR 0002 AR10) every published v1 file would be refused); a required `grouped_by` / parent-mask field (MorphoRelate names the parent in its request as a role, `cytoplasm` included, which is not a mask of the file); per-feature rules in the Spec (each brick owns its feature table); refusing it in every role without the capability (`A_MASK_PARENT_LABELS_NOT_SUPPORTED`, the first draft of PL1: a provided mask would be lost to every brick that does not declare the capability; rejected by the owner on 11 November 2026); reading it as an area without a recorded marker (the grouping would be lost without a trace) | §4.5, §4.5a, §4.5b, §4.5c, §7, §8 | `v38` (was `i111`), `v39`, `i136`-`i139`; conformance §4 "Parent labels" |
+
+Owner answers of 11 November 2026 to the questions of the first draft (Spec PR #28):
+
+1. **Versioning:** an amendment of v1 (experiment-v1 §7), not `schema_version` 2.
+2. **Parent field:** none for now; a `grouped_by` field stays `E_UNKNOWN_FIELD` (`i138`).
+3. **Without the capability:** the mask is used as an area in the role `region`, recorded and
+   shown (above), instead of the first draft's refusal in every role. As objects it stays
+   `A_MASK_NOT_INSTANCES`; it is never split or relabelled.
+4. **Names:** `parent_labels_support` is kept. The first draft's code
+   `A_MASK_PARENT_LABELS_NOT_SUPPORTED` is dropped: after answer 3 no role is left where it
+   applies, so experiment-v1 §8 gains no code.
+5. **Resolver contract:** version 2 (ADR 0002).
 
 Modelling choices made when writing PL1 into the text (not themselves owner decisions; the owner
-may amend them): the capability key is named `parent_labels_support`; the refusal code is
-`A_MASK_PARENT_LABELS_NOT_SUPPORTED`, an experiment-v1 §8 code like `A_RGB_NOT_SUPPORTED` because
-it concerns a value of the description; it applies in every role; the resolver contract gains the
-capability as version 2 (ADR 0002); `i111` became `v38` with an added `Cells` mask, following the
-renumbering of `rv07`/`rv08` to `ri25`/`ri26` when their verdict flipped.
+may amend them): the marker is `conversion = "parent_labels_as_area"`; `i111` became `v38` with an
+added `Cells` mask, following the renumbering of `rv07`/`rv08` to `ri25`/`ri26` when their verdict
+flipped.
 
 ### Histogram representation: candidates and criteria only (decided in ADR 0003)
 

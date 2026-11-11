@@ -364,10 +364,10 @@ answer: the representation is user-confirmed, §4.5).
   group, and no consumer joins groups or objects by number alone.
 - **Not instances.** A group is not an object of this mask: its pieces are not one object, and its
   value is not an object label of this mask. A `parent_labels` mask is never an object set
-  (`A_MASK_NOT_INSTANCES`, §8). No reader, resolver or labeller splits it into connected
-  components, relabels it or converts it to `instances` or `binary`, and the per-request
-  conversion of §4.5c applies to `binary` masks only. What a brick measures inside a group (for
-  example its connected pieces) is that brick's own numerical rule.
+  (`A_MASK_NOT_INSTANCES`, §8), with or without the capability below. No reader, resolver or
+  labeller splits it into connected components, relabels it or converts it to `instances`, and
+  the per-request conversion of §4.5c applies to `binary` masks only. What a brick measures
+  inside a group (for example its connected pieces) is that brick's own numerical rule.
 - **Declared wrongly.** A grouped mask declared `binary` is refused by the mask step when it holds
   more than two distinct values (`R_MASK_CONTRADICTS_REPRESENTATION`, §4.5a); with one group (0 and
   one value) it cannot be told from a `binary` mask. Declared `instances` it cannot be refused,
@@ -378,16 +378,23 @@ answer: the representation is user-confirmed, §4.5).
   FOV** (an `instances` mask, or a set the brick derives from one, such as MorphoRelate's
   `cytoplasm`). It then reports the pixels whose value disagrees with that parent and never
   reassigns them.
-- **Capability (`parent_labels_support`).** A brick accepts a `parent_labels` mask only if it
-  declares so. A brick that publishes a provider manifest declares it there as the optional
-  top-level key `parent_labels_support`, a boolean, with the rules of `rgb_support` (§4.4b): `true`
-  declares support; `false` and an absent key mean unsupported; a value that is not a boolean is a
+- **Capability (`parent_labels_support`).** A brick declares whether it reads the groups. A brick
+  that publishes a provider manifest declares it there as the optional top-level key
+  `parent_labels_support`, a boolean, with the rules of `rgb_support` (§4.4b): `true` declares
+  support; `false` and an absent key mean unsupported; a value that is not a boolean is a
   manifest error, never read as `true`; a brick without a provider manifest states it in its
-  documented capabilities. A request on a described run that uses a `parent_labels` mask, in any
-  role, for a consumer that does not declare support is refused at analysis
-  (`A_MASK_PARENT_LABELS_NOT_SUPPORTED`, §8), never relabelled or read as another representation.
-  Which features of a brick accept the representation is the brick's own list; the Spec gives
-  none.
+  documented capabilities. Which features of a brick accept the representation is the brick's
+  own list; the Spec gives none.
+- **Use as a region (owner decision of 11 November 2026).** A request can use a `parent_labels`
+  mask in the role `region` (an area, not objects) for every consumer:
+  - a consumer that declares `parent_labels_support` receives the values as groups (`conversion`
+    none);
+  - a consumer that does not declare it reads the mask as an **area**: every non-zero pixel is
+    inside, 0 is outside, and the groups are not kept. This is never silent: the resolver returns
+    the selection with the recorded marker `conversion = "parent_labels_as_area"`, and the
+    consumer records it in its run provenance or output and shows it to the user (for example
+    "`Mito`: parent_labels used as an area; grouping not kept"). The selection keeps
+    `representation = "parent_labels"`; the file is not changed.
 
 **§4.5c A binary mask is never an object set by default (AQ9).** A request that uses a `binary`
 mask as an object set is `A_MASK_NOT_INSTANCES`. The only way around it is an **explicit,
@@ -788,7 +795,7 @@ separate code for "no image has it" (owner decision SI1); the refusal names the 
 the images that lack it, as "present in k of n acquisitions" (`k` may be 0); refuse unless the user
 selects and records an eligible subset; never drop FOVs, impute, re-weight technical repeats or
 change biological N);
-`A_MASK_NOT_INSTANCES` (a `binary` mask requested as an object set without the explicit recorded per-request conversion of §4.5c, or a `parent_labels` mask requested as an object set, §4.5b); `A_MASK_PARENT_LABELS_NOT_SUPPORTED` (a request on a described run uses a `parent_labels` mask, in any role, for a consumer whose manifest does not declare `parent_labels_support = true`, or that does not declare it at all, §4.5b); `A_MASK_UNCHECKED` (a run uses a mask file whose representation check is `not yet checked`, §4.5a); `A_RGB_NOT_SUPPORTED` (a request on a described run includes the channels of an RGB unit, §4.4b, for a brick whose manifest does not declare `rgb_support = true`, or that does not declare it at all); `A_DRAFT_REFUSED` (§10: `RunInputs` given a draft or an unconfirmed file). Each biological repeat is
+`A_MASK_NOT_INSTANCES` (a `binary` mask requested as an object set without the explicit recorded per-request conversion of §4.5c, or a `parent_labels` mask requested as an object set, with or without `parent_labels_support`, §4.5b); `A_MASK_UNCHECKED` (a run uses a mask file whose representation check is `not yet checked`, §4.5a); `A_RGB_NOT_SUPPORTED` (a request on a described run includes the channels of an RGB unit, §4.4b, for a brick whose manifest does not declare `rgb_support = true`, or that does not declare it at all); `A_DRAFT_REFUSED` (§10: `RunInputs` given a draft or an unconfirmed file). Each biological repeat is
 classified **fully represented**, **partially represented** or **unavailable** per request and
 recorded in the run manifest. Consumers resolve channels by canonical ID per unit, never by C
 index alone, and group by canonical repeat ID (`repeat_group`, §3.4) while keeping the source label

@@ -110,21 +110,22 @@ code is ADR 0001's.
 
 ### Resolver contract version 2: parent-label masks (11 November 2026)
 
-ADR 0001 PL1 (owner decision of 11 November 2026) adds `parent_labels` to the description's
-`representation` (experiment-v1 §4.5b). The contract changes in three places, so it is version 2
-(`RESOLVER_VERSION = 2`, AR8); everything else above stands.
+ADR 0001 PL1 (owner decisions of 11 November 2026) adds `parent_labels` to the description's
+`representation` (experiment-v1 §4.5b). The contract gains one input and one output value, so it
+is version 2 (`RESOLVER_VERSION = 2`, AR8); everything else above stands, and no code is added.
 
 - **Input.** `Capabilities` gains `parent_labels_support` (false by default), beside
   `rgb_support` and `volume_support`. MorphoFeature reads it from a provider manifest's
   `parent_labels_support` key; a direct runner passes its own declaration (AR7).
-- **Refusal.** A requested mask declared `parent_labels`, in either role, for a consumer without
-  `parent_labels_support` is refused with `A_MASK_PARENT_LABELS_NOT_SUPPORTED` (an experiment-v1
-  §8 code, like `A_RGB_NOT_SUPPORTED`), naming the mask ID. In the role `objects` it is also
-  `A_MASK_NOT_INSTANCES` (all refusals are reported). A `binary_mask_policy` on it is a malformed
-  request (`ValueError`), as for any mask that is not `binary`.
-- **Output.** With the capability, a `parent_labels` mask in the role `region` is selected with
-  `representation = "parent_labels"` and `conversion` none; the resolver never splits or
-  relabels it, and the consumer measures it by its own rules.
+- **Region.** A `parent_labels` mask in the role `region` is selected with
+  `representation = "parent_labels"` and `conversion` none when the consumer declares
+  `parent_labels_support`, and with `conversion = "parent_labels_as_area"` when it does not: that
+  consumer reads every non-zero pixel as inside and 0 as outside, records the marker in its run
+  provenance or output and shows it to the user. The resolver never splits or relabels the mask
+  and reads no pixel of it.
+- **Objects.** In the role `objects` it is `A_MASK_NOT_INSTANCES`, with or without the
+  capability. A `binary_mask_policy` on it is a malformed request (`ValueError`), as for any mask
+  that is not `binary`.
 
 ### Consequences
 

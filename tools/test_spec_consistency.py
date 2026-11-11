@@ -21,7 +21,10 @@ RETIRED_FIXTURES = {
 }
 
 #: `A_*` codes that were proposed or removed and may be named only as history, in these files.
-RETIRED_CODES: dict[str, tuple[str, ...]] = {}
+RETIRED_CODES = {
+    # First draft of PL1, dropped by the owner's answer of 11 November 2026 (no role applies).
+    "A_MASK_PARENT_LABELS_NOT_SUPPORTED": ("docs/adr/0001-experiment-description-v1.md",),
+}
 
 #: Resolver-contract codes (ADR 0002), not experiment-v1 section 8 codes.
 RESOLVER_CODES = ("A_VOLUME_NOT_SUPPORTED", "A_DESCRIPTION_REQUIRED")

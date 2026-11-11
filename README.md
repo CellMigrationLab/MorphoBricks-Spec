@@ -131,9 +131,10 @@ What each block says:
   and channel 1 of those images are. An acquisition with another order gets its own list.
 - **`[masks.Cells]`.** One mask type, found in the folder `cells`. `instances` means each cell
   has its own number, so it can be used as an object set; a `binary` mask is a region and
-  cannot. A third kind, `parent_labels`, gives each group one number whose pixels may be in
-  several pieces (the mitochondria of one cell); only a brick that declares support for it
-  receives it. `source_channels` records that it was segmented from the DNA channel.
+  cannot. A third kind, `parent_labels`, gives each group one number whose pixels can be in
+  several pieces (the mitochondria of one cell); a brick that declares support for it reads the
+  groups, any other brick uses it as a plain area and says so. `source_channels` records that it
+  was segmented from the DNA channel.
 - **`[used_ids]`.** Every short name ever saved. A name that is removed stays here and is never
   given to something else, so old results can never be confused with new ones.
 
