@@ -49,7 +49,8 @@
    is "the folder label read from disk" (F01); 4.6a gives no "propose another ID" rule for a
    biological-repeat folder named like a forbidden key (`z`, F16); v1 is silent on time-lapses,
    and MorphoFeature does not export several planes per FOV to MorphoCoverage (A03); grouped
-   masks cannot be described and are undetectable once declared `instances` (A14). RGB
+   masks cannot be described and are undetectable once declared `instances` (A14; described since
+   PL1, 11 November 2026). RGB
    "documented capabilities" (4.4b) have no machine-readable form, so no brick declares any.
 
 ## 1. Evidence base
@@ -317,7 +318,7 @@ Every non-MATCH cell and every preprocessing cell, with the observation behind i
 - **A11** PP M: accepted (warnings mask_missing)
 - **A12** PP M: refused (mask_planes_mismatch) ~ spec discovery:mask_planes_mismatch
 - **A13** PP MB: accepted; v1 refuses (R_MASK_CONTRADICTS_REPRESENTATION): Stage 1 reader; CP MB: cell mode ran on a mask v1 declares binary (no representation known; a 0/1 mask is one object per FOV); v1 A_MASK_NOT_INSTANCES; MO MB: accepted silently; v1 refuses A_MASK_NOT_INSTANCES (objects per FOV [3]); MR MB: accepted silently; v1 refuses A_MASK_NOT_INSTANCES; FF MB: accepted silently; v1 refuses A_MASK_NOT_INSTANCES
-- **A14** PP MS: v1 cannot describe a grouped mask (4.5b); declared `instances` it is measured as wrong objects and nothing can detect it; preprocessing's kind heuristic (median pieces per label > 2) reports this mask `instances`
+- **A14** PP MS: v1 cannot describe a grouped mask (4.5b); declared `instances` it is measured as wrong objects and nothing can detect it; preprocessing's kind heuristic (median pieces per label > 2) reports this mask `instances` (superseded 11 November 2026 by owner decision PL1: v1 now describes it as `parent_labels`, 4.5b; declared `instances` it is still undetectable, so the declaration is the guard)
 - **P01** PP M: accepted
 - **P02** PP MB: accepted silently: unnamed units with different channel orders cannot be declared, so channels are pooled by C index; NORM MB: SILENT: C0/C1 pooled across conditions whose orders differ; CP MB: cell mode ran on a mask v1 declares binary (no representation known; a 0/1 mask is one object per FOV); v1 A_MASK_NOT_INSTANCES; MO MB: accepted silently; v1 refuses A_MASK_NOT_INSTANCES (objects per FOV [1]); MR MB: accepted silently; v1 refuses A_MASK_NOT_INSTANCES; FF MB: accepted silently; v1 refuses A_MASK_NOT_INSTANCES
 - **P03** PP M: refused (channel_names_differ) = Stage 1-2 R_HETEROGENEOUS_LAYOUT_NOT_ENABLED; v1 accepts at Stage 3
@@ -486,7 +487,8 @@ files them). Citations at the SHAs of section 1.
     names conditions and technical repeats only (F16; fixture `v36`).
 14. **FILE (spec), MS-5.** Grouped masks cannot be described (4.5b) and, declared `instances`, are
     measured as wrong objects; preprocessing's kind heuristic (`mask_scan.py:480-481`, median pieces
-    per label > 2) calls a mask with a two-piece label `instances` (A14).
+    per label > 2) calls a mask with a two-piece label `instances` (A14). **Since 11 November 2026** (owner
+    decision PL1, ADR 0001) v1 describes grouped masks (`parent_labels`, 4.5b); the rest stands.
 15. **FILE (preprocessing).** `run` applies the suggested image type when `--image-type` is absent
     (`cli_run.py:487-489`), against preprocessing contract §13 ("never applied without the user's
     confirmation") and v1 4.4b ("never inferred"). Code reading; every case here passed

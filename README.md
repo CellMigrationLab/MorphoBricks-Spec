@@ -42,7 +42,8 @@ checks your experiment folder, shows a picture of each image folder, and asks:
    that never change once saved;
 2. which condition each treatment is compared against;
 3. what was imaged in each channel, tagged per acquisition with the header name as evidence;
-4. whether each mask is a set of separate numbered objects or a region;
+4. whether each mask is a set of separate numbered objects, a region, or groups such as the
+   mitochondria of each cell;
 5. whether the folders of one biological repeat were prepared and imaged the same way.
 
 *Check and save* restates your answers in sentences and writes `morphobricks.toml` to the
@@ -130,7 +131,10 @@ What each block says:
   and channel 1 of those images are. An acquisition with another order gets its own list.
 - **`[masks.Cells]`.** One mask type, found in the folder `cells`. `instances` means each cell
   has its own number, so it can be used as an object set; a `binary` mask is a region and
-  cannot. `source_channels` records that it was segmented from the DNA channel.
+  cannot. A third kind, `parent_labels`, gives each group one number whose pixels can be in
+  several pieces (the mitochondria of one cell); a brick that declares support for it reads the
+  groups, any other brick uses it as a plain area and says so. `source_channels` records that it
+  was segmented from the DNA channel.
 - **`[used_ids]`.** Every short name ever saved. A name that is removed stays here and is never
   given to something else, so old results can never be confused with new ones.
 
@@ -176,7 +180,7 @@ The work is staged; each stage has a gate that is declared only after the tests 
 
 | Stage | What | Where it stands |
 |---|---|---|
-| 0: Specification | Decisions ([ADR 0001](docs/adr/0001-experiment-description-v1.md)), the normative text, 185 fixtures, a reference validator, a conformance plan | **Done** (6 to 9 November 2026). Validator: 0 mismatches |
+| 0: Specification | Decisions ([ADR 0001](docs/adr/0001-experiment-description-v1.md)), the normative text, 190 fixtures, a reference validator, a conformance plan | **Done** (6 to 9 November 2026). Validator: 0 mismatches |
 | 1: Preprocessing writes and reads the file | Notebook questions, `describe` command, strict reader, reconciliation when folders change, `RunInputs` with canonical IDs, the derived `experiment_design.csv` | Implemented on the preprocessing `main` branch; ships as **v0.5.0**. Gate G1 is declared once every fixture and scenario of the [conformance plan](docs/conformance-plan.md) runs on the release candidate |
 | 2: The bricks | MorphoFeature, MorphoRelate, fiberfeatures, MorphoObjects, MorphoEmbed, MorphoCoverage and CellPatcher take channel, mask and repeat identities from `RunInputs` instead of raw labels | Design decisions recorded (ADR 0001, 8 November 2026); the architecture decided on 10 November 2026 ([ADR 0002](docs/adr/0002-shared-request-resolver.md): one shared request resolver in preprocessing, both routes kept); a draft resolver in preprocessing; not implemented in the bricks |
 | 3: Mixed layouts | Acquisitions with different channel sets or orders processed in one experiment | Not started. Until then a described run with mixed layouts is refused (`R_HETEROGENEOUS_LAYOUT_NOT_ENABLED`) |
@@ -205,7 +209,7 @@ writer or a brick that consumes the description.
 
 ### Fixtures and goldens
 
-[`fixtures/`](fixtures/README.md) holds 37 valid files, 135 invalid ones (each with the exact
+[`fixtures/`](fixtures/README.md) holds 39 valid files, 138 invalid ones (each with the exact
 set of error codes a reader must report), 13 transitions (a valid file checked against the
 published file it replaces), golden `experiment_design.csv` outputs and 37 goldens for the
 records file. A reader pins this repository by commit SHA and must accept or refuse every file

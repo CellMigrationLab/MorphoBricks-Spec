@@ -64,7 +64,8 @@ OVERRIDES = {
     ("C12b", "PP"): ("MATCH", "refused (channel_names_differ) ~ spec R_HEADER_CONTRADICTION"),
     ("A14", "PP"): ("MISMATCH-SPEC", "v1 cannot describe a grouped mask (4.5b); declared `instances` it is "
                     "measured as wrong objects and nothing can detect it; preprocessing's kind heuristic "
-                    "(median pieces per label > 2) reports this mask `instances`"),
+                    "(median pieces per label > 2) reports this mask `instances`"
+                    " (superseded 11 November 2026 by owner decision PL1: v1 now describes it as `parent_labels`, 4.5b; declared `instances` it is still undetectable, so the declaration is the guard)"),
     ("C17", "NORM"): ("MISMATCH-BRICK", "SILENT: normalization pools C0 over DAPI (CTRL) and ACTIN (DrugA); "
                       "per-unit channel lists cannot be declared"),
     ("P06", "NORM"): ("MISMATCH-BRICK", "SILENT: C0/C1 pooled across technical repeats whose orders differ"),

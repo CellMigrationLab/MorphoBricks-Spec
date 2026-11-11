@@ -5,7 +5,8 @@
   (roadmap S0.1) is done ([PR #5](https://github.com/CellMigrationLab/MorphoBricks-Spec/pull/5)); the
   third round below answers its questions; the fourth round (FR1, FR2) separates condition and
   technical-repeat IDs from their folder labels and states the limit of CSV byte-identity; the
-  fifth round (7 November 2026, SQ2, SQ6-SQ8) settles the Stage 1 design questions.
+  fifth round (7 November 2026, SQ2, SQ6-SQ8) settles the Stage 1 design questions. PL1
+  (11 November 2026) supersedes AQ8: `parent_labels` masks are described in v1.
 - **Tracking:** [RFC #1](https://github.com/CellMigrationLab/MorphoBricks-Spec/issues/1);
   [roadmap §2 and §5 Stage 0](../roadmap.md);
   [feasibility audit](../audits/rfc1-feasibility-2026-11-05.md);
@@ -130,7 +131,7 @@ and the normative text states the result. Fixture numbers refer to `fixtures/`; 
 | AQ5 | The canonical repeat ID is **added** next to the FOV key as `repeat_group`; the key keeps the source folder label in `biological_repeat`, so IDs, caches and exports are unchanged; grouping and pairing use the canonical ID | Replacing the source label by the canonical ID in the key: it changes FOV and patch identities, scaling keys, caches and exports in every brick at once, and erases the provenance | §3.4 | `v03`, `v30`; P25 |
 | AQ6 | **Supersedes D8.** RGB is an accepted declared image type: `image_type = "rgb"` per imaging unit, fixed channel tokens `R`, `G`, `B` in that order, no aliases; checked against header metadata and never inferred from pixels; the scientific meaning is left to each brick, which must declare RGB support and is otherwise refused at analysis (`A_RGB_NOT_SUPPORTED`). `R_RGB_NOT_SUPPORTED` is removed | Keeping D8 (RGB users, supported by preprocessing today, would lose a working path once the file is required); or letting RGB runs bypass `morphobricks.toml` until a v2 rule exists (two ways to describe an experiment) | §4.4b, §8 | `v28`, `v29`, `i100`-`i106`, `i119`; P13, P23, P24 |
 | AQ7 | **No trimming.** A header name and a `header_names` entry are compared exactly after NFC of both sides; outer whitespace needs a confirmed alias. Preprocessing must stop trimming header names in Stage 1 | Normative trimming (what preprocessing does today, `zarr_input.py:68`): a trimmed name hides a header the user never confirmed | §4.3 | `v31`, `i110`; P26 |
-| AQ8 | `parent_labels` (grouped) masks are out of scope in v1 (`E_ENUM`); a v1.1 design follows later | Adding the value before freeze: it needs per-feature applicability rules that nothing has specified | §4.5b | `i111` |
+| AQ8 | **Superseded on 11 November 2026 by PL1** (owner decision: "Parent-label masks: Spec change NOW"; the row stays as history). `parent_labels` (grouped) masks are out of scope in v1 (`E_ENUM`); a v1.1 design follows later | Adding the value before freeze: it needs per-feature applicability rules that nothing has specified | §4.5b | `i111` |
 | AQ9 | A `binary` mask may stand in for instances only through an explicit, per-request, recorded conversion (for example CellPatcher `binary_mask_policy="connected_components"`), never automatically and never in the file | Refusing regardless (no route for users who segment regions); or an automatic conversion (today CellPatcher silently measures an integer 0/1 mask as one object) | §4.5c, §4.7, §8 | `v08`, `i112`; P27 |
 | AQ10 | `R_MASK_CONTRADICTS_REPRESENTATION` is checked in the mask step, on each new batch of a progressive mask. Publication records "not yet checked"; a run that uses an unchecked mask refuses (`A_MASK_UNCHECKED`) | Checking at publication (a full pixel read of every mask at every publication, masks being unfinished) or in `run` (the failure appears late and per run) | §4.5a, §8 | `v09`; P05, P28 |
 | AQ11 | A discovered mask type that breaks the Label rules has its own code, `R_MASK_TYPE_NAME_INVALID`, refused at discovery (a non-NFC name is `R_FOLDER_NOT_NFC`) | No code, leaving the failure to the later `E_ID_TEXT` on writing `source_type` | §8 | P29 |
@@ -309,6 +310,59 @@ repositories rather than a rule of the description, so it is recorded in
 implements them; RC1 stands for described runs, and its clause on undescribed runs is superseded
 by ADR 0002 AR10 (every run needs a published description; a run without one is refused,
 `A_DESCRIPTION_REQUIRED`).
+
+### Owner decision of 11 November 2026 (parent-label masks, accepted)
+
+The owner reversed AQ8 on 11 November 2026: "Parent-label masks: Spec change NOW". AQ8 had
+deferred the value because "it needs per-feature applicability rules that nothing has
+specified". PL1 answers that with a contract-level rule (a declared capability, like
+`rgb_support`) and leaves the per-feature lists to the bricks.
+
+Evidence, read at these commits:
+
+- MorphoRelate `main` `7d2fa69`: the representation is declared, never inferred, and its objects
+  are 8-connected components within each parent value (`registry/_spec.py:59-70`;
+  `structures_table.py:89-98`, `:116-127`); which feature accepts which representation is the
+  brick's own table (`registry/_spec.py:73-83`); a cell or nucleus mask must be `instances`
+  (`config.py:124-129`); the parent is named by the run's configuration as a role, `cell`,
+  `nucleus` or `cytoplasm` (`config.py:61`, `:89`), "the pixel values are labels of this parent
+  mask" (`docs/input_contract.md:253`), and pixels that disagree with it are counted, never
+  reassigned (`structures_table.py:82-86`, `:257-273`; `docs/identity.md:178-184`). No
+  description field is read for the parent. MorphoRelate draft PR #243 (`cc143dc`,
+  `config_masks.py:96-106`) requests a structure mask without a policy in the resolver role
+  `region`, so a `parent_labels` mask reaches the brick through `region`; until this decision it
+  measured these masks in memory (PRs #242, #243: CellProfiler parity, HPMEC, JUMP mito).
+- morphobricks-preprocessing `main` `a775ebf`: the mask step suggests the kind `grouped` (median
+  pieces per label > 2) and the relation `grouped_by` as evidence (`mask_scan.py:7-11`, `:18-19`,
+  `:536-537`, `:557-563`); its pieces are 4-connected (`mask_scan.py:299-326`); v1 lists
+  `instances` and `binary` only (`description_rules.py:107`); the resolver already refuses any
+  non-`instances` mask used as objects (`run_inputs_request.py:418-429`) and takes the consumer's
+  capabilities as booleans (`run_inputs_request.py:86-100`); `instances` files are `checked`
+  once read, since pixels cannot prove them (`mask_representation.py:14-17`).
+- CellPatcher `main` `2bbeaf3`: the shared labeller is 8-connected (`object_geometry.py:40-43`,
+  owner decision of 11 November 2026) and refuses an integer mask with more than one foreground
+  value (`object_geometry.py:206-209`), so it can never split a `parent_labels` mask.
+
+| # | Accepted decision | Rejected alternative | Spec | Fixtures / scenarios |
+|---|---|---|---|---|
+| PL1 | **`representation = "parent_labels"` is a v1 value.** Each non-zero value names one group whose pixels may be in several pieces; 0 is background; a group is identified by FOV key, mask ID and value, never by the value alone. It is not instances: never an object set (`A_MASK_NOT_INSTANCES`), never split, relabelled or converted by a reader, the resolver or the labeller; as objects it is `A_MASK_NOT_INSTANCES` with or without the capability. In the role `region` every consumer can use it: one that declares `parent_labels_support = true` (provider manifest key with the rules of `rgb_support`) receives the groups; one that does not reads it as an area (every non-zero pixel inside, 0 outside, the groups not kept), never silently: the resolver returns the marker `conversion = "parent_labels_as_area"` and the consumer records it in its run provenance or output and shows it to the user (owner decision of 11 November 2026: "if a mask is provided it should be used even if the link cannot be maintained. it should be used as another area"). The file names no parent mask: a consumer reads a value as a parent's label only when its own request names that parent, and reports disagreeing pixels. Made as an amendment of v1, not a new `schema_version` | Keeping AQ8 (MorphoRelate's parity, HPMEC and JUMP datasets stay on an in-memory route); a new `schema_version` 2 (no valid v1 file changes meaning, a reader pinned to an earlier commit refuses the value as `E_ENUM`, and with no migration (ADR 0002 AR10) every published v1 file would be refused); a required `grouped_by` / parent-mask field (MorphoRelate names the parent in its request as a role, `cytoplasm` included, which is not a mask of the file); per-feature rules in the Spec (each brick owns its feature table); refusing it in every role without the capability (`A_MASK_PARENT_LABELS_NOT_SUPPORTED`, the first draft of PL1: a provided mask would be lost to every brick that does not declare the capability; rejected by the owner on 11 November 2026); reading it as an area without a recorded marker (the grouping would be lost without a trace) | §4.5, §4.5a, §4.5b, §4.5c, §7, §8 | `v38` (was `i111`), `v39`, `i136`-`i139`; conformance §4 "Parent labels" |
+
+Owner answers of 11 November 2026 to the questions of the first draft (Spec PR #28):
+
+1. **Versioning:** an amendment of v1 (experiment-v1 §7), not `schema_version` 2.
+2. **Parent field:** none for now; a `grouped_by` field stays `E_UNKNOWN_FIELD` (`i138`).
+3. **Without the capability:** the mask is used as an area in the role `region`, recorded and
+   shown (above), instead of the first draft's refusal in every role. As objects it stays
+   `A_MASK_NOT_INSTANCES`; it is never split or relabelled.
+4. **Names:** `parent_labels_support` is kept. The first draft's code
+   `A_MASK_PARENT_LABELS_NOT_SUPPORTED` is dropped: after answer 3 no role is left where it
+   applies, so experiment-v1 §8 gains no code.
+5. **Resolver contract:** version 2 (ADR 0002).
+
+Modelling choices made when writing PL1 into the text (not themselves owner decisions; the owner
+may amend them): the marker is `conversion = "parent_labels_as_area"`; `i111` became `v38` with an
+added `Cells` mask, following the renumbering of `rv07`/`rv08` to `ri25`/`ri26` when their verdict
+flipped.
 
 ### Histogram representation: candidates and criteria only (decided in ADR 0003)
 
