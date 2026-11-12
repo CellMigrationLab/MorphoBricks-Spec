@@ -17,7 +17,7 @@ Update a row in the same Spec pull request (or a follow-up) whenever a brick's r
 
 | Brick | Pinned Spec commit | Date | PR | File set |
 |---|---|---|---|---|
-| morphobricks-preprocessing | [`1bed024`](https://github.com/CellMigrationLab/MorphoBricks-Spec/commit/1bed024e278d104ba4b8f63ae76c020fb2e3470d) | 2026-11-09 | [preprocessing #242](https://github.com/CellMigrationLab/morphobricks-preprocessing/pull/242) | Standard |
+| morphobricks-preprocessing | [`69a58b3`](https://github.com/CellMigrationLab/MorphoBricks-Spec/commit/69a58b3e2f89b318364c4c1252c54caf676fb6bb) | 2026-11-12 | [preprocessing #289](https://github.com/CellMigrationLab/morphobricks-preprocessing/pull/289) (released in v0.5.2, tag `6d81bcf`, release PR #290; normalization `v0.5.0`) | Standard |
 | morphobricks-normalization | not pinned; pinned with its Stage 2 PR | | | canonical-channel / canonical-ID pooling (Stage 2-3) |
 | MorphoFeature | not pinned; pinned with its Stage 2 PR | | | P24 `rgb_support` in provider manifests, P25 `repeat_group` to MorphoCoverage, P27 `binary_mask_policy` |
 | fiberfeatures | [`cc9820f`](https://github.com/CellMigrationLab/MorphoBricks-Spec/commit/cc9820f5b84f01bbbb5c8e3f54e70ee13cb5e9eb) | 2026-11-11 | [fiberfeatures #201](https://github.com/CellMigrationLab/fiberfeatures/pull/201) (merged as `a9aca79`; preprocessing `v0.5.0`, CellPatcher `v0.3.0`) | Standard (P24, canonical-channel adapter later) |
