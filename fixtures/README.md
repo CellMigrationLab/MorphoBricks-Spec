@@ -50,6 +50,8 @@ their section.
   invalid (`E_ENUM`) and is now valid: following the renumbering of `rv07`/`rv08` to `ri25`/`ri26`
   when their verdict flipped, it moved to `valid/` as `v38` (with a `Cells` mask added), and the
   number `i111` is not reused. PL1 adds `v39` and `i136`-`i139`.
+- **RGB header override (13 November 2026, owner decision RH1).** Adds `v40`, `i140` and `i141`; the
+  image checks (three interleaved samples, the manifest record) are scenario P36 of the conformance plan.
 
 ## Syntax check (6 November 2026)
 
@@ -163,6 +165,7 @@ This is a check of the fixtures against the text, not a conformance claim for an
 | Adding is not a change; removing or reassigning is | `t03`, `t06`, `t07`, `t08`; P07, P15 |
 | Case-only correction needs a new ID; set of publication codes | `t02`, `t09`, `i95`; P16 |
 | RGB images (declared type, fixed tokens, no aliases) | `v28`, `v29`, `i100`-`i106`, `i119`; P13, P23, P24 |
+| RGB header override (RH1) | `v40`, `i140`, `i141`; P36 |
 | Reserved names (one list for channel and mask IDs; also for `used_ids.channels`) | `i59`, `i61`, `i107`-`i109`, `i135`, `v32`, `v37` |
 | Forbidden names apply to ID keys | `i113`-`i115` |
 | Folder labels never restricted: condition and technical-repeat IDs separate from `source_folder` | `v33`, `v34`, `i113`, `i115`, `i120`-`i127`, `t10`-`t12`; P32, P33 |
@@ -212,6 +215,7 @@ This is a check of the fixtures against the text, not a conformance claim for an
 | UR1 | The reserved list also applies to `used_ids.channels` entries (they reserve those IDs) | `i135`, `v37` |
 | AQ5 | Canonical repeat ID added as `repeat_group`; the FOV key keeps the source label | `v03`, `v30`; P25 |
 | AQ6 | RGB accepted as a declared type (`image_type = "rgb"`, tokens `R`, `G`, `B`); supersedes D8 | `v28`, `v29`, `i100`-`i106`, `i119`; P13, P23, P24 |
+| RH1 | A unit declared `rgb` may set `rgb_header_override = true`: a contradicting header is accepted for exactly three interleaved samples, recorded | `v40`, `i140`, `i141`; P36 |
 | AQ7 | No trimming: header names exact after NFC of both sides | `v31`, `i110`; P26 |
 | AQ8 | `parent_labels` masks out of scope in v1. **Superseded 11 November 2026** by PL1 | none (`i111` retired: it is now `v38`) |
 | AQ9 | Binary-as-instances only by an explicit, per-request, recorded conversion | `v08`, `i112`; P27 |
@@ -275,6 +279,7 @@ This is a check of the fixtures against the text, not a conformance claim for an
 | [`v37_used_ids_reserved_near_misses`](valid/v37_used_ids_reserved_near_misses.toml) | Owner decision UR1 (Spec issue 11) | pass | yes | `v32` with the retired channel IDs `Ringer` and `label2` listed in `used_ids.channels`: names next to the reserved list are valid there too (experiment-v1 4.9). |
 | [`v38_parent_labels_mask`](valid/v38_parent_labels_mask.toml) | Owner decision PL1 (supersedes AQ8; was `i111`) | pass | yes | A `parent_labels` mask `Mito` beside an `instances` mask `Cells`: each non-zero value of `Mito` is one group (the mitochondria of one cell) in any number of pieces; 0 is background. Not an object set (`A_MASK_NOT_INSTANCES`), never split or relabelled; as a region, a brick without `parent_labels_support` reads it as an area with the recorded marker `parent_labels_as_area` (conformance §4 "Parent labels"). No field names the grouping mask (experiment-v1 4.5b). |
 | [`v39_parent_labels_only`](valid/v39_parent_labels_only.toml) | Owner decision PL1 | pass | yes | A `parent_labels` mask with no other mask in the file: the description never names the mask whose objects the values refer to; a consumer that reads a value as a parent's label names that parent in its own request (experiment-v1 4.5b). |
+| [`v40_rgb_header_override`](valid/v40_rgb_header_override.toml) | Owner decision RH1 | pass | yes | The CTRL units declare `rgb_header_override = true` beside `image_type = "rgb"` (scanner files whose TIFF header says MINISBLACK with three interleaved samples); the DrugA units do not. The key changes no channel ID; whether a header is overridden is checked against the images (P36), never by this file. |
 
 ## Expected outputs (3)
 
@@ -449,6 +454,8 @@ Valid alone; checked against the named published predecessor (refused with the l
 | [`i137_representation_parent_labels_case`](invalid/i137_representation_parent_labels_case.toml) | Owner decision PL1 | `E_ENUM` | 3 | `representation = "Parent_Labels"`: the enumeration is exact and lower case, never case-folded. |
 | [`i138_mask_grouped_by_field`](invalid/i138_mask_grouped_by_field.toml) | Owner decision PL1 | `E_UNKNOWN_FIELD` | 3 | A `parent_labels` mask naming its grouping mask (`grouped_by = "Nuclei"`): v1 has no relationship field; the parent is named by the consumer's request (experiment-v1 4.5b). |
 | [`i139_parent_labels_support_in_file`](invalid/i139_parent_labels_support_in_file.toml) | Owner decision PL1 | `E_UNKNOWN_FIELD` | 3 | `parent_labels_support = true` at the top level: support is a capability the receiving brick declares (experiment-v1 4.5b), never a statement of the description. |
+| [`i140_rgb_override_without_rgb`](invalid/i140_rgb_override_without_rgb.toml) | Owner decision RH1 | `E_RGB_OVERRIDE_WITHOUT_RGB` | 5 | A unit without `image_type` declares `rgb_header_override = true`: the override exists only for units declared `rgb` (experiment-v1 4.4b). |
+| [`i141_rgb_override_not_boolean`](invalid/i141_rgb_override_not_boolean.toml) | Owner decision RH1 | `E_TYPE` | 3 | `rgb_header_override = "true"`: a string is never read as a boolean. |
 
 ## Records fixtures (37)
 
