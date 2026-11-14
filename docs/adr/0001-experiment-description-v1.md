@@ -311,6 +311,35 @@ implements them; RC1 stands for described runs, and its clause on undescribed ru
 by ADR 0002 AR10 (every run needs a published description; a run without one is refused,
 `A_DESCRIPTION_REQUIRED`).
 
+### Owner decision of 13 November 2026 (RGB header override, accepted: RH1)
+
+Real scanner files store interleaved RGB under a header that does not say RGB: the brightfield
+cores of Zenodo 4550300 (Keikhosravi et al. 2020) are TIFF with `SamplesPerPixel = 3` and photometric
+`MINISBLACK`, so a unit declared `rgb` was refused (`R_IMAGE_TYPE_CONTRADICTS_HEADER`) and such data
+could not enter except by rewriting the files (RGB data-flow audit, MorphoFeature #220; Spec #36).
+The owner decided: "Override if 3 samples", with an explicit per-unit key, recorded. RH1 adds
+`rgb_header_override` (§4.4b): accepted only for exactly three interleaved samples per pixel, recorded
+in the manifest as declared RGB with the header overridden, never inferred. Alternatives rejected:
+refusing such files (users would rewrite pixels outside any record), and an automatic override (a
+declaration error would pass silently).
+
+**Owner answers of 14 November 2026 (independent review of RH1, blockers B1-B3, B5).**
+- **Homogeneity uses the effective type.** Images of one overridden unit whose headers differ only in
+  colour interpretation are homogeneous.
+- **Interpretation-free formats.** On an OME-Zarr unit the key is declared but unused, accepted and
+  recorded as such.
+- **Declared and effective recorded separately.** The declared key and, per image, whether it was used
+  are recorded separately.
+- **Refusal priority.** `R_RGB_OVERRIDE_NOT_THREE_SAMPLES` is reported before `R_UNIT_NOT_HOMOGENEOUS`.
+- **The key is part of the confirmed layout.** Adding, removing or changing it reopens the N35
+  confirmation (§10; transitions `t14`, `t15`).
+
+Alternatives rejected:
+- refusing mixed headers (users would rewrite valid files);
+- refusing the key on OME-Zarr (a declaration valid for TIFF would fail on a converted copy);
+- treating the key as metadata outside the layout (preprocessing and the reference validator would
+  disagree on `confirmed_on`).
+
 ### Owner decision of 11 November 2026 (parent-label masks, accepted)
 
 The owner reversed AQ8 on 11 November 2026: "Parent-label masks: Spec change NOW". AQ8 had

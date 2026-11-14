@@ -1,8 +1,8 @@
 # ADR 0004: execution windows, typed coordinates and the patch catalogue (first slice)
 
-- **Status:** **Proposed**, not accepted. The owner decisions of 14 November 2026 that it encodes
-  are recorded in [the one-route design](../design/one-route.md) (section 7 and the decisions table,
-  draft PR #38). Specification only: no fixture, golden or validator of `experiment-v1.md` changes
+- **Status:** **Accepted** (owner, 14 November 2026). The owner decisions it encodes are recorded in
+  [the one-route design](../design/one-route.md) (section 7 and the decisions table; the design itself
+  stays proposed until its gates are met). Specification only: no fixture, golden or validator of `experiment-v1.md` changes
   (`python -I tools/audit/refval.py fixtures .` unchanged). The coordinate conversions are executable
   in `tools/execution_frames.py`, with their cases in `tools/test_execution_frames.py`.
 - **Tracking:** umbrella [#2](https://github.com/CellMigrationLab/MorphoBricks-Spec/issues/2); the
@@ -96,7 +96,7 @@ A provider declares the smallest window it accepts; a smaller one is refused, ne
 - **Not decided here:** series and level fields (later amendment), the `run` scope's fits (design §4.6),
   streamed output and resume, object tiling, random and cell patches.
 
-## Open points for acceptance
+## Open points (decided in the implementing PRs)
 
 1. Whether the catalogue file lives with the run's patch outputs or with CellPatcher's export.
 2. The per-feature CPU/CUDA tolerances for fiberfeatures, measured in the CUDA-lane PR (design 7.5,
