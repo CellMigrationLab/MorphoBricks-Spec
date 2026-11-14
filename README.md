@@ -206,6 +206,9 @@ writer or a brick that consumes the description.
 - [Conformance plan](docs/conformance-plan.md): how preprocessing turns the fixtures into
   executable tests, the physical scenarios P01 to P35, and the exit criteria of gate G1.
 - [Roadmap](docs/roadmap.md) and [master roadmap](docs/master-roadmap.md).
+- [ADR 0004](docs/adr/0004-execution-windows.md) (**proposed**): execution windows, typed
+  coordinates and the patch catalogue, the first slice of the one-route design; reference conversions
+  in `tools/execution_frames.py`.
 
 ### Fixtures and goldens
 
