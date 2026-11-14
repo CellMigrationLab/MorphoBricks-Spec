@@ -206,6 +206,9 @@ writer or a brick that consumes the description.
 - [Conformance plan](docs/conformance-plan.md): how preprocessing turns the fixtures into
   executable tests, the physical scenarios P01 to P35, and the exit criteria of gate G1.
 - [Roadmap](docs/roadmap.md) and [master roadmap](docs/master-roadmap.md).
+- [One route for every image size and type](docs/design/one-route.md): **proposed, not
+  normative**. The whole-slide, multithreaded, bridge-compatible design (umbrella #2), with its
+  acceptance gates.
 
 ### Fixtures and goldens
 
