@@ -180,7 +180,7 @@ The work is staged; each stage has a gate that is declared only after the tests 
 
 | Stage | What | Where it stands |
 |---|---|---|
-| 0: Specification | Decisions ([ADR 0001](docs/adr/0001-experiment-description-v1.md)), the normative text, 190 fixtures, a reference validator, a conformance plan | **Done** (6 to 9 November 2026). Validator: 0 mismatches |
+| 0: Specification | Decisions ([ADR 0001](docs/adr/0001-experiment-description-v1.md)), the normative text, 195 fixtures, a reference validator, a conformance plan | **Done** (6 to 9 November 2026). Validator: 0 mismatches |
 | 1: Preprocessing writes and reads the file | Notebook questions, `describe` command, strict reader, reconciliation when folders change, `RunInputs` with canonical IDs, the derived `experiment_design.csv` | Implemented on the preprocessing `main` branch; ships as **v0.5.0**. Gate G1 is declared once every fixture and scenario of the [conformance plan](docs/conformance-plan.md) runs on the release candidate |
 | 2: The bricks | MorphoFeature, MorphoRelate, fiberfeatures, MorphoObjects, MorphoEmbed, MorphoCoverage and CellPatcher take channel, mask and repeat identities from `RunInputs` instead of raw labels | Design decisions recorded (ADR 0001, 8 November 2026); the architecture decided on 10 November 2026 ([ADR 0002](docs/adr/0002-shared-request-resolver.md): one shared request resolver in preprocessing, both routes kept); a draft resolver in preprocessing; not implemented in the bricks |
 | 3: Mixed layouts | Acquisitions with different channel sets or orders processed in one experiment | Not started. Until then a described run with mixed layouts is refused (`R_HETEROGENEOUS_LAYOUT_NOT_ENABLED`) |
@@ -209,8 +209,8 @@ writer or a brick that consumes the description.
 
 ### Fixtures and goldens
 
-[`fixtures/`](fixtures/README.md) holds 39 valid files, 138 invalid ones (each with the exact
-set of error codes a reader must report), 13 transitions (a valid file checked against the
+[`fixtures/`](fixtures/README.md) holds 40 valid files, 140 invalid ones (each with the exact
+set of error codes a reader must report), 15 transitions (a valid file checked against the
 published file it replaces), golden `experiment_design.csv` outputs and 37 goldens for the
 records file. A reader pins this repository by commit SHA and must accept or refuse every file
 exactly as listed. Fixtures change first: a normative change lands here as text plus fixtures
