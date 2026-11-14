@@ -209,6 +209,9 @@ writer or a brick that consumes the description.
 - [One route for every image size and type](docs/design/one-route.md): **proposed, not
   normative**. The whole-slide, multithreaded, bridge-compatible design (umbrella #2), with its
   acceptance gates.
+- [ADR 0004](docs/adr/0004-execution-windows.md) (**accepted**, 14 November 2026): execution windows,
+  typed coordinates and the patch catalogue, the first slice of the one-route design; reference
+  conversions in `tools/execution_frames.py`.
 
 ### Fixtures and goldens
 
