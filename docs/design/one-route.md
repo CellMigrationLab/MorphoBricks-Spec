@@ -163,7 +163,7 @@ Each provider declares, per feature, its **dependency graph**:
 - **fits at every stage:** input, derived maps, per scale; each with estimator and scope;
 - **global reductions** and how they combine;
 - **context:** margin in physical units, converted to pixels per axis, with the exact footprint (owner
-  decision);
+  decision); support that pairs only pixels inside a region (for example nematic correlation) adds no margin;
 - **border semantics at the true image edge:** padding, clipping or refusal, as the provider defines it
   today. For example, MorphoEmbed's image-edge zero padding stays; padding inside a slide is never used;
 - **backend and numerical tolerance.**
@@ -315,44 +315,94 @@ choose the crop or the file route.
 
 QuPath #49 (small ROI) runs independently, early.
 
-## 7. First slice: tiles on the RGB route
+## 7. First slice: patch windows on the RGB route
 
-Owner decisions of 14 November 2026, adjusted to sections 4.3 and 4.5.
+Owner decisions of 14 November 2026 (two rounds), adjusted to sections 4.3 and 4.5, and to a discovery
+pass over the code at MorphoFeature `ccb7b2e`, fiberfeatures `4cc6ebb`, CellPatcher v0.6.0 and
+MorphoObjects `main`.
 
-- **Scope `per_patch` (declared).** Each grid patch of the global catalogue is computed by fiberfeatures
-  on its own window: the patch plus the exact margin, clipped and recorded at the image edge, with its
-  own percentile scaling at every stage. Results depend only on the declared catalogue and margin, never
-  on execution partition or workers.
-  - This is a **declared different scientific scope** from today's whole-plane patch route. It does not
-    claim equality with it. Equality with whole-image needs the staged fits of section 4.6.
-  - `per_patch` is one value of the declared scaling scope, so it stays valid when run-level fits
+### 7.1 Scientific definition
+
+- **Scope `patch_window` (declared).** Each grid patch of the global catalogue is computed by
+  fiberfeatures on its own window: the patch plus the exact margin, clipped and recorded at the image
+  edge. The name avoids a clash with decision D67, where normalization already uses `scope: patch` for
+  something else.
+  - **Percentiles come from the patch interior only.** Every percentile stage (before and after
+    smoothing, and per scale) uses the patch's own pixels; the margin is filter context only. Values then
+    do not depend on the margin size or on clipping at the image edge.
+  - Results depend only on the declared catalogue and margin, never on the execution partition, the
+    worker count or the device beyond the stated tolerance (section 7.3).
+  - This is a **declared, different scientific scope** from today's whole-plane patch route, and does not
+    claim equality with it. Equality with whole-image values needs the staged fits of section 4.6.
+    `patch_window` is one value of the declared scaling scope, so it stays valid when run-level fits
     arrive.
-- **Amount features are computed and flagged.** The scope and each feature's structure/amount group
-  (`fiberfeatures.feature_groups`) are recorded in the manifest and visible on the columns, so they
-  cannot be pooled with whole-image values unknowingly. Structure features are the recommended set.
-- **Grid patches only** in this slice. Random and cell patches follow once the persisted catalogue
-  covers them.
-- **Pieces:**
-  - Spec: the first-slice fields of sections 4.2 and 4.5, with the scope value;
-  - CellPatcher: `context_bounds`;
-  - MorphoFeature: a window source (`read(fov, plane, bounds, channels)`: an in-memory slice now,
-    `read_window` later) and work units over catalogue patches;
-  - fiberfeatures: its margin from its own settings (largest filter, nematic sigma, correlation
-    distance, pixel size; two-channel alignment included), a windowed entry point (pipeline on the
-    window, existing `_single`/`_paired` on the interior), and RGB conversion per window through the
-    existing `ConvertedChannels`.
-- **Tests:**
-  - a windowed patch equals the pipeline run on the hand-cut patch plus margin;
-  - identical results for 1/2/N workers and any completion order;
-  - windowed RGB conversion is bitwise equal to the same slice of the whole conversion;
-  - the default route is bitwise unchanged.
-- **Not in this slice:**
-  - RGB-specific tiling;
-  - tiling inside fiberfeatures or the bridges;
-  - reader changes;
-  - fields outside the Spec;
-  - streamed output;
-  - object tiling.
+- **Amount features are computed and flagged.** The scope (`scaling_scope = patch_window`) and each
+  feature's structure/amount group (`fiberfeatures.feature_groups`) are carried on every column and
+  recorded in the run's column section, so they cannot be pooled with whole-image values unknowingly.
+  Structure features are the recommended set.
+- **Grid patches only** in this slice. Random and cell patches follow once the catalogue covers them.
+
+### 7.2 Geometry and identity
+
+- **The provider receives global bounds plus a window origin.** Patch `bounds` stay in the plane's frame
+  (`pixel_edge`, identity unchanged). The window carries its origin, plane shape and margins (requested
+  and clipped, per side), so the provider converts with one recorded offset.
+- **`context_bounds(bounds, margin, shape)` is CellPatcher's** (pure geometry; MorphoFeature never
+  computes geometry).
+- **The catalogue is persisted now, versioned.** Adding the series to patch identity later bumps the
+  version, and older catalogues are refused, never converted.
+- **Filters reflect at the true image edge**, as today, so a clipped window keeps today's edge behaviour.
+  A window smaller than a kernel radius is refused.
+
+### 7.3 Execution: CPU and CUDA
+
+- **Work unit** = one catalogue patch window × the providers that declare windowed execution. Each window
+  is read once per unit, and the merge is deterministic, in catalogue (`patch_id`) order.
+- **CPU lane:** a process pool reusing MorphoFeature's existing pool machinery.
+- **CUDA lane:** a GPU tile queue with VRAM admission (section 4.8) and recorded device and precision.
+  The CPU/GPU tolerance is stated per feature and tested.
+- **Threads are fixed and recorded** for windowed units in serial and pooled mode alike, including torch
+  and SciPy FFT workers. fiberfeatures is added to MorphoFeature's per-provider thread limits, so serial
+  and pooled CPU runs are identical by construction; a test checks it.
+- Providers that run in their own process stay off the pool until they declare windowed execution.
+
+### 7.4 Contract changes
+
+- **Provider manifest:** an optional top-level field
+  `windowed_execution = {scopes: ["patch_window"], margin: {function, version}}`.
+  - It is additive to provider API v3. Discovery accepts only version 3 exactly, so a bump to v4 would
+    break every provider.
+  - The margin is a hook, like `request_check`, because it depends on request parameters and
+    calibration.
+  - Providers without the field get no windowed calls: their plane-bound checks would refuse a window.
+- **fiberfeatures margin per axis, in pixels.** The kernel radius is r(σ) = max(1, int(4σ + 0.5)). The
+  margin is r(denoise) [+ r(local contrast)] + max over scales s of [max(r(s), r(σ_in) + r(σ_out·s)) +
+  r(max(s/2, 0.75)) + 1] + the persistence shift + max(r(nematic σ), r(alignment σ) when pairs are
+  requested). It comes to about 67 px at the pixel defaults. Nematic correlation adds nothing: it pairs
+  only pixels inside the region. Unknown settings are refused.
+
+### 7.5 PRs, in dependency order
+
+| # | Repository | Size | Content | Tests |
+| --- | --- | --- | --- | --- |
+| 1 | Spec | S/M | ADR 0004 / `docs/execution-v1.md`: frame subset, typed coordinates (`bounds`, `context_bounds` as `pixel_edge`, a `local` window origin), margin record, `patch_window` scope, column fields `scaling_scope` and `feature_group`, catalogue format version | coordinate-conversion fixture |
+| 2 | CellPatcher | S | `context_bounds`, exported; then a release and pin moves | edges, corners, refusal of negative or float margins |
+| 3 | MorphoFeature | M | the `windowed_execution` field and hook; `windows.py` (in-memory window read); `rgb_inputs.provider_planes(bounds=)`; `provider-api.md` §6a | manifest without the field unchanged; RGB window = slice of the whole stack |
+| 4 | MorphoFeature | M/L | window units (serial), per-window merge, persisted catalogue, column section, run record | fake windowed provider; default route bitwise unchanged |
+| 5 | MorphoFeature | M | CPU pool plus fixed threads; MorphoObjects margin-0 declaration | 1/2/N workers and shuffled completion identical; MorphoObjects `mean_intensity` windowed = serial |
+| 6 | fiberfeatures | M | margin hook, windowed entry (interior percentiles), declaration | windowed patch = pipeline on the hand-cut window with interior percentiles; RGB window conversion bitwise = slice; margin = kernel radii |
+| 7 | MorphoFeature | M | CUDA tile queue, VRAM admission | CPU/GPU tolerance per feature |
+| 8 | MorphoFeature | S/M | one real OME-Zarr integration test (before the scheduler API is frozen) | windowed run on a small OME-Zarr |
+
+### 7.6 Not in this slice
+
+- RGB-specific tiling;
+- tiling inside fiberfeatures or the bridges;
+- `read_window` in preprocessing (in-memory windows only);
+- fields outside the Spec;
+- streamed output and resume;
+- object tiling;
+- random and cell patches.
 
 ## 8. Owner decisions (14 November 2026) and review notes
 
@@ -366,12 +416,12 @@ Owner decisions of 14 November 2026, adjusted to sections 4.3 and 4.5.
 | TIFF layouts | tiled + splittable strips | agree | as taken |
 | Output | part file per tile + ledger | Parquet/Arrow + transaction manifest | adopted (section 4.9) |
 | Workers | threads first, benchmark | pluggable executor, separate handles | adopted (section 5) |
-| First slice | per_patch; amount computed and flagged; grid only | n/a | section 7 |
+| First slice | `patch_window` (interior percentiles); amount computed and flagged; grid only; global bounds + window origin; CPU and CUDA; fixed recorded threads; catalogue persisted, versioned | n/a | section 7 |
 
 ## 9. Acceptance gates (from the independent review)
 
 - **G1 Full-pipeline tile parity** is specified per stage. fiberfeatures percentile stages are fitted
-  globally or stay `whole_only` / `per_patch`.
+  globally or stay `whole_only` / `patch_window`.
 - **G2 Global observation identity**, including series and object labels across windows.
 - **G3 Typed coordinates**, with tested conversions to the bridge frame.
 - **G4 Bridge binding contract** before any claim of placement on a slide.
