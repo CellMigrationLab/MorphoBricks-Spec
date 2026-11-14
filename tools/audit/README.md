@@ -21,7 +21,7 @@ fixtures of this repository; nothing here is a rule.
 The tags below are the pins of 7 November 2026 and will age at the next release.
 
 ```bash
-python -I tools/audit/refval.py fixtures .          # 40/40, 140/140, 13/13, 3 golden CSVs, 37 records goldens, round trip
+python -I tools/audit/refval.py fixtures .          # 40/40, 140/140, 15/15, 3 golden CSVs, 37 records goldens, round trip
 uv venv venv-mx -p 3.13
 uv pip install -p venv-mx/bin/python --extra-index-url https://download.pytorch.org/whl/cpu \
   --index-strategy unsafe-best-match \

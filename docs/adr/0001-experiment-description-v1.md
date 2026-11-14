@@ -323,6 +323,23 @@ in the manifest as declared RGB with the header overridden, never inferred. Alte
 refusing such files (users would rewrite pixels outside any record), and an automatic override (a
 declaration error would pass silently).
 
+**Owner answers of 14 November 2026 (independent review of RH1, blockers B1-B3, B5).**
+- **Homogeneity uses the effective type.** Images of one overridden unit whose headers differ only in
+  colour interpretation are homogeneous.
+- **Interpretation-free formats.** On an OME-Zarr unit the key is declared but unused, accepted and
+  recorded as such.
+- **Declared and effective recorded separately.** The declared key and, per image, whether it was used
+  are recorded separately.
+- **Refusal priority.** `R_RGB_OVERRIDE_NOT_THREE_SAMPLES` is reported before `R_UNIT_NOT_HOMOGENEOUS`.
+- **The key is part of the confirmed layout.** Adding, removing or changing it reopens the N35
+  confirmation (§10; transitions `t14`, `t15`).
+
+Alternatives rejected:
+- refusing mixed headers (users would rewrite valid files);
+- refusing the key on OME-Zarr (a declaration valid for TIFF would fail on a converted copy);
+- treating the key as metadata outside the layout (preprocessing and the reference validator would
+  disagree on `confirmed_on`).
+
 ### Owner decision of 11 November 2026 (parent-label masks, accepted)
 
 The owner reversed AQ8 on 11 November 2026: "Parent-label masks: Spec change NOW". AQ8 had
