@@ -1,6 +1,8 @@
 # ADR 0004: execution windows, typed coordinates and the patch catalogue (first slice)
 
-- **Status:** **Accepted** (owner, 14 November 2026); amended by EW11 (window histograms, owner, 15 November 2026). The owner decisions it encodes are recorded in
+- **Status:** **Accepted** (owner, 14 November 2026). EW11 (window histograms) is an **accepted owner
+  decision of 15 November 2026, not implemented**: no brick has code for it yet, and its two steps
+  land in the order stated in [its section](#window-histograms-ew11). The owner decisions it encodes are recorded in
   [the one-route design](../design/one-route.md) (section 7 and the decisions table; the design itself
   stays proposed until its gates are met). Specification only: no fixture, golden or validator of `experiment-v1.md` changes
   (`python -I tools/audit/refval.py fixtures .` unchanged). The coordinate conversions are executable
@@ -41,7 +43,7 @@ for typed coordinates and globally planned identities **before** any scheduler c
 | EW8 | **Column fields.** Every feature column computed under a windowed scope carries `scaling_scope` and, when the provider defines one, `feature_group` (a provider-defined label such as fiberfeatures' `structure`, `amount` or `not_assessed`). Both are recorded in the run's per-column section. Amount features are computed and flagged, not refused (owner decision). | Dropping unknown column fields (today's behaviour). |
 | EW9 | **Execution record (operational, not scientific identity).** Device, precision and thread counts per library (for example torch, SciPy FFT workers) of every windowed unit are fixed for the run and recorded. Serial and pooled CPU runs must give identical values. CPU vs CUDA is held to a stated per-feature tolerance. | Library defaults (thread counts that change bits between serial and pooled runs). |
 | EW10 | **Additive provider contract.** Windowed execution is declared by an optional manifest field (`windowed_execution`, MorphoFeature provider API v3, its contract §6a). A provider that does not declare it is never called on a window. Asking for a windowed scope from such a provider is refused when the run is planned, before any pixel is read. | A provider API version 4: discovery accepts version 3 exactly, so every provider would break at once. |
-| EW11 | **Window histograms** (amendment, owner, 15 November 2026). A windowed run stores, for every catalogue patch and every image it measured, a histogram of the **patch interior** (never the margin), so that downstream normalization strategies (group pooling, the later `run` scope, design §4.6) can use and reproduce what each window saw. They are written with the run, in the normalization brick's histogram table format ([below](#window-histograms-ew11)). | Recomputing from the source later (a second full read); histograms of the whole window (margins overlap, so counts double); not storing them (the per-window scaling is not reproducible downstream). |
+| EW11 | **Window histograms** (amendment, owner, 15 November 2026; not implemented). A windowed run stores histograms of the **patch interior** (never the margin) in a new table, `window_histograms.csv`, whose type, schema (version 1) and reader belong to the normalization brick ([below](#window-histograms-ew11)). **Step 1:** one histogram per source channel read for the patch, computed by MorphoFeature from the window pixels it already holds, binned with the plane's recorded binning. **Step 2:** derived-image histograms with fixed per-preset limits, the conversion identity (`conversion_id`) and the scaling applied, delivered by the provider in a new typed, versioned payload. A preset without a fixed range gets no derived histogram, with a recorded reason. | Recomputing from the source later (a second full read); histograms of the whole window (margins overlap, so counts double); extending `plane_histograms.csv` (one row per plane, one bin count, one dtype); reusing `PlaneHistogram`, whose limits must enclose the observed extrema; not storing them (the per-window scaling is not reproducible downstream). |
 
 ## Coordinate types (EW1)
 
@@ -84,47 +86,318 @@ A provider declares the smallest window it accepts; a smaller one is refused, ne
 
 ## Window histograms (EW11)
 
-Owner decision of 15 November 2026: store per-window histograms so the normalization strategy can be
-kept downstream. Pixels counted: the **patch interior** only (`local_interior` of the window record),
-which is also where `patch_window` takes its percentiles (EW7).
+Owner decisions of 15 November 2026, **not implemented**. Code read for this section:
+morphobricks-normalization `b8aa65b` (`v0.6.1`), morphobricks-preprocessing `1195038`, MorphoFeature
+`b6a711e`. Pixels counted: the **patch interior** only (the window record's `local_interior`, EW4),
+which is also where `patch_window` takes its percentiles (EW7). Only windowed runs write anything
+here; the `whole_plane` route is unchanged, bitwise (gate below).
 
-**What is stored, per catalogue patch:**
+### Two steps
 
-1. **Source channels** (fluorescence channels and the `R`, `G`, `B` of an RGB unit): one histogram
-   per channel read for the patch, binned with **exactly the plane's binning** that preprocessing
-   recorded in `plane_histograms.csv` (`bin_count`, `binning_min`, `binning_max`, and the robust
-   tails with the same limits; normalization contract §1.2.2, §1.4). Consequences:
-   - histograms of the interiors of a grid whose patches do not overlap **sum exactly**
-     (bin counts, valid and total pixel counts, tail counts) to the plane's histogram, and tail sums
-     and means agree within the float rounding of §1.2.2's block rule. This is the conformance test;
-   - 8-bit `R`, `G`, `B` are exact (256 values, 256 bins).
-   - A plane without a recorded histogram (no preprocessing statistics) is refused for windowed
-     histograms, never binned with guessed limits.
-2. **Derived images** (the scalar image of a stain preset, for example `Eosin` from `he_eosin`): one
-   histogram of the derived interior, which cannot be rebuilt from the `R`, `G`, `B` histograms (the
-   conversion mixes the three channels nonlinearly). Because no whole plane is ever seen, the binning
-   is **fixed in advance per preset and options**: the normalization brick states each preset's
-   output bounds for 8-bit input and a declared white (for optical density, from
-   `log10(white / 255)` to `log10(white / 1)` per channel, mapped through the stain matrix), and a
-   recorded bin count. Pixels the conversion excludes (its `exclusion` map: above white, saturated)
-   are **not counted**; their number is recorded as `excluded_pixel_count`. Each row carries the
-   conversion record (preset and version, white, stain vectors, polarizer, scikit-image version where
-   used) so histograms of different conversions are never pooled together.
-3. **The scaling applied**: for each windowed feature column, the provider's interior percentiles (or
-   other scaling values) actually used, recorded per patch so that every value is reproducible.
+| Step | What | Computed by | Delivered by |
+| --- | --- | --- | --- |
+| 1 (first) | One histogram per **source channel** read for the patch: a fluorescence channel, or each of the `R`, `G`, `B` of an RGB unit | MorphoFeature, from the window pixels it already holds (no extra read), with the normalization brick's binning | MorphoFeature writes the table |
+| 2 (after step 1) | One histogram per **derived image** (the scalar image of a stain preset, for example `Eosin` from `he_eosin`), its `conversion_id`, its pixel-dependent diagnostics, and the **scaling applied** to each windowed feature column | The provider, which makes the derived image (MorphoFeature never converts an RGB unit, `rgb_inputs.py`), with the normalization brick's functions | A new typed, versioned provider payload (`window_report`, below), validated and written by MorphoFeature |
 
-**Table.** `window_histograms` is written with the run's patch outputs, next to the patch catalogue
-(EW3), in the normalization brick's histogram table format extended with `patch_set`, `patch_id`,
-the global `bounds` and the `local_interior` (`pixel_edge`), `image` (channel ID or derived image
-name) and, for derived images, the conversion record and `excluded_pixel_count`. A table of another
-schema version is refused, never converted. Only windowed runs write it; the default `whole_plane`
-route is unchanged.
+A derived image cannot be rebuilt from the `R`, `G`, `B` histograms (the conversions mix the three
+channels nonlinearly), which is why step 2 needs the provider.
 
-**Implementation order:** (1) normalization: the table schema with the window columns, the per-preset
-output bounds and a function binning a window interior with given limits; (2) MorphoFeature: computes
-the histograms from the window pixels it already holds (no extra read) and writes the table, plus the
-exact-sum test against `plane_histograms.csv`; (3) fiberfeatures (and any windowed provider): reports
-the scaling values it applied, recorded by MorphoFeature per patch and column.
+### The window histogram type (normalization)
+
+`WindowHistogram` is a new type of the normalization brick, separate from `PlaneHistogram`.
+`PlaneHistogram` and its invariants (contract §1.2.2, `integrity.py`) are **not changed or
+weakened**: they require `pixel_min ≤ binning_min ≤ binning_max ≤ pixel_max` and a binning limit
+equal to its extremum exactly when its tail is empty, which a patch binned with limits inherited from
+its plane does not satisfy (its own extrema usually lie inside the plane's limits).
+
+A `WindowHistogram` has a **reference binning**, fixed before any patch pixel is seen, and
+**observed values**, measured on the interior:
+
+| Field | Meaning |
+| --- | --- |
+| `reference` | `kind` (`plane_histogram` or `output_histogram_spec`), `bin_count`, `binning_min`, `binning_max`, and the identity of where they come from (below) |
+| `total_pixel_count` | Interior pixels: `(y1 − y0) · (x1 − x0)` of the patch `bounds` |
+| `valid_pixel_count` | Finite interior pixels |
+| `nonfinite_pixel_count` | NaN, `+inf` and `−inf` interior pixels; `total = valid + nonfinite` exactly |
+| `pixel_min`, `pixel_max` | Observed finite extrema of the interior; blank without valid pixels |
+| `counts` | int64, `bin_count` non-negative values: valid pixels with `binning_min ≤ x ≤ binning_max`, binned by contract §1.2.2 with the reference limits |
+| `underflow`, `overflow` | Valid pixels `x < binning_min` and `x > binning_max`: count, mean and population standard deviation, each the float64 nearest its exact value (the centred moments of §1.4, N65, computed by the same code) |
+
+**Invariants**, checked when a `WindowHistogram` is made, computed or read (a violation is refused
+with `ValueError`, never clipped or filled in):
+
+- `counts` is a one-dimensional int64 array of `bin_count` non-negative values; the three pixel
+  counts are whole numbers from 0 to 2**63 − 1 with `valid + nonfinite = total`, and the bins and
+  tails hold exactly the valid pixels (an exact integer sum).
+- The reference limits are both finite with `binning_min ≤ binning_max`, or both blank. They are
+  blank only for a source channel whose plane has no finite pixels (the plane's limits are blank,
+  §1.2.2); then `valid_pixel_count` is 0.
+- Without valid pixels (an all-nonfinite patch, or a patch of an all-nonfinite plane): `pixel_min`
+  and `pixel_max` blank, every count 0, both tails empty (count, mean and std 0). The reference
+  limits are kept (they describe the plane or preset, not the patch). The row is a measured
+  histogram, never a missing one.
+- With valid pixels: `pixel_min ≤ pixel_max`, both finite; the underflow is non-empty exactly when
+  `pixel_min < binning_min`, the overflow exactly when `pixel_max > binning_max`; a populated tail's
+  mean lies in `[pixel_min, binning_min]` (underflow) or `[binning_max, pixel_max]` (overflow) and
+  its std is at most half that range, with §1.2.2's slack. **No ordering between the observed
+  extrema and the reference limits is required otherwise**: `pixel_min > binning_min` and
+  `pixel_max < binning_max` are normal.
+- Nonfinite pixels are never in a bin or a tail, and a value outside the reference limits is never
+  put in an end bin: the float rule "clipped to `n − 1`" of §1.2.2 applies only to `x = binning_max`.
+
+The normalization brick provides `window_histogram(pixels, reference)` (one interior array and one
+reference binning) and reuses **only its existing binning maths**: the bin of a pixel, the tail
+moments and the integer/float rules are those of `compute_block_histogram`, the same code, so a pixel
+falls in the same bin in a window as in its plane, bit for bit.
+
+### Step 1: source channels
+
+**Reference binning.** The plane's row in `plane_histograms.csv` (schema version 5, contract §6.2)
+written by the preprocessing brick for the channel: `bin_count`, `Histogram_BinningMin_<ID>`,
+`Histogram_BinningMax_<ID>`, under the run's `HistogramSettings` (`minmax` or `robust`, §1.4).
+The reference identity is the `plane_id`, the channel ID, the table's SHA-256 (`csv_sha256` of the
+preprocessing `run_manifest.json`) and the histogram settings. Consequences:
+
+- An integer plane with `W ≤ n` values is exact, and bin `i` holds the value `binning_min + i`. An
+  8-bit channel (an `R`, `G` or `B` of an RGB unit) with the default 256 bins therefore **inherits
+  the plane's `binning_min`**: when the plane's minimum is 12, bin 0 holds 12, not 0. Window
+  histograms never re-anchor to 0.
+- With the robust range, a patch's tails hold its pixels beyond the **plane's** robust limits; a
+  patch without such pixels has empty tails although the plane has tails.
+- The window's dtype must equal the plane row's `dtype`; the bin count is the plane's, the same for
+  every plane of a preprocessing run (§1.2.1).
+
+**No guessed limits.** A plane without a row in the referenced `plane_histograms.csv` (no
+preprocessing statistics), or whose row cannot be shown to describe the pixels MorphoFeature reads
+(another source file, plane or dtype; a projected or converted copy on one side only; a table whose
+SHA-256 differs from the one recorded when the run was planned), gets **no** source-channel histogram:
+its rows are `not_measured` with the reason `no_plane_histogram` or `plane_histogram_mismatch`. It is
+never binned with limits taken from the patch, from the dtype or from another plane. The features run
+as before.
+
+### Exact-sum conformance (step 1)
+
+For one plane `P`, one source channel `c` and one patch set `S`, the window histograms of `S` sum
+**exactly** to `P`'s histogram of `c` only when all of these hold:
+
+1. **One patch set, one plane, one image**: every row has the same `plane_id`, `patch_set` and
+   `image`; histograms of different patch sets are never added together.
+2. **Exact cover**: the interiors cover every pixel of the plane exactly once, checked from the
+   catalogue (EW3) and the rows, never assumed from the mode: every patch's global `bounds` lies in
+   `[0, H) × [0, W)`, the bounds are pairwise disjoint, their areas sum to `H · W`, and each row's
+   `local_interior` equals its `bounds` minus its window `origin`.
+3. **Same binning**: every row has the same reference (bin count, limits, plane_id, table SHA-256,
+   settings), equal to `P`'s row.
+4. **Every patch measured**: every catalogue patch of `S` on `P` has a `measured` row for `c`.
+
+Then, exactly: the bin counts, `valid_pixel_count`, `total_pixel_count`, `nonfinite_pixel_count`
+(`total − valid` of `P`), the underflow and overflow counts, the smallest `pixel_min` and the largest
+`pixel_max` (the plane's `Intensity_MinIntensity_<ID>` and `Intensity_MaxIntensity_<ID>`). The tail
+means and standard deviations are pooled as in §1.4 (count-weighted mean, centred terms for the std,
+correctly rounded sums) and must agree with `P`'s, within
+`4 · ulp(max(|a|, |b|)) + 1e-12 · |value of P|`, where `[a, b]` is `P`'s tail range (`[pixel_min,
+binning_min]` or `[binning_max, pixel_max]`): each window's moments are rounded once, as the plane's
+are, so only the pooled moments can differ, by these roundings.
+
+When a condition fails, **no equality is claimed**, and what may be claimed instead is:
+
+| Case | What may be claimed |
+| --- | --- |
+| A grid without partial edge patches (`include_partial = false`: the edge strips are not in the catalogue, `patch_sets.py:304–310`) | The sum is the histogram of the covered region (interiors disjoint); the covered pixel count is reported. It is never compared with or used as `P`'s histogram. |
+| Several patch sets on one plane | Each set on its own, as above. Pooling across sets is refused (they may overlap). |
+| Patches not measured (no eligible request, so no window unit; or a `not_measured` row) | The sum over the measured rows is the histogram of their region, with the number of missing patches reported. |
+| Overlapping interiors (CellPatcher's `flush` grid edges, random or cell patches, `whole_fov` squares; outside this slice, which is grid-only) | Nothing: the pooling function refuses rows whose bounds overlap. |
+
+### Step 2: derived images
+
+**Fixed limits per preset.** No whole derived plane is ever seen, so the binning is fixed in advance.
+The normalization brick provides a tested `output_histogram_spec(preset, *, white=None,
+stain_vectors=None, polarizer=None)`, needing no pixel (like `check_options`, which it runs first),
+returning either an `OutputHistogramSpec(spec_version, bin_count, binning_min, binning_max,
+tolerance)` or a `NoFixedRange(reason)`. The limits are the exact mathematical bounds of the
+preset's output for every 8-bit input under the given options, widened by `tolerance` (the
+float32 rounding of the conversion, stated per family and tested). This is not the preset's
+`fixed_range` (a scaling range, `None` for every preset in `stain_presets.py` today), which stays
+as it is. Per family:
+
+| Family (presets) | Bound to derive and test |
+| --- | --- |
+| `custom_od` (`psr_brightfield`, `he_custom`, `trichrome_custom`, user or default vectors) | Per channel `OD ∈ [log10(white/255), log10(white/1)]` (`I` floored at 1). The target concentration is a linear map of the OD with the target column `a` of `inv(M)`, so its bound is **sign-aware**: `Σ_j min(a_j·lo_j, a_j·hi_j)` to `Σ_j max(a_j·lo_j, a_j·hi_j)`. Negative concentrations are kept (§3.4), so the lower limit can be negative. |
+| `fixed_deconvolution` (`he_eosin`, `he_hematoxylin`, `trichrome_blue`; scikit-image `separate_stains`) | Per channel `log(max(I/255, 1e-6)) / log(1e-6) ∈ [0, 1]`; the component is that vector times the matrix column, then set to 0 where negative, so `[0, Σ_j max(0, m_jk)]`, derived from the pinned scikit-image version's matrix and code. |
+| `cielab` (`lab_a`, `trichrome_green`) | The extremes of `rgb2lab(...)[..., 1]` over all 2**24 8-bit colours at the pinned scikit-image version (exhaustive), negated for `trichrome_green`; the white rescale keeps the input 8-bit, so the same bound holds with `white`. |
+| `luminance` (`luminance_inverted`, `psr_polarized`) | `[0, 1]` (weights 0.2125, 0.7154, 0.0721 on values in `[0, 1]`), tested over all 2**24 colours. |
+| `passthrough` (`fluorescence`, `shg`) | None: `NoFixedRange("preset_has_no_fixed_range")`. Its source-channel histogram (step 1) still exists. |
+
+Any preset the brick cannot bound (for example a future family, or vectors for which it states no
+bound) returns `NoFixedRange` with a reason. Then (owner ruling 3) **no derived window histogram is
+written**: the row is `not_measured` with the reason, the features still run, and the patch's
+source-channel histograms are still written. A derived image is never binned with guessed limits
+and never clipped into end bins.
+
+**What is counted.** **Every finite derived pixel** of the interior, with nothing excluded (owner
+ruling 2): `ScalarResult.exclusion` is a continuous image (the exclusion stain's concentration), not
+a mask, and no exclusion threshold exists in this amendment. A future rule would be its own
+versioned option, never a default. `total = finite + nonfinite` (today `ScalarResult.image` is
+finite, so `nonfinite` is 0, but the type does not assume it). A value outside the spec's limits
+(the bound was wrong) goes to the underflow or overflow, never to an end bin, and is a conformance
+failure in the normalization brick's tests.
+
+**Conversion identity.** `conversion_id(preset, *, white=None, stain_vectors=None, polarizer=None)`,
+in the normalization brick, needs no pixel and is the lowercase hex SHA-256 of the UTF-8 bytes of a
+canonical JSON object: keys sorted, separators `,` and `:`, no whitespace, ASCII only, floats
+written as float64 shortest round-trip (`repr`), integers as integers, NaN and infinity refused,
+absent values `null`. It holds exactly these keys, the **fully resolved, stable** parameters and
+nothing else:
+
+`conversion_id_version` (1), `preset`, `preset_version`, `method`, `matrix`, `target_component`,
+`exclusion_component`, `inverted`, `input_dtype`, `colour_space`, `white` (three floats, or
+`null` when not given), `white_rescale`, `stain_names`, `stain_matrix` (the unit rows actually used,
+default or user), `residual_completed`, `od_definition`, `polarizer`, `normalization_version`,
+`skimage_version` (`null` when scikit-image is not called) and `numpy_version`.
+
+The pixel-dependent diagnostics (`zero_fraction`, `floored_fraction`, `negative_fraction`,
+`above_white_fraction`, `white_clipped_fraction`, `float32_exact`), descriptive fields (`hints`,
+citations) and `axes` (`YXC` and `CYX` give bitwise identical outputs) are **not** in it. Required
+tests: two conversions with identical settings on images with different fractions give the same id;
+changing any one of the listed keys (white, a vector, the polarizer, the preset version, the
+scikit-image version) gives a different id; the id from the options equals the id rebuilt from any
+`ScalarResult.provenance` of the same call. Pooling refuses rows of different `conversion_id`s, or of
+different specs.
+
+**Diagnostics per patch.** The diagnostics are stored per patch as **counts over the interior**
+(`zero_count`, `floored_count`, `negative_count`, `above_white_count`, `white_clipped_count`, each
+the numerator of the provenance's fraction, with `total_pixel_count` as the denominator), so they
+add up exactly across patches; a count is blank where the preset's method does not define it. The
+normalization brick computes them from the interior's input pixels with the provenance's definitions
+(`conversion_diagnostic_counts`); the provider does not reimplement them. They are separate from the
+conversion identity.
+
+**Scaling applied.** For every windowed feature column (`scaling_scope = patch_window`, EW7, EW8)
+and every patch it is measured on, the provider reports the scaling it applied, keyed by plane,
+`patch_set`, `patch_id`, `image`, `conversion_id` (blank for a source channel) and feature column:
+
+| Field | Meaning |
+| --- | --- |
+| `transform` | `none` (the feature is computed on unscaled values; stated, never left out), `percentile_range` or `fixed_range` |
+| `parameters` | The exact numbers used, float64: for `percentile_range` the quantiles in percent, the percentile method and the fitted values at them (`low_value`, `high_value`); for `fixed_range` `low`, `high` |
+| `clip` | `none`, or the two limits the scaled values were clipped to |
+| `applied` | `(x − offset) / scale` with `offset` and `scale` from `parameters` (§1.2.4) |
+
+A column whose scaling is not reported is recorded as "scaling not recorded" for its provider; it is
+never filled in.
+
+**Provider payload (`window_report`, version 1).** A provider declares it with an optional key of
+its `windowed_execution` manifest field, `window_report: {version: 1}` (EW10 stays additive; a
+provider without it is unchanged, and its derived rows are `not_measured` with the reason
+`provider_reports_none`). For each windowed call (one patch, EW4), its output gains the key
+`window_report`: `{version, derived: [...], scaling: [...]}`, one `derived` entry per derived image
+the call made (`image`, `preset`, `conversion_id`, then either the `WindowHistogram` and the
+diagnostic counts, or `not_measured` with a reason) and one `scaling` entry per column of the call.
+MorphoFeature refuses, as a provider output error: another version; an entry for another patch,
+image or column; a missing entry; a `conversion_id` or spec that differs from what it recomputes
+from the request's preset and options with the pinned normalization brick; a histogram that breaks
+the invariants. Today's `check_patch_output` (`patch_output.py:201–253`) reads only `status`,
+`tables`, `manifest` and `applicability`, and `PatchOutput` has no field for this: step 2 adds the
+field and its validation. Until then no scaling or derived histogram is recorded.
+
+MorphoFeature writes the scaling entries to `window_scaling.csv`, a table of the run (schema version
+1, MorphoFeature's): the plane columns and patch columns of `window_histograms.csv` (below), then
+`image`, `conversion_id`, `column`, `transform`, `parameters` (canonical JSON as for
+`conversion_id`), `clip` (`none` or two floats `;`-separated), one row per patch and column, in the
+row order below and then by column name. Another schema version is refused.
+
+### The `window_histograms.csv` table (normalization)
+
+A new table with its own schema, owned by the normalization brick (type, writer, reader), **not an
+extension of `plane_histograms.csv`** (schema 5 has a unique `plane_id` per row, one `bin_count` and
+one `dtype` per table). MorphoFeature writes it next to the patch catalogue (EW3) through the brick's
+writer. Common format of §6.1 (UTF-8, comma-separated, one header row, floats at full precision with
+`repr`, blanks for missing values, temporary file then replace).
+
+- **File:** `window_histograms.csv`; column `schema_version` = `1`, its own sequence.
+- **Row:** one per plane x patch x image, key `(plane_id, patch_set, patch_id, image,
+  conversion_id)`, unique (two derived images of one name but different options differ by
+  `conversion_id`; it is blank for source channels).
+- **Rows written:** for every catalogue patch of a set with a windowed request on the plane, one row
+  per source channel read by any unit of that set on the plane, and (step 2) one per derived image of
+  its requests; a patch with no window unit gets `not_measured` rows.
+- **Order:** planes in the run's order, patch sets in the order they were cut, patches in catalogue
+  (CellPatcher) order, then source channels before derived images, each in sorted order (Python
+  string order, §6.1), then `conversion_id`. Serial and pooled runs give the same bytes (EW9).
+
+Columns, in this order:
+
+| Columns | Content |
+| --- | --- |
+| `position_id`, `image_file`, `z`, `t`, `condition`, `biological_repeat`, `technical_repeat`, `source_relative_path`, `plane_id` | The plane columns of §6.1, same names and order |
+| `patch_set`, `patch_id`, `catalogue_version` | Patch identity (EW3) |
+| `bounds_y0`, `bounds_y1`, `bounds_x0`, `bounds_x1` | Global `bounds`, `pixel_edge`, plane frame: the tuple `(y0, y1, x0, x1)` as four integer columns |
+| `origin_y`, `origin_x`, `interior_y0`, `interior_y1`, `interior_x0`, `interior_x1` | Window `origin` and `local_interior` (`pixel_edge`, window-local), integer columns; the reader checks `interior = bounds − origin` |
+| `image`, `image_kind`, `dtype` | Channel ID or derived image name; `source_channel` or `derived`; the plane's dtype, or `float32` for a derived image |
+| `status`, `reason` | `measured` (reason blank) or `not_measured` with one reason of a closed list: `no_window_unit`, `no_plane_histogram`, `plane_histogram_mismatch`, `preset_has_no_fixed_range` (or another `NoFixedRange` reason the brick defines), `provider_reports_none` |
+| `reference_kind`, `reference_sha256`, `histogram_range` | `plane_histogram` with the SHA-256 of `plane_histograms.csv` and `minmax` or `robust`; or `output_histogram_spec` with the SHA-256 of the spec's canonical JSON and `histogram_range` blank |
+| `preset`, `preset_version`, `conversion_id`, `spec_version` | Derived images; blank for source channels |
+| `bin_count`, `binning_min`, `binning_max` | Reference binning (per row: a source channel's and a derived image's bin counts differ) |
+| `total_pixel_count`, `valid_pixel_count`, `nonfinite_pixel_count`, `pixel_min`, `pixel_max` | Observed values |
+| `underflow_count`, `underflow_mean`, `underflow_std`, `overflow_count`, `overflow_mean`, `overflow_std` | Tails; `0`, `0.0`, `0.0` when empty |
+| `counts` | The non-zero bins as `index:count` pairs, `;`-separated, indices ascending, decimal integers; the literal `empty` when no pixel is in a bin |
+| `zero_count`, `floored_count`, `negative_count`, `above_white_count`, `white_clipped_count` | Derived diagnostics (step 2); blank where not defined and for source channels |
+
+A `not_measured` row has its identity, image, status and reason, and every histogram cell blank; the
+reader refuses a value there, so a zero histogram never stands for a missing one. A measured row's
+cells are checked against the invariants above. The reader refuses another `schema_version`, a
+missing or extra column, an unknown reason or `image_kind`, a duplicate key, and a
+`plane_histograms.csv` given in its place; it never converts. If a measurement fails (other than a
+listed reason), the writer writes nothing, as for `plane_histograms.csv` (§6.2).
+
+### Conformance matrix
+
+Tests the implementing PRs add (normalization for the type, spec and reader; MorphoFeature for the
+writer and the run):
+
+| Case | Expected |
+| --- | --- |
+| Clipped grid (`include_partial = true`, `clipped`), one set, all patches measured | Exact equality with the plane row; tail moments within the stated tolerance |
+| Grid without partial edges | Coverage below `H · W` reported; no equality claimed; the pooling function says so |
+| Two patch sets on one plane | Each set conforms on its own; pooling across sets refused |
+| A catalogue patch without a window unit | `not_measured`, `no_window_unit`; equality refused, partial sum allowed |
+| Overlapping bounds | Pooling refused |
+| All-NaN float plane | Plane limits blank; every patch: `valid` 0, `nonfinite` = area, reference blank, counts 0; the sums still equal the plane's |
+| All-NaN patch in a plane with finite pixels | `valid` 0, observed extrema blank, reference limits kept |
+| `+inf` and `−inf` pixels | In `nonfinite_pixel_count`, never in a bin or a tail |
+| Robust range with hot pixels | Tail counts sum exactly; a patch without tail pixels has empty tails; `pixel_min > binning_min` accepted |
+| 8-bit `R`, `G`, `B` with a plane minimum above 0 | Bin `i` holds `binning_min + i`; exact |
+| Constant plane | Every valid pixel in bin 0, in every patch |
+| Plane without a `plane_histograms.csv` row, or a SHA-256 mismatch | `not_measured` with the reason; features unchanged |
+| Each bounded preset family at the extreme 8-bit inputs (0, 255, pure colours; all 2**24 colours for `cielab` and `luminance`) | Every value inside the spec's limits; empty tails |
+| `passthrough` preset | Derived row `not_measured`, `preset_has_no_fixed_range`; features and source rows present |
+| `conversion_id`: same settings, different fractions / changed settings | Same id / different id |
+| Mixed `conversion_id`s | Pooling refused |
+| A table of `schema_version` 0 or 2, or a `plane_histograms.csv` | Refused by the reader |
+| Serial vs pooled run | Identical `window_histograms.csv` bytes |
+
+### Order, pins and the regression gate
+
+Implementation order (owner ruling 1):
+
+1. normalization: `WindowHistogram`, its invariants, `window_histogram()`, the pooling with the
+   exact-cover check, the `window_histograms.csv` writer and reader (schema 1); released with a tag;
+2. MorphoFeature: the step-1 writer, pinned to that tag, with the exact-sum test against
+   `plane_histograms.csv`;
+3. normalization: `output_histogram_spec()` and `conversion_id()`, tagged;
+4. MorphoFeature: the `window_report` payload protocol (version 1) and `window_scaling.csv`;
+5. fiberfeatures: reports the payload, pinned to the normalization tag of step 3;
+6. MorphoFeature: the integration test with fiberfeatures.
+
+Bricks pin each other by **tag** (as `pyproject.toml` pins normalization `v0.6.1` today), each step on
+the tag of the step before. A reader refuses any other schema version; a test reads a table written
+with the previous version and expects the refusal.
+
+**Regression gate (kept explicit).** A run whose requests are all `whole_plane` writes no
+`window_histograms.csv` and no `window_scaling.csv` and is **bitwise identical** to the same run
+before EW11 (tables, run record, catalogue). In a windowed run, the provider tables are bitwise
+identical with and without the histograms being computed: they are a side output and change no
+feature value.
 
 ## Consequences
 
