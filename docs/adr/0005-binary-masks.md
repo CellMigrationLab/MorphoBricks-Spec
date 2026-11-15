@@ -1,6 +1,6 @@
 # ADR 0005: one policy for binary masks
 
-- **Status:** **Proposed** (draft for the owner's review). The owner decisions it encodes (15 November
+- **Status:** **Accepted** (15 November 2026, after four independent review rounds; not implemented yet: the per-brick PRs follow the [order below](#implementation-order)). The owner decisions it encodes (15 November
   2026, BM1-BM5 below) are final; what this ADR adds is their encoding: where the one helper and the
   one region checker live, the record, the vocabulary, the messages and the PR order. Those choices
   are listed under [modelling choices](#modelling-choices-for-the-owners-review). It amends the
