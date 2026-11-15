@@ -377,9 +377,13 @@ MorphoObjects `main`.
   - Providers without the field get no windowed calls: their plane-bound checks would refuse a window.
 - **fiberfeatures margin per axis, in pixels.** The kernel radius is r(σ) = max(1, int(4σ + 0.5)). The
   margin is r(denoise) [+ r(local contrast)] + max over scales s of [max(r(s), r(σ_in) + r(σ_out·s)) +
-  r(max(s/2, 0.75)) + 1] + the persistence shift + max(r(nematic σ), r(alignment σ) when pairs are
-  requested). It comes to about 67 px at the pixel defaults. Nematic correlation adds nothing: it pairs
-  only pixels inside the region. Unknown settings are refused.
+  r(max(s/2, 0.75)) + 1] + max(the persistence shift, r(nematic σ), r(alignment σ) when pairs are
+  requested). The last three are a maximum, not a sum: each reads the merged maps side by side and none
+  reads another's output (owner decision, 15 November 2026, on fiberfeatures #221, which implements
+  it). It comes to 67 px at the pixel defaults. Nematic correlation adds nothing: it pairs only pixels
+  inside the region. Unknown settings are refused. In the `patch_window` scope every percentile and
+  the local-contrast mean come from the patch interior, so values never depend on the margin (owner
+  decision, 15 November 2026).
 
 ### 7.5 PRs, in dependency order
 
