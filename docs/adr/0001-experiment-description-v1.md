@@ -8,7 +8,8 @@
   fifth round (7 November 2026, SQ2, SQ6-SQ8) settles the Stage 1 design questions. PL1
   (11 November 2026) supersedes AQ8: `parent_labels` masks are described in v1. Amended by
   [ADR 0005](0005-binary-masks.md) (proposed, 15 November 2026): the connectivity of a binary
-  mask's pieces and objects is 8, fixed (BM1); the stale "4-connected" evidence of PL1 is marked.
+  mask's pieces and objects is 8, fixed (BM1); the stale "4-connected" evidence of PL1 is marked;
+  D10's value rule becomes {0, v} for one positive v (BM11).
 - **Tracking:** [RFC #1](https://github.com/CellMigrationLab/MorphoBricks-Spec/issues/1);
   [roadmap §2 and §5 Stage 0](../roadmap.md);
   [feasibility audit](../audits/rfc1-feasibility-2026-11-05.md);
@@ -85,7 +86,7 @@ Stage 0 freezes the decisions, the normative schema and the fixtures before any 
 | D7 | Identities are Unicode NFC. **Refined by Q3: a reader refuses a non-NFC identity (`E_ID_NOT_NFC`); it does not normalize, so `E_ID_NFC_COLLISION` no longer exists.** IDs are never otherwise transformed | Compare raw code points (look-alike duplicates); or NFKC / case folding (changes meaning) | §3.3 | `v23`, `i78`, `i83`-`i85` |
 | D8 | **Superseded by AQ6 (third round).** Was: refuse RGB (interleaved colour) images in v1 (`R_RGB_NOT_SUPPORTED`, now removed) | Treat RGB as three channels | §4.4b | P13, P23, P24 |
 | D9 | Header names match exactly and case-sensitively; anything else needs a user-confirmed alias | Case-insensitive or similarity matching | §4.3 | `v11`, P03 |
-| D10 | Refuse a mask declared `binary` with more than two distinct values (`R_MASK_CONTRADICTS_REPRESENTATION`); declare `instances` instead | Accept and threshold | §4.5 | P05 |
+| D10 | Refuse a mask declared `binary` with more than two distinct values (`R_MASK_CONTRADICTS_REPRESENTATION`); declare `instances` instead. *Amended by [ADR 0005](0005-binary-masks.md) BM11 (15 November 2026): a `binary` file holds values in {0, v} for one v > 0; all-zero and all-foreground files are accepted; two or more distinct positive values, or a negative value, are refused* | Accept and threshold | §4.5 | P05 |
 | D11 | Drafts are internal to preprocessing; `RunInputs` reads only confirmed, published files and refuses drafts (`A_DRAFT_REFUSED`) | Let consumers read drafts | §12 | `i37`, P14 |
 
 ### Owner decisions of 6 November 2026, second round (LabChronicle audit, all accepted)

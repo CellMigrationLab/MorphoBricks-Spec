@@ -214,7 +214,8 @@ writer or a brick that consumes the description.
   conversions in `tools/execution_frames.py`.
 - [ADR 0005](docs/adr/0005-binary-masks.md) (**proposed**, owner decisions of 15 November 2026):
   one policy for binary masks: 8-connected and fixed, one labeller in preprocessing with one
-  recorded conversion, one region checker, `empty_region` for an empty region, and the PR order per brick.
+  recorded conversion, one region checker, `empty_region` for an empty region, and the PR order per brick;
+  amends experiment-v1 §4.5, §4.5b and §8 (a `binary` file holds values in {0, v} for one positive v).
 
 ### Fixtures and goldens
 

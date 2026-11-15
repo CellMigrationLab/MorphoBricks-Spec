@@ -132,8 +132,9 @@ is version 2 (`RESOLVER_VERSION = 2`, AR8); everything else above stands, and no
 
 ### Resolver contract version 3: the conversion record (ADR 0005)
 
-[ADR 0005](0005-binary-masks.md) (proposed, 15 November 2026) adds one output and one refusal, so the
-contract is version 3 (`RESOLVER_VERSION = 3`); everything above stands, and no code is added.
+[ADR 0005](0005-binary-masks.md) (proposed, 15 November 2026) adds one output, one refusal and one
+request rule, so the contract is version 3 (`RESOLVER_VERSION = 3`); everything above stands, and no
+`A_*` code is added.
 
 - **Output.** `Provenance.mask_conversions`: one record `{mask_id, conversion, connectivity,
   labeller}` per mask of the request whose selection has a `conversion`, in request order
@@ -142,9 +143,19 @@ contract is version 3 (`RESOLVER_VERSION = 3`); everything above stands, and no 
   `mask_conversions`.
 - **Refusal.** A `binary_mask_policy` on a position whose images have more than one Z plane is
   `A_VOLUME_NOT_SUPPORTED`, for a `plane` or a `volume` request, with or without `volume_support`.
+- **Request.** A mask request is identified by `(mask_id, role)`: one mask ID may be requested once
+  as `objects` (converted or not) and once as `region` in the same request, and the selection then
+  holds one `MaskSelection` per role. "A mask ID is requested twice" is replaced by two `ValueError`s:
+  the same mask ID as `objects` with two different conversions, and an exact repeat of one
+  `(mask_id, role)`. Coverage and the mask refusals are computed once per mask ID. A mask ID has at
+  most one conversion record ([ADR 0005, uses of one mask](0005-binary-masks.md#uses-of-one-mask-in-one-run-bm2-bm5)).
 - **Application.** The resolver still reads no pixel and labels nothing; `RunInputs.read_objects`
   (a reading module, not a resolver module) applies the recorded conversion, replacing AR5's "each
   route applies it with CellPatcher's labeller".
+- **Consumers check the version.** Each consumer accepts exactly the versions it lists
+  (`SUPPORTED_RESOLVER_VERSIONS = {3}` in this wave), checked on `Provenance.resolver_version` before
+  any pixel read, output or cache reuse, and refuses any other with `RESOLVER_VERSION_UNSUPPORTED`
+  ([ADR 0005](0005-binary-masks.md#resolver-version-check-bm10)); never `>= 3`.
 
 ### Consequences
 
