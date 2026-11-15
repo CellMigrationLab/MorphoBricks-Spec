@@ -104,7 +104,10 @@ run's SHA-256) and the mask step's status file only; it never reads a pixel, lab
 chooses a device or imports a brick, CellPatcher or provider module (a test scans its modules).
 A malformed request (an ID twice; an unknown role, policy, plane kind or device; a policy on a
 mask that is not `binary` or in a `region` role) is a programming error (`ValueError`), not a
-refusal. A run without a published description is refused by the resolver with `A_DESCRIPTION_REQUIRED`,
+refusal. *For mask IDs, "an ID twice" is superseded by contract version 3
+([below](#resolver-contract-version-3-the-conversion-record-adr-0005)): a mask ID may repeat, and only
+its `objects` requests with two different conversions are malformed; a channel ID twice stays
+malformed.* A run without a published description is refused by the resolver with `A_DESCRIPTION_REQUIRED`,
 naming the fix (run the notebook or `describe`); there is no header-name path (AR10).
 
 Codes: `A_VOLUME_NOT_SUPPORTED` and `A_DESCRIPTION_REQUIRED` are defined by this contract, not by
@@ -143,18 +146,22 @@ request rule, so the contract is version 3 (`RESOLVER_VERSION = 3`); everything 
   `mask_conversions`.
 - **Refusal.** A `binary_mask_policy` on a position whose images have more than one Z plane is
   `A_VOLUME_NOT_SUPPORTED`, for a `plane` or a `volume` request, with or without `volume_support`.
-- **Request.** A mask request is identified by `(mask_id, role)`: one mask ID may be requested once
-  as `objects` (converted or not) and once as `region` in the same request, and the selection then
-  holds one `MaskSelection` per role. "A mask ID is requested twice" is replaced by two `ValueError`s:
-  the same mask ID as `objects` with two different conversions, and an exact repeat of one
-  `(mask_id, role)`. Coverage and the mask refusals are computed once per mask ID. A mask ID has at
-  most one conversion record ([ADR 0005, uses of one mask](0005-binary-masks.md#uses-of-one-mask-in-one-run-bm2-bm5)).
+- **Request.** A mask request is identified by `(mask_id, role)`, and a mask ID may appear in any
+  number of `MaskRequest`s: a consumer sends **one entry per use** (each object set, each region or
+  fraction use) without merging them, so that the resolver, not the consumer, validates them together.
+  Entries of one `(mask_id, role)` with the same conversion collapse into one `MaskSelection`; one mask
+  ID can therefore be `objects` (converted or not) and `region` in the same request, with one
+  `MaskSelection` per role. The version-1 "a mask ID is requested twice" `ValueError` is replaced by
+  one: the same mask ID as `objects` with two different conversions (a policy and none count as two).
+  Coverage and the mask refusals are computed once per mask ID. A mask ID has at most one conversion
+  record ([ADR 0005, uses of one mask](0005-binary-masks.md#uses-of-one-mask-in-one-run-bm2-bm5)).
 - **Application.** The resolver still reads no pixel and labels nothing; `RunInputs.read_objects`
   (a reading module, not a resolver module) applies the recorded conversion, replacing AR5's "each
   route applies it with CellPatcher's labeller".
 - **Consumers check the version.** Each consumer accepts exactly the versions it lists
   (`SUPPORTED_RESOLVER_VERSIONS = {3}` in this wave), checked on `Provenance.resolver_version` before
-  any pixel read, output or cache reuse, and refuses any other with `RESOLVER_VERSION_UNSUPPORTED`
+  any pixel read, output or cache reuse, and refuses any other with `RESOLVER_VERSION_UNSUPPORTED`,
+  built by normalization's one constructor `contracts.refuse_resolver_version`
   ([ADR 0005](0005-binary-masks.md#resolver-version-check-bm10)); never `>= 3`.
 
 ### Consequences

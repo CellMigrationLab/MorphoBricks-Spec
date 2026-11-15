@@ -16,8 +16,8 @@
   interleaved samples per pixel (§4.4b, §6, §7, §8).
 - **Amended** on 15 November 2026 (owner decision BM11,
   [ADR 0005](adr/0005-binary-masks.md)): a `binary` mask file holds values in {0, v} for one
-  positive v; all-zero and all-foreground files are accepted, two or more distinct positive values
-  are refused (§4.5, §4.5b, §8). It replaces "more than two distinct values".
+  positive v over all its planes, stored as integers or booleans; all-zero and all-foreground files
+  are accepted, two or more distinct positive values and float files are refused (§4.5, §4.5b, §8). It replaces "more than two distinct values".
 - **Decisions:** [ADR 0001](adr/0001-experiment-description-v1.md).
 - **Fixtures:** [fixtures/README.md](../fixtures/README.md). **Conformance:**
   [conformance-plan.md](conformance-plan.md).
@@ -366,7 +366,7 @@ Repeat rules:
 | Key | Type | Req | Rule |
 |---|---|---|---|
 | `source_type` | text | yes | Exact discovered mask type (Label rules); one mask per source type (`E_MASK_SOURCE_TYPE_REUSED`) |
-| `representation` | text | yes | `instances`, `binary` or `parent_labels` (`E_ENUM`; exact, lower case); user-confirmed, never inferred from dtype, values or names. Every file of a mask declared `binary` MUST hold values in {0, v} for one positive integer v (a boolean file: {0, 1}); v may differ between files. An all-zero file is accepted (zero objects; an empty region where used as a region), and so is an all-foreground file {v}. A file holding two or more distinct positive values, or any negative value, is refused by preprocessing's mask step (`R_MASK_CONTRADICTS_REPRESENTATION`, §4.5a); the user must declare `instances` or `parent_labels`, or fix the file. `parent_labels`: §4.5b |
+| `representation` | text | yes | `instances`, `binary` or `parent_labels` (`E_ENUM`; exact, lower case); user-confirmed, never inferred from dtype, values or names. Every file of a mask declared `binary` MUST be stored as integers (signed or unsigned) or booleans, never floats (a float file is refused even when every value is whole), and MUST hold, over all its planes together, values in {0, v} for one positive integer v (a boolean file: {0, 1}); v may differ between files. An all-zero file is accepted (zero objects; an empty region where used as a region), and so is an all-foreground file {v}. A float file, or a file holding two or more distinct positive values (also when each plane alone holds one) or any negative value, is refused by preprocessing's mask step (`R_MASK_CONTRADICTS_REPRESENTATION`, §4.5a); the user must declare `instances` or `parent_labels`, or fix the file. `parent_labels`: §4.5b |
 | `source_channels` | array of channel IDs | no | Provenance only (what the mask was derived from); not a restriction on measured channels; each declared (`E_UNKNOWN_CHANNEL`); no duplicates (`E_DUPLICATE_VALUE`); order not semantic |
 | `display_name` | non-empty text | no | Display only (§4.8) |
 
@@ -818,7 +818,7 @@ Required preprocessing refusals (`R_*`):
 | `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` | Stage 1–2 only: the units do not all have the same ordered list; names the units; lifted at Stage 3 |
 | `R_MASK_TYPE_NOT_DECLARED` | A discovered mask type has no `masks` entry |
 | `R_MASK_TYPE_NAME_INVALID` | A discovered mask type name breaks the Label rules (for example `NA`, ` cells`), so it cannot be a `source_type`; refused at discovery (AQ11) |
-| `R_MASK_CONTRADICTS_REPRESENTATION` | A file of a mask declared `binary` holds two or more distinct positive values or a negative value (a `binary` file holds values in {0, v} for one v > 0; all-zero and all-foreground files are accepted, §4.5); raised by the mask step on each new batch, not at publication (§4.5a) |
+| `R_MASK_CONTRADICTS_REPRESENTATION` | A file of a mask declared `binary` is stored as floats, or holds, over all its planes, two or more distinct positive values or a negative value (a `binary` file is integer or boolean and holds values in {0, v} for one v > 0; all-zero and all-foreground files are accepted, §4.5); raised by the mask step on each new batch, not at publication (§4.5a) |
 
 Within one unit, `R_UNIT_NOT_HOMOGENEOUS` is reported first and replaces
 `R_CHANNEL_COUNT_MISMATCH` and `R_HEADER_CONTRADICTION` for that unit: intra-unit discrepancies

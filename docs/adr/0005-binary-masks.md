@@ -13,7 +13,11 @@
 - **Revised** on 15 November 2026 after an independent review (verdict "merge after fixes", blockers
   B1-B6 and five filed items): the value rule in the normative text (B1), uses routed by
   `(mask ID, use)` (B2), `RegionEstimate` (B3), one constructor per refusal code (B4), the lineage
-  record of the conversion helpers (B5), the supported resolver versions (B6).
+  record of the conversion helpers (B5), the supported resolver versions (B6). Revised again the same
+  day after the re-check: uses sent to the resolver one entry per use and aggregated only after it
+  (B2), one normalization constructor for `RESOLVER_VERSION_UNSUPPORTED` (B4), helpers on `RunInputs`
+  with output mask IDs, collision refusals and atomic publication (B5), the file-wide value rule and
+  the dtype rule (N1), and a lineage digest over a canonical header and the pixels (N2).
 - **Tracking:** [#42](https://github.com/CellMigrationLab/MorphoBricks-Spec/issues/42) ("one
   consistent, simpler policy for binary masks across all bricks"). The implementing PRs follow in the
   [order below](#implementation-order), one per brick.
@@ -90,7 +94,7 @@ The owner decided BM1-BM5 and BM11-BM14 on 15 November 2026 (final). BM6-BM10 ar
 | BM8 | **One undefined reason for an empty region, `empty_region`** ([vocabulary](#undefined-reason-vocabulary-bm8)). A value whose denominator is the region's pixels is undefined; a value whose denominator is another, non-empty area (the fraction of a patch inside the region) is defined and may be 0. In normalization an estimate over a region is a [`RegionEstimate`](#region-estimates-in-normalization-bm3-bm8), never NaN. | A refusal (`sampling_mask_empty`, fiberfeatures' row stop, normalization's `ValueError`); 0 for a mean over no pixels; NaN as a fitted white or stain vector. |
 | BM9 | **Refusal codes and messages are fixed here** ([table](#refusal-codes-and-messages)): `A_MASK_NOT_INSTANCES` (resolver and in memory), `A_VOLUME_NOT_SUPPORTED` (a conversion of a Z-stack), `MASK_WINDOW_CONVERTED`, `MASK_REGION_INVALID`, `R_MASK_CONTRADICTS_REPRESENTATION` (mask step and read guard) and `RESOLVER_VERSION_UNSUPPORTED`. Each code has **one constructor function**; every other place propagates the constructed error unchanged ([construction and propagation](#construction-and-propagation)). | Each brick rewording the shared refusals (I11, I12). |
 | BM10 | **Resolver contract version 3.** The resolver adds the conversion record to its `Provenance`, refuses a conversion on a Z-stack, and accepts one mask ID once per role. Every consumer accepts **exactly** the resolver versions it supports, `{3}` in this wave, before any pixel read, output or cache reuse ([resolver version](#resolver-version-check-bm10)). | Recording the conversion only in each brick (I13); leaving the version at 2 (a consumer could not tell whether its resolver gives the record); `>= 3` (assumes every future contract is compatible). |
-| BM11 | **Strict binary at the mask step** (owner, 15 November 2026): every file of a mask declared `binary` holds values in **{0, v} for one positive v**. An **all-zero** file is accepted (zero objects; an empty region where used as a region) and an **all-foreground** file {v} is accepted. A file with two or more distinct positive values (for example {0, 3, 7} or {3, 7}), or any negative value, is refused at the mask step with `R_MASK_CONTRADICTS_REPRESENTATION`, so the refusal comes before any run, not at read (closes I14; F10 moves to the mask step). `experiment-v1.md` §4.5, §4.5b and §8 state this rule. | Any non-zero as foreground (a mask that is really labels or classes passes as binary and is labelled silently); "at most two distinct values" (today's text: {3, 7} passes). |
+| BM11 | **Strict binary at the mask step** (owner, 15 November 2026): every file of a mask declared `binary` is stored as integers (signed or unsigned) or booleans, never floats (also when integer-valued), and holds values in **{0, v} for one positive v**, checked over the **whole file** (all its planes together). An **all-zero** file is accepted (zero objects; an empty region where used as a region) and an **all-foreground** file {v} is accepted. A file with two or more distinct positive values (for example {0, 3, 7} or {3, 7}), or any negative value, is refused at the mask step with `R_MASK_CONTRADICTS_REPRESENTATION`, so the refusal comes before any run, not at read (closes I14; F10 moves to the mask step). `experiment-v1.md` §4.5, §4.5b and §8 state this rule. | Any non-zero as foreground (a mask that is really labels or classes passes as binary and is labelled silently); "at most two distinct values" (today's text: {3, 7} passes). |
 | BM12 | **Explicit conversion helpers in preprocessing** (owner): the user converts masks on purpose, as a recorded step that writes **new mask files** declared with their own representation: **binary → instance labels** (the BM1/BM6 labelling: connected components, 8-connected) and **class label image → one binary mask per class value** (for class/semantic segmentation). Each output carries a lineage record (source and output with their content SHA-256, operation, class value or connectivity, helper and version; [schema](#the-conversion-helpers-bm12)), like preprocessing's existing named-axis copies (`convert`). The run then declares the outputs and reads them like any mask. | Converting implicitly at read only (users cannot produce instance or per-class masks they can inspect, share or edit); a labelled copy of every binary mask, made automatically (AR5, still rejected: here nothing is converted unless the user asks, and the source is unchanged). |
 | BM13 | **Notebook display** (owner): CellPatcher's notebook shows the recorded conversion of a file run **read-only**; it offers no binary-mask setting. | A file-run-only control (a second place to decide what BM2 decides once). |
 | BM14 | **Grouping inside `parent_labels` is a measurement, not a labeller** (owner): MorphoRelate's rows per group of an already-labelled `parent_labels` mask (`structures_table.py:89-114`) are allowed; BM2's "no other labeller" applies to binary masks only. | Routing parent-label grouping through the recorded conversion (the user's labels already define the groups). |
@@ -169,30 +173,37 @@ run cannot use a converted mask as objects and the same mask as a region or frac
   `restrict_to`, an analysis region) or `fraction` (a mask whose share each patch reports). Only an
   `objects` use can carry a conversion; `region` and `fraction` uses read the **raw** mask and take
   `mask != 0` through `check_region` (BM3), never labelled.
-- **One source mask, many uses.** In one run a mask ID may have **one** `objects` use, with or without
-  a conversion, and any number of `region` and `fraction` uses. It then has exactly one conversion
-  record (when its `objects` use is converted), and that record says nothing about its region and
-  fraction reads.
+- **One source mask, many uses.** In one run a mask ID may serve any number of object sets in the
+  `objects` use, all with the **same** conversion (all with the policy, or all without), and any
+  number of `region` and `fraction` uses. It then has exactly one conversion record (when its
+  `objects` use is converted), and that record says nothing about its region and fraction reads.
 - **Preprocessing's request resolution** (`check_request`). A `MaskRequest` is identified by
-  `(mask_id, role)`. The refusal "a mask ID is requested twice" is replaced by two `ValueError`s:
-  (a) the same mask ID requested as `objects` with two different conversions (a policy and none count
-  as two): `{mask_id!r} is requested as objects with two different conversions ({a!r} and {b!r}); one
-  run converts a mask at most one way`; (b) an exact repeat of one `(mask_id, role)` with the same
-  conversion: `{mask_id!r} is requested twice in the role {role!r}`. `(mask_id, "objects")` and
-  `(mask_id, "region")` in one request are accepted. Coverage, `A_SCOPE_INCOMPLETE` and
-  `A_MASK_UNCHECKED` are computed **once per mask ID** (the files are the same), not once per role.
-  `FovSelection.masks` holds one `MaskSelection` per `(mask_id, role)` requested; the `objects` one
-  carries the conversion, the `region` one has none.
-- **MorphoFeature's per-mask aggregation** (`mask_uses`, `region_masks`, `_selected`, `mask_record`).
-  `mask_uses` returns one `MaskUse` per `(mask_id, use)`, with that use's object-set names; `objects`
-  no longer absorbs a region or fraction use of the same ID. All object sets of one mask ID in the
-  `objects` use must give the same policy (else refused, as above, by preprocessing's message, not a
-  second check); a policy on a name that has no `objects` use stays a malformed request raised by the
-  resolver only (I12). The resolver request holds one `MaskRequest` per `(mask_id, resolver role)`:
-  the `objects` use as `objects` with its policy, and the `region` and `fraction` uses together as one
-  `region` request. `SelectedMasks.conversions` is keyed by `(image, object set)` of the `objects` use
-  only; nothing keyed by mask ID alone decides how a plane is read. The manifest's `masks` entries are
-  one per `(mask_id, role)`, beside the resolver's `mask_conversions` list.
+  `(mask_id, role)`, and a mask ID may appear in several entries. The version-2 refusal "a mask ID is
+  requested twice" is replaced by **one** `ValueError`: the same mask ID requested as `objects` with
+  two different conversions (a policy and none count as two): `{mask_id!r} is requested as objects
+  with two different conversions ({a!r} and {b!r}); one run converts a mask at most one way`, with
+  `a` and `b` in request order. Entries of one `(mask_id, role)` with the same conversion are
+  accepted and collapse into one selection; `(mask_id, "objects")` and `(mask_id, "region")` in one
+  request are accepted. Coverage, `A_SCOPE_INCOMPLETE` and `A_MASK_UNCHECKED` are computed **once per
+  mask ID** (the files are the same), not once per entry or role. `FovSelection.masks` holds one
+  `MaskSelection` per `(mask_id, role)`, in the order of its first entry; the `objects` one carries
+  the conversion, the `region` one has none.
+- **MorphoFeature sends, then aggregates** (`resolve_masks`, `mask_uses`, `region_masks`,
+  `_selected`, `mask_record`). MorphoFeature does **not** merge uses before resolution and makes no
+  local check of their policies (today's "different binary_mask_policy values" refusal at
+  `mask_selection.py:182-187` and the region-policy refusal at `:189-194` are removed). It sends
+  **one `MaskRequest` per object set and per region or fraction use**, in run order, in the one
+  request it gives `resolve_request`: each object set as `(mask_id, "objects", its policy)`, each
+  region or fraction use as `(mask_id, "region", its policy or None)`. The resolver validates them
+  together, so a conflict (for example `CellsA` reading `TumorRegion` with `connected_components` and
+  `CellsB` reading it without a policy) is refused by preprocessing's `ValueError`, propagated
+  unchanged ([construction and propagation](#construction-and-propagation)); a policy on a region or
+  fraction use is likewise the resolver's malformed-request `ValueError` (I12). Only **after a
+  successful resolution** does `mask_uses` aggregate, into one `MaskUse` per `(mask_id, use)` with that
+  use's object-set names; `objects` no longer absorbs a region or fraction use of the same ID.
+  `SelectedMasks.conversions` is keyed by `(image, object set)` of the `objects` use only; nothing
+  keyed by mask ID alone decides how a plane is read. The manifest's `masks` entries are one per
+  `(mask_id, role)`, beside the resolver's `mask_conversions` list.
 - **Reads.** The `objects` use reads `RunInputs.read_objects` (whole plane only). A `region` or
   `fraction` use reads `RunInputs.read_mask` on the whole-plane route or `read_mask_window` on the
   lazy route, then `check_region`. On the whole-plane route a name used both as objects and as a
@@ -211,10 +222,12 @@ selection's `(mask_id, "objects")` mask selection:
 
 - `representation = "instances"`, no conversion: the stored labels, checked by `check_labels`, never
   relabelled (D47: an `instances` mask holding 0 and 1 is one object).
-- `conversion = "connected_components"`: the stored plane must be boolean, or integers in {0, v} for
-  one v > 0 (BM11); otherwise `mask_rules.check_binary_values` raises
-  `R_MASK_CONTRADICTS_REPRESENTATION` (the read guard, the same function the mask step calls, I14).
-  The plane is then labelled by `label_binary` (below). A plane with no foreground gives zero objects,
+- `conversion = "connected_components"`: the plane is labelled by `label_binary` (below), which first
+  calls `mask_rules.check_binary_values` on it: the stored plane must be boolean, or signed or
+  unsigned integers in {0, v} for one v > 0 (BM11), never floats; otherwise
+  `R_MASK_CONTRADICTS_REPRESENTATION`. This per-plane check is the **read guard**, a defensive repeat
+  of the mask step's file-wide check (I14); it cannot see values in other planes, which is why the
+  mask step's check, not this one, decides whether a file is accepted. A plane with no foreground gives zero objects,
   an all-foreground plane one object; neither is an error.
 - It reads whole planes only; it has no window argument. A mask ID with no `objects` selection
   (a mask used only as a region), or a `parent_labels` mask, passed to it is a programming error
@@ -226,9 +239,13 @@ selection's `(mask_id, "objects")` mask selection:
 structure of ones (`STRUCTURE`) that the mask step's piece counter imports (`PIECE_STRUCTURE` is no
 longer restated). Its contract:
 
-- **Input:** a 2-D `numpy.ndarray`, boolean or integer, that `check_binary_values` accepts (the caller
-  checks it; `label_binary` refuses anything else with `ValueError` and never casts, thresholds or
-  squeezes).
+- **Signature:** `label_binary(mask, *, name="the mask")`; `name` fills `{path}` in its refusal.
+- **Input:** a 2-D `numpy.ndarray`. `label_binary` **calls `check_binary_values` itself** (dtype and
+  values) before labelling, so a direct call is as safe as a call through `read_objects`: a float
+  array (also when integer-valued), a negative value or two distinct positive values is
+  `R_MASK_CONTRADICTS_REPRESENTATION` from the one constructor; a non-array or an array that is not
+  2-D is `ValueError`. It never casts, thresholds or squeezes. Tests call it directly with `{0, 3, 7}`,
+  `{0, -1}`, `float32` 0/1, a `(1, 8, 8)` stack and a list, and expect those refusals.
 - **Output:** a new `int32` array of the input's shape; 0 where `mask == 0`; the components of
   `mask != 0` under 8-connectivity (`scipy.ndimage.label` with `STRUCTURE`) numbered **1 to n with no
   gap**, in row-major order of each component's first pixel. The input is not changed.
@@ -251,7 +268,12 @@ outside the set (2, or a future 4) is refused with `RESOLVER_VERSION_UNSUPPORTED
 ([table](#refusal-codes-and-messages)); it is never read as "at least 3". A cached result is reused
 only when the resolver version recorded with it is in the set as well. The check reads the
 `Provenance` field that version 2 already has, so it also refuses an older preprocessing that does not
-know this ADR; for that reason the constructor lives in each consumer, not in preprocessing. Widening
+know this ADR. The error is built by **one constructor in normalization**,
+`morphobricks_normalization.contracts.refuse_resolver_version(found, supported) ->
+ResolverVersionError` (a `ValueError` with `code`): normalization is the lowest brick, every consumer
+can import it whatever preprocessing is installed, and it imports nothing of preprocessing. Each
+consumer declares and pins normalization, calls the constructor and raises the result; it may raise
+its own exception type instead, with the code and message copied verbatim, never changed. Widening
 the set is a later ADR's change, with its own tests.
 
 ## Region checker contract (BM3, BM7)
@@ -347,10 +369,10 @@ it as a `Refusal` and a checker can raise it. "Raised at" lists where it reaches
 | --- | --- | --- | --- | --- |
 | `A_MASK_NOT_INSTANCES` | `morphobricks_preprocessing.mask_rules.refuse_not_instances(subject, *, declared=None, value=None) -> MaskNotInstancesError` (a `ValueError` and a `RunInputsError` with `code`); exactly one of `declared` (the declared representation) and `value` (the in-memory object) is given | (a) `resolve_request`, which turns it into `Refusal(error.code, mask_id, str(error))`; `mask_representation_refusal` keeps only the decision and calls the constructor; (b) `morphobricks_preprocessing.masks.check_object_set(value, *, name)`, which raises it | (a) a `binary` mask as objects without `binary_mask_policy`, a `parent_labels` mask as objects; (b) an in-memory object set that is not a plain `numpy.ndarray` (`type(value) is numpy.ndarray`) of a signed or unsigned integer dtype | (a) `declared = "binary"` or `"parent_labels"`: today's two resolver messages, unchanged (preprocessing `run_inputs_request.py:453-478`). (b) for a plain `numpy.ndarray`: `A_MASK_NOT_INSTANCES: {name!r} is a {dtype} array, not an object set. An object set is an integer instance array (0 is background, each positive value one object). A boolean array is used only as a region. To measure the connected pieces of a binary mask as objects, describe it as binary and request binary_mask_policy='connected_components' in a run.`; for anything else (a list, None, a tensor, a `numpy.ma.MaskedArray`): `A_MASK_NOT_INSTANCES: {name!r} is a {type_name} (not a plain NumPy array), not an object set.` followed by the same three sentences, with `{type_name}` = `type(value).__name__` |
 | `A_VOLUME_NOT_SUPPORTED` | `morphobricks_preprocessing.run_inputs_request.volume_refusals(request, z_counts) -> tuple[Refusal, ...]`, today's `volume_refusal` extended: the one place that builds the code, for a volume request (today's message, unchanged) and for a conversion | `resolve_request` | a mask request with `binary_mask_policy` on a position with `z_count > 1`, as a `plane` or a `volume` request, with or without `volume_support` | `{mask_id!r} would be converted by connected_components, which labels 2-D planes only; the images of {position} have {z_count} Z planes. Converting a Z-stack is not supported (A_VOLUME_NOT_SUPPORTED).` |
-| `R_MASK_CONTRADICTS_REPRESENTATION` | `morphobricks_preprocessing.mask_rules.refuse_binary_values(path, values) -> MaskContradictsRepresentationError` (a `ValueError` with `code`), called only by the shared validator `mask_rules.check_binary_values(values, *, path)`, which takes the distinct values of a plane or of a whole file | (a) the mask step (`mask_representation.check_representation`), over every plane of each new file, stopping at the first refusal; it records the error as its `ValidationIssue` with the error's code and message verbatim and no action text added, and never records the file as `checked`; (b) the read guard in `RunInputs.read_objects`, on the plane, which raises it | a file (mask step) or plane (read guard) of a mask declared `binary` holds a negative value or two or more distinct positive values (BM11) | `R_MASK_CONTRADICTS_REPRESENTATION: {path} is declared binary but holds the values {values}; a binary mask holds 0 and at most one positive value (an all-zero or all-foreground file is accepted). Declare it instances or parent_labels, or fix the file.` with `{values}` the distinct non-zero values found when the check stopped, ascending, as a Python list of at most 10 items (`, ...]` after the tenth). Replaces today's mask-step message "holds {n} different values. A binary mask has at most two" (`description_run_text.py:152-165`) |
+| `R_MASK_CONTRADICTS_REPRESENTATION` | `morphobricks_preprocessing.mask_rules.refuse_binary_values(path, *, values=None, dtype=None) -> MaskContradictsRepresentationError` (a `ValueError` with `code`; exactly one of `values`, `dtype` given), called only by the shared validator `mask_rules.check_binary_values(values, *, dtype, path)`, which takes the stored dtype and the distinct values of a plane or of a whole file and checks the dtype first (signed or unsigned integer, or bool; never float, complex or object, also when every value is whole) and then the values | (a) the mask step (`mask_representation.check_representation`), **file-wide**: it unions the distinct values of every plane of a new file and calls `check_binary_values` on the union (it may stop reading once the union already holds two positive values or a negative one), so a file whose planes hold {0, 3} and {0, 7} is refused with `[3, 7]`; it records the error as its `ValidationIssue` with the error's code and message verbatim and no action text added, and never records the file as `checked`; (b) `label_binary`, which calls `check_binary_values` on its plane: the per-plane read guard of `RunInputs.read_objects`, and any direct call | a file (mask step) or plane (`label_binary`) of a mask declared `binary` has a non-integer, non-bool dtype, or holds a negative value or two or more distinct positive values (BM11) | values: `R_MASK_CONTRADICTS_REPRESENTATION: {path} is declared binary but holds the values {values}; a binary mask holds 0 and at most one positive value (an all-zero or all-foreground file is accepted). Declare it instances or parent_labels, or fix the file.` with `{values}` the distinct non-zero values found when the check stopped, ascending, as a Python list of at most 10 items (`, ...]` after the tenth). dtype: `R_MASK_CONTRADICTS_REPRESENTATION: {path} is declared binary but has pixel type {dtype}; a binary mask is stored as integers or booleans, never as floats, even when its values are whole numbers. Save it as integers or booleans.` Both replace today's mask-step message "holds {n} different values. A binary mask has at most two" (`description_run_text.py:152-165`) |
 | `MASK_WINDOW_CONVERTED` | MorphoFeature `window_reads.check_window_objects(plan, uses) -> None`, the single preflight, which raises `RequestError(message, "MASK_WINDOW_CONVERTED")` | MorphoFeature, once, when the run is planned, before any pixel or header of a plane is read | a request on the lazy windowed route reads, as objects, a `(mask_id, "objects")` use whose selection has `conversion = "connected_components"` (region and fraction uses are never refused) | one line per offending `(request, object set)`, in run order, joined by newlines, in one error: `MASK_WINDOW_CONVERTED: the request {request!r} runs by window and reads the object set {object_set!r}, the binary mask {mask_id!r} converted by connected_components, which needs the whole plane, so it has no window. Run this request on the whole-plane route; region and fraction reads of {mask_id!r} are read by window.` |
 | `MASK_REGION_INVALID` | `morphobricks_normalization.regions.check_region` (exception `RegionMaskError`, a `ValueError` with `code` and `reason`) | wherever a region is taken (BM7's list) | the five reasons of the [contract](#region-checker-contract-bm3-bm7) | `MASK_REGION_INVALID ({reason}): the region {name!r} {detail}. A region is a 2-D integer or boolean array of the plane's shape (Y, X); its non-zero pixels are inside.` with `{detail}` one of: `is not a NumPy array (got {type})`, `is a masked array`, `has {ndim} dimensions`, `has shape {shape}, not the plane's {plane}`, `has pixel type {dtype}` |
-| `RESOLVER_VERSION_UNSUPPORTED` | one function per resolver consumer, `check_resolver_version(provenance)`, in the module that calls `resolve_request` (CellPatcher, MorphoRelate, fiberfeatures, MorphoFeature); it raises the consumer's own error type with this code | that consumer, right after `resolve_request` ([resolver version](#resolver-version-check-bm10)) | `provenance.resolver_version` not in `SUPPORTED_RESOLVER_VERSIONS` (`{3}`) | `RESOLVER_VERSION_UNSUPPORTED: the installed morphobricks-preprocessing resolver has contract version {found}; {consumer} supports exactly {supported}. Install the morphobricks-preprocessing release {consumer} pins; nothing was read or written.` with `{supported}` the sorted list, `[3]` |
+| `RESOLVER_VERSION_UNSUPPORTED` | `morphobricks_normalization.contracts.refuse_resolver_version(found, supported) -> ResolverVersionError` (a `ValueError` with `code`); the only one | each resolver consumer (CellPatcher, MorphoRelate, fiberfeatures, MorphoFeature), right after `resolve_request` ([resolver version](#resolver-version-check-bm10)): it calls the constructor and raises the result, or its own type with code and message verbatim | `provenance.resolver_version` not in the consumer's `SUPPORTED_RESOLVER_VERSIONS` (`{3}`) | `RESOLVER_VERSION_UNSUPPORTED: the installed morphobricks-preprocessing resolver has contract version {found}; this consumer supports exactly {supported}. Install the morphobricks-preprocessing release it pins; nothing was read or written.` with `{supported}` the sorted list, `[3]` |
 
 `A_MASK_NOT_INSTANCES`, `A_VOLUME_NOT_SUPPORTED` and `R_MASK_CONTRADICTS_REPRESENTATION` are existing
 codes (experiment-v1 §8; ADR 0002); no `A_*` or `R_*` code is added. `MASK_WINDOW_CONVERTED` is
@@ -391,51 +413,94 @@ a non-`binary` mask or in the role `region`, two conversions of one mask's objec
 
 ## The conversion helpers (BM12)
 
-Two functions in `morphobricks_preprocessing.mask_conversion`, with a CLI command and a notebook card
-that call them. They write **new** mask files and never change the source. The run then declares each
-output as a mask of its own (a new source type, with the representation named below) and the mask step
-checks it like any mask; nothing reads an output before that.
+Two methods of `RunInputs`, implemented in `morphobricks_preprocessing.mask_conversion`, with a CLI
+command and a notebook card that call them. They take a **typed context, not paths**: the opened run
+and the source's FOV and mask ID, so the run's recorded representation, mask-step status and
+fingerprint decide what may be read. They write **new** mask files and never change the source. The
+user then declares each output mask ID in the description (its source type is the output mask ID,
+its representation the one named below) and runs the mask step on it like any mask; nothing reads an
+output before that.
 
-**Inputs.**
+```python
+RunInputs.binary_to_instances(fov, mask_id, *, output_mask_id) -> MaskConversionResult
+RunInputs.classes_to_binary(fov, mask_id, *, output_prefix) -> MaskConversionResult
+```
 
-| Helper | Accepts | Refuses (`ValueError` naming the file; never cast, thresholded, squeezed or selected) |
+**Inputs.** Both refuse, before reading a pixel and writing anything, a `mask_id` that the published
+description does not declare (`ValueError` naming the declared IDs), a source file of that mask for
+`fov` whose mask-step status is `not yet checked`, or whose fingerprint differs from the one recorded
+when it was checked (`A_MASK_UNCHECKED`, the resolver's refusal for that file), and a source that
+changes while it is read (the existing `MaskChangedError`). Then, never casting, thresholding,
+squeezing or selecting:
+
+| Helper | Accepts | Refuses (`ValueError` naming the mask ID and file, unless a code is named) |
 | --- | --- | --- |
-| `binary_to_instances(source, output)` | a file of a mask declared `binary` whose mask-step status is `checked` with the fingerprint it has now (so `check_binary_values` has passed on every plane); one Z plane; any number of time points, each labelled on its own | a mask not declared `binary` (its representation named); a file `not yet checked` or changed since its check (`A_MASK_UNCHECKED`, the resolver's wording for that file); a file with more than one Z plane (2-D labelling only, BM5); a file the read guard refuses (`R_MASK_CONTRADICTS_REPRESENTATION`, from `check_binary_values`) |
-| `classes_to_binary(source, output_folder)` | one 2-D plane `(Y, X)` of a signed or unsigned integer dtype holding class values `>= 0`, class `0` the background; the source need not be a declared mask | a negative value (`holds negative values (smallest {v}); class 0 is the background and classes are positive`); a float, complex or other non-integer dtype, and **bool** (`has pixel type {dtype}; a class image holds non-negative integer class values`); anything not 2-D, a Z, T or C stack and a **one-hot** image (a class axis of 0/1 planes) included (`has {ndim} dimensions (shape {shape}); a class image is one 2-D plane of class values; a one-hot or multi-channel stack is not converted`) |
+| `binary_to_instances` | a mask declared `binary`, so its file passed `check_binary_values` file-wide; one Z plane; any number of time points, each labelled on its own | a mask declared `instances` or `parent_labels` (its representation named); a file with more than one Z plane (2-D labelling only, BM5); a plane `label_binary` refuses (`R_MASK_CONTRADICTS_REPRESENTATION`, its message verbatim) |
+| `classes_to_binary` | a mask declared `parent_labels` or `instances` (pixels prove neither, so a class image passes the mask step under both; `parent_labels`, each value one group in any number of pieces, is the closer description) whose file is one 2-D plane `(Y, X)` of a signed or unsigned integer dtype holding class values `>= 0`, class `0` the background | a mask declared `binary` (it has one class already: declare or use it as it is); a negative value (`holds negative values (smallest {v}); class 0 is the background and classes are positive`); a float, complex or other non-integer dtype, and **bool** (`has pixel type {dtype}; a class image holds non-negative integer class values`); anything not 2-D, a Z, T or C stack and a **one-hot** image (a class axis of 0/1 planes) included (`has {ndim} dimensions (shape {shape}); a class image is one 2-D plane of class values; a one-hot or multi-channel stack is not converted`) |
 
-**Outputs.** `binary_to_instances` writes one `int32` instance mask of the source's shape: per plane,
-`label_binary` of the source plane (BM1/BM6: 8-connected, numbered 1..n), so it equals
-`RunInputs.read_objects` on the source plane for plane. `classes_to_binary` writes **one `uint8`
-binary mask per class value present in the image**, in ascending class order, with `1` where
-`image == class` and `0` elsewhere: never a threshold, never a subset of the classes, never a merge.
-Class 0 gives no output; an all-zero image gives no output and the helper reports "no class present".
-The outputs are declared `instances` and `binary` respectively.
+**Outputs and their mask IDs.** `binary_to_instances` writes exactly one `int32` instance mask under
+the mask ID `output_mask_id`: per plane, `label_binary` of the source plane (BM1/BM6: 8-connected,
+numbered 1..n), so it equals `RunInputs.read_objects` on the source plane for plane; it is declared
+`instances`. `classes_to_binary` writes **one `uint8` binary mask per class value present in the
+image**, in ascending class order, under the mask ID `<output_prefix>_class<value>` (for example
+`Tissue_class1`, `Tissue_class2`), with `1` where `image == value` and `0` elsewhere: never a
+threshold, never a subset of the classes, never a merge. Class 0 gives no output; an all-zero image
+gives no output and the result says "no class present". Each output is declared `binary`. Output mask
+IDs follow the Label rules of experiment-v1 §3.2 (refused otherwise). An output file is written in the
+mask-type folder named by its output mask ID, at the source file's path relative to its own mask-type
+folder.
 
-**Lineage record**, one per output, written by the helper as one line of `mask_lineage.jsonl` in the
-output's mask-type folder after the output is written (mask discovery MUST ignore it; PR 2b tests
-that). Keys exactly these, in this order, all always present:
+**Collisions are refused, never overwritten.** Before anything is written the helper refuses
+(`ValueError` naming the ID or file) an output mask ID that the published description declares, a
+discovered mask type of that name holding any file without a lineage line of the same operation, and
+an output file that already exists, unless it is the **same** conversion already published (its
+lineage line names the same source digest, operation, class value and helper version, and the file's
+digest equals the line's): that call is a no-op that returns the existing result (idempotent retry).
+
+**Lineage record**, one per output, one line of `mask_lineage.jsonl` in the output's mask-type folder
+(mask discovery MUST ignore that file and the helper's temporary files; PR 2b tests it). Keys exactly
+these, in this order, all always present:
 
 | Key | Value |
 | --- | --- |
-| `source` | `{"path": ..., "content_sha256": ...}` of the file read |
-| `output` | `{"path": ..., "content_sha256": ...}` of the file written |
+| `source` | `{"mask_id": ..., "path": ..., "axes": ..., "shape": [...], "dtype": ..., "content_sha256": ...}` of the file read |
+| `output` | the same keys for the file written |
 | `operation` | `"binary_to_instances"` or `"classes_to_binary"` |
 | `connectivity` | `8` for `binary_to_instances`; `null` for `classes_to_binary` |
 | `class_value` | the class (an integer) for `classes_to_binary`; `null` for `binary_to_instances` |
-| `helper` | the function's qualified name, `morphobricks_preprocessing.mask_conversion.binary_to_instances` or `...classes_to_binary` |
+| `helper` | `morphobricks_preprocessing.RunInputs.binary_to_instances` or `morphobricks_preprocessing.RunInputs.classes_to_binary` |
 | `helper_version` | `morphobricks_preprocessing.__version__` at the time of writing |
 
-`path` is relative to the experiment folder, with `/`. `content_sha256` is the lower-case hex SHA-256
-of the **stored pixel bytes**: every plane of the file as the reader returns it, in the file's stored
-axis order, C order, the stored dtype in little-endian byte order. It is computed by the helper when it
-reads the source and when it writes the output (from the array written, then checked against a
-re-read of the written file; a mismatch removes the output and refuses). It is never preprocessing's
-`Fingerprint` (size and modification time, `fingerprint.py:6-16`) and never the file's bytes (headers
-and compression differ between writers).
+`path` is relative to the experiment folder, with `/`. `axes` is the stored axis letters of the file
+as the run recorded them (for example `"YX"`, `"TYX"`), `shape` the stored shape in that order,
+`dtype` the NumPy dtype string in little-endian form (`"|u1"`, `"<u2"`, `"<i4"`, `"|b1"`).
+**`content_sha256` is the lower-case hex SHA-256 of a canonical header followed by the pixel bytes**:
+the header is the UTF-8 bytes of `json.dumps({"axes": axes, "dtype": dtype, "shape": shape},
+sort_keys=True, separators=(",", ":"))` followed by one byte `0x0A`; the pixel bytes are every plane of
+the file as the reader returns it, in the stored axis order, C order, in that little-endian dtype. Two
+files with the same pixel bytes but another shape, axes or dtype therefore have different digests.
+The helper computes it when it reads the source and when it writes the output (from the array
+written, then checked against a re-read of the written file; a mismatch aborts the publication). It is
+never preprocessing's `Fingerprint` (size and modification time, `fingerprint.py:6-16`) and never the
+file's bytes (headers and compression differ between writers).
 
 ```json
-{"source": {"path": "masks/TumorRegion/CTRL/rep1/a.tif", "content_sha256": "<64 hex>"}, "output": {"path": "masks/TumorObjects/CTRL/rep1/a.tif", "content_sha256": "<64 hex>"}, "operation": "binary_to_instances", "connectivity": 8, "class_value": null, "helper": "morphobricks_preprocessing.mask_conversion.binary_to_instances", "helper_version": "<version>"}
+{"source": {"mask_id": "TumorRegion", "path": "masks/TumorRegion/CTRL/rep1/a.tif", "axes": "YX", "shape": [8, 8], "dtype": "|u1", "content_sha256": "<64 hex>"}, "output": {"mask_id": "TumorObjects", "path": "masks/TumorObjects/CTRL/rep1/a.tif", "axes": "YX", "shape": [8, 8], "dtype": "<i4", "content_sha256": "<64 hex>"}, "operation": "binary_to_instances", "connectivity": 8, "class_value": null, "helper": "morphobricks_preprocessing.RunInputs.binary_to_instances", "helper_version": "<version>"}
 ```
+
+**Publication is atomic per output: the output file and its lineage line are published as a pair.**
+For each output, in this order: (1) the pixels are written to a temporary file in the target folder
+and synced, and its digest is checked by re-reading; (2) `mask_lineage.jsonl` is rewritten to a
+temporary file holding its previous lines plus the new one, synced, and renamed over the old file;
+(3) the temporary output is renamed to its final name. A failure in (1) or (2) removes the temporary
+files and leaves `mask_lineage.jsonl` as it was: no output, no line. A failure in (3) removes the line
+again (step 2 with the previous lines) and the temporary file. So a visible output always has its
+line (no lineage-less output) and no output is left without one (no orphan output). If the process
+dies between (2) and (3), the line names an output that does not exist; readers treat such a line as
+pending and ignore it, and the next call for the same conversion completes or rolls it back before
+anything else, so a retry gives the same files and lines as one uninterrupted call. A multi-output
+`classes_to_binary` publishes output by output in ascending class order; a retry after a failure
+skips the classes already published (idempotent, as above) and continues.
 
 ## Breaking changes and migration notes
 
@@ -444,14 +509,14 @@ refused as unknown, never mapped.
 
 | Brick | Breaking change | Migration |
 | --- | --- | --- |
-| normalization | the region rules of `region_white`, `region_vectors` and their wrappers `white_from_region`, `stain_vectors_from_regions` become `check_region`'s, which changes several error types, not floats only: an **integer** region is accepted (was `TypeError`); a float, complex or object region is `MASK_REGION_INVALID` `dtype` (`ValueError`, was `TypeError`); a non-array is `not_an_array` and a masked array `masked_array` (`ValueError`, were `TypeError`); a 3-D region is `not_2d` (`ValueError`, was a `TypeError` or a shape `ValueError`); a wrong shape stays a `ValueError`, now `MASK_REGION_INVALID` `shape` with the fixed message. `region_white` and `region_vectors` return `RegionEstimate` (were a tuple and a mapping of tuples) and give `empty_region` instead of raising on an empty region; the two `stain` wrappers keep their return types and refuse an empty region with the fixed `empty_region` message | callers of `region_white`/`region_vectors` read `.value` (bitwise today's for a non-empty region) and handle `value is None` by the [per-caller rule](#region-estimates-in-normalization-bm3-bm8); code that caught `TypeError` for a bad region catches `ValueError` (`RegionMaskError`) |
-| preprocessing | resolver contract version 3: `Provenance.mask_conversions`; a conversion on a Z-stack refused; a mask ID accepted once per role, and "a mask ID is requested twice" replaced by the two refusals of [uses of one mask](#uses-of-one-mask-in-one-run-bm2-bm5). New `RunInputs.read_objects`, `masks.binary.label_binary`, `mask_rules` (`refuse_not_instances`, `refuse_binary_values`, `check_binary_values`), `masks.check_object_set`, `mask_conversion` (BM12). The mask step's binary rule becomes {0, v} (BM11): a file with {3, 7} that passed before is refused; its message changes. `PIECE_STRUCTURE` is imported from `masks.binary`, not restated | consumers accept exactly `SUPPORTED_RESOLVER_VERSIONS = {3}` ([resolver version](#resolver-version-check-bm10)), never `>= 3`, and copy the record; a `binary` mask whose files hold two positive values is redeclared `instances` or `parent_labels`, or its files fixed, and the mask step run again |
+| normalization | the region rules of `region_white`, `region_vectors` and their wrappers `white_from_region`, `stain_vectors_from_regions` become `check_region`'s, which changes several error types, not floats only: an **integer** region is accepted (was `TypeError`); a float, complex or object region is `MASK_REGION_INVALID` `dtype` (`ValueError`, was `TypeError`); a non-array is `not_an_array` and a masked array `masked_array` (`ValueError`, were `TypeError`); a 3-D region is `not_2d` (`ValueError`, was a `TypeError` or a shape `ValueError`); a wrong shape stays a `ValueError`, now `MASK_REGION_INVALID` `shape` with the fixed message. `region_white` and `region_vectors` return `RegionEstimate` (were a tuple and a mapping of tuples) and give `empty_region` instead of raising on an empty region; the two `stain` wrappers keep their return types and refuse an empty region with the fixed `empty_region` message. New: `contracts.refuse_resolver_version` | callers of `region_white`/`region_vectors` read `.value` (bitwise today's for a non-empty region) and handle `value is None` by the [per-caller rule](#region-estimates-in-normalization-bm3-bm8); code that caught `TypeError` for a bad region catches `ValueError` (`RegionMaskError`) |
+| preprocessing | resolver contract version 3: `Provenance.mask_conversions`; a conversion on a Z-stack refused; a mask ID may repeat (one entry per use), and "a mask ID is requested twice" is replaced by the one two-conversions refusal of [uses of one mask](#uses-of-one-mask-in-one-run-bm2-bm5). New `RunInputs.read_objects`, `masks.binary.label_binary`, `mask_rules` (`refuse_not_instances`, `refuse_binary_values`, `check_binary_values`), `masks.check_object_set`, `RunInputs.binary_to_instances` and `RunInputs.classes_to_binary` (BM12). The mask step's binary rule becomes {0, v} over the whole file, integers or booleans only (BM11): a file with {3, 7}, or with planes {0, 3} and {0, 7}, or a float file, that passed before is refused; its message changes. `PIECE_STRUCTURE` is imported from `masks.binary`, not restated | consumers accept exactly `SUPPORTED_RESOLVER_VERSIONS = {3}` ([resolver version](#resolver-version-check-bm10)), never `>= 3`, and copy the record; a `binary` mask whose files hold two positive values is redeclared `instances` or `parent_labels`, or its files fixed (a float file saved as integers), and the mask step run again |
 | CellPatcher | **removed:** `label_objects`, `BINARY_MASK_POLICIES`, `CONNECTIVITIES`, `BINARY_MASK_CONNECTIVITY`; `cell.binary_mask_connectivity`; the notebook checkbox "The mask is binary: label its connected components"; the in-memory use of `cell.binary_mask_policy`; `_RESOLVED`/`resolved_masks()`; `check_region_mask` (moves to normalization). A boolean cell mask in memory is `A_MASK_NOT_INSTANCES`. Float fraction, random and windowed masks are `MASK_REGION_INVALID`. A Z-stack conversion is refused. `run_config.json`: `mask_conversions` replaces `cell.binary_mask_connectivity` and `preprocessing.mask_conversions`. The notebook shows a file run's recorded conversion read-only (BM13) | in memory: pass integer instance labels, or run a described run with the policy; a config file with `binary_mask_connectivity` is refused (delete the key); `cell.binary_mask_policy` stays only as the file-run request field passed to the resolver; threshold probability maps before using them as fraction masks |
 | MorphoObjects | the boolean object-set message becomes the shared `A_MASK_NOT_INSTANCES` one (from `check_object_set`); `restrict_to` uses normalization's `check_region`, so MorphoObjects **declares `morphobricks-normalization` in its own dependencies and pins it** (today it would reach it only through CellPatcher and preprocessing); every brick that imports `check_region` or `RegionEstimate` does the same | none for valid inputs |
 | MorphoEmbed | the bool object-mask refusal becomes `A_MASK_NOT_INSTANCES` (was a dtype-kind message); `BINARY_MASK_POLICY = None` and its explicit argument removed; stale `ROADMAP.md:293-296` fixed; declares and pins normalization for `check_region` | none for valid inputs |
 | MorphoRelate | **a `binary` structure without `binary_mask_policy` gives no `structures.csv` rows** (it is a region: its region columns and component-count features stay); rows need the recorded conversion and are then of kind `instance`. Its own `BINARY_MASK_POLICIES` copy, labelling call site and structure splitting of binary masks removed; `run_config.json` `masks[].conversion/labeller/connectivity` replaced by `mask_conversions`; `connectivity` 2 → 8; in memory a boolean object set is `A_MASK_NOT_INSTANCES`. Grouping inside `parent_labels` is unchanged (BM14) | add `:connected_components` to the structure's `--mask` (or `binary_mask_policy` in the config) to keep per-component rows; downstream readers of `structure_label_kind = component` for binary masks read `instance` |
 | fiberfeatures | **a `region` mask is no longer handed to CellPatcher cell mode as cells** (I6): cell mode needs an `objects` mask; an empty analysis region gives undefined rows with `empty_region` instead of stopping; `> 0` becomes `!= 0`; the run record keys `binary_mask_policy`/`binary_mask_connectivity` become `mask_conversions`; `labeller_connectivity()` removed; notebooks' `BINARY_MASK_POLICY` parameter stays the request field | name an `objects` mask (with the policy for a binary one) for cell mode |
-| MorphoFeature | `mask_conversions` replaces `masks[].conversion/labeller/connectivity` in the manifest (`connectivity` 2 → 8); manifest `masks` entries are one per `(mask_id, role)`; `mask_uses` keyed by `(mask_id, use)`; `FovInput` accepts boolean **regions** and refuses boolean object sets with the shared message; `sampling_mask_empty` becomes the non-refusing ledger reason `empty_region`; `MASK_WINDOW_CONVERTED` only for objects uses, from one preflight; resolver messages passed on verbatim (no "the run file's masks cannot be resolved" or "the preprocessing run refuses ..." text) | readers of the manifest read `mask_conversions` and the per-role entries; code matching the old message prefixes matches the code instead; cached results whose identity carries the old record or another resolver version are not reused (the record and the version are part of the source identity) |
+| MorphoFeature | `mask_conversions` replaces `masks[].conversion/labeller/connectivity` in the manifest (`connectivity` 2 → 8); manifest `masks` entries are one per `(mask_id, role)`; one `MaskRequest` sent per use and `mask_uses` aggregated by `(mask_id, use)` only after resolution; its own policy-conflict and region-policy refusals removed (the resolver's are raised); `FovInput` accepts boolean **regions** and refuses boolean object sets with the shared message; `sampling_mask_empty` becomes the non-refusing ledger reason `empty_region`; `MASK_WINDOW_CONVERTED` only for objects uses, from one preflight; resolver messages passed on verbatim (no "the run file's masks cannot be resolved" or "the preprocessing run refuses ..." text) | readers of the manifest read `mask_conversions` and the per-role entries; code matching the old message prefixes matches the code instead; cached results whose identity carries the old record or another resolver version are not reused (the record and the version are part of the source identity) |
 
 ## Implementation order
 
@@ -462,15 +527,15 @@ propagates a code of this ADR carries the [exact-message and pre-read tests](#co
 | # | Repository | Change | Tests in the same PR |
 | --- | --- | --- | --- |
 | 0 | MorphoBricks-Spec | this ADR; `experiment-v1.md` §4.5, §4.5b, §8 (BM11); ADR 0001 D10 and evidence; ADR 0002 contract version 3; conformance plan P05 and "Mask rule" row | `refval.py` unchanged; tools tests |
-| 1 | morphobricks-normalization | `regions.check_region`, `RegionMaskError`, `EMPTY_REGION`, `RegionEstimate`; `region_white` and `region_vectors` on them; the two `stain` wrappers refuse an undefined estimate | the BM3/BM7 table case by case (F04, F05); F06's normalization part (both functions, both wrappers, bitwise values) |
-| 2 | morphobricks-preprocessing | resolver contract v3 (`mask_conversions`, Z-stack refusal, `(mask_id, role)` requests); `RunInputs.read_objects`; `masks.binary.label_binary`; `mask_rules`; `check_object_set`; strict binary at the mask step (BM11); pins normalization | F01, F02 (resolver record), F07's messages (array and non-array branches), F08c's resolver part, F09, F10, `label_binary`'s range and overflow rules; the resolver's import scan still passes |
-| 2b | morphobricks-preprocessing | the conversion helpers (BM12) with their lineage records; CLI and notebook card | F11, F12 (full records and every rejected input); mask discovery ignores `mask_lineage.jsonl` |
-| 3 | CellPatcher | the CellPatcher removals above; file runs read objects through `read_objects`; regions through `check_region`; record copied; `check_resolver_version`; the notebook shows the recorded conversion read-only (BM13) | F01 (no connectivity key accepted), F05 on fraction/random/windowed masks, F07, the `run_config.json` record (F02), F13; **a notebook test (BM13)**: for a file run whose resolver record holds a conversion, the form shows the record's text read-only (no enabled widget) and offers no binary-mask control, and a run without a conversion shows none |
+| 1 | morphobricks-normalization | `regions.check_region`, `RegionMaskError`, `EMPTY_REGION`, `RegionEstimate`; `region_white` and `region_vectors` on them; the two `stain` wrappers refuse an undefined estimate; `contracts.refuse_resolver_version` and `ResolverVersionError` | the BM3/BM7 table case by case (F04, F05); F06's normalization part (both functions, both wrappers, bitwise values); the exact `RESOLVER_VERSION_UNSUPPORTED` message for found 2 and 4 |
+| 2 | morphobricks-preprocessing | resolver contract v3 (`mask_conversions`, Z-stack refusal, `(mask_id, role)` requests); `RunInputs.read_objects`; `masks.binary.label_binary`; `mask_rules`; `check_object_set`; strict binary at the mask step (BM11); pins normalization | F01, F02 (resolver record), F07's messages (array and non-array branches), F08c's resolver part (repeated entries collapsed; the two-conversions refusal), F09, F10 (file-wide, the dtype rule), `label_binary` called directly with invalid input and its range and overflow rules; the resolver's import scan still passes |
+| 2b | morphobricks-preprocessing | the conversion helpers (BM12): `RunInputs.binary_to_instances` and `RunInputs.classes_to_binary`, their output mask IDs, collision refusals, lineage records and atomic publication; CLI and notebook card | F11, F12 (full records, every rejected input, source changed since check, lineage write failure and retry, the digest rule); mask discovery ignores `mask_lineage.jsonl` and the temporary files |
+| 3 | CellPatcher | the CellPatcher removals above; file runs read objects through `read_objects`; regions through `check_region`; record copied; the resolver-version check (normalization's constructor; declares and pins normalization); the notebook shows the recorded conversion read-only (BM13) | F01 (no connectivity key accepted), F05 on fraction/random/windowed masks, F07, the `run_config.json` record (F02), F13; **a notebook test (BM13)**: for a file run whose resolver record holds a conversion, the form shows the record's text read-only (no enabled widget) and offers no binary-mask control, and a run without a conversion shows none |
 | 4 | MorphoObjects | shared refusal; `check_region`; declares and pins normalization | F07, F04, F06 (`empty_region` unchanged) |
 | 5 | MorphoEmbed | shared refusal; constant removed; ROADMAP; declares and pins normalization | F07 |
-| 6 | MorphoRelate | no binary structure splitting; `read_objects`; record copied; region checker; shared refusal; `check_resolver_version` | F03 (no rows without the policy; instance rows and the record with it), F02, F06, F07, F13; **a regression test (BM14)**: on a described `v38` run, the `parent_labels` mask `Mito` (groups 3 and 9, each in two pieces) under a `parent_labels_support` request gives the same `structures.csv` grouping rows (`structures_table.py:89-114`), values and kinds as at the inventory commit, with no conversion record |
-| 7 | fiberfeatures | `read_objects`; record; no region as cells; empty region undefined; `!= 0`; `check_resolver_version` | F03 (region not cells), F02, F06, F13 |
-| 8 | MorphoFeature | `read_objects`; record copied; uses keyed by `(mask_id, use)`; one `MASK_WINDOW_CONVERTED` preflight for objects uses; resolver messages verbatim; `FovInput` regions; `empty_region` in the ledger; `check_resolver_version` | F02, F06, F07, F08a, F08b, F08c, F13; the message-preservation test of `resolve_masks`; the cross-route "Mask rule" with each provider |
+| 6 | MorphoRelate | no binary structure splitting; `read_objects`; record copied; region checker; shared refusal; the resolver-version check (normalization's constructor; declares and pins normalization) | F03 (no rows without the policy; instance rows and the record with it), F02, F06, F07, F13; **a regression test (BM14)**: on a described `v38` run, the `parent_labels` mask `Mito` (groups 3 and 9, each in two pieces) under a `parent_labels_support` request gives the same `structures.csv` grouping rows (`structures_table.py:89-114`), values and kinds as at the inventory commit, with no conversion record |
+| 7 | fiberfeatures | `read_objects`; record; no region as cells; empty region undefined; `!= 0`; the resolver-version check (normalization's constructor; declares and pins normalization) | F03 (region not cells), F02, F06, F13 |
+| 8 | MorphoFeature | `read_objects`; record copied; uses keyed by `(mask_id, use)`; one `MASK_WINDOW_CONVERTED` preflight for objects uses; resolver messages verbatim; `FovInput` regions; `empty_region` in the ledger; the resolver-version check (normalization's constructor; declares and pins normalization) | F02, F06, F07, F08a, F08b, F08c, F13; the message-preservation test of `resolve_masks`; the cross-route "Mask rule" with each provider |
 
 Steps 4-7 depend only on 1-3 and may run in parallel; MorphoFeature comes last because it orchestrates
 the providers changed in 4-7. The cross-route "Mask rule" test (conformance plan §4) becomes a gate of
@@ -498,19 +563,20 @@ pixel data. All arrays are 8 × 8 `uint8` unless stated; "described" means a `v0
 | F07 | BM4 in memory | a bool array as an object set (CellPatcher, MorphoFeature, MorphoObjects, MorphoRelate, MorphoEmbed); a `float32` object set; a list `[[0, 1]]`, `None` and an integer `numpy.ma.MaskedArray` as object sets; the same bool as a region | `A_MASK_NOT_INSTANCES` with the exact message in every brick: the array branch (`is a bool array`, `is a float32 array`) for the first two, the non-array branch (`is a list`, `is a NoneType`, `is a MaskedArray`, each `(not a plain NumPy array)`) for the others; the region is accepted |
 | F08a | BM5 windowed objects use | described with the policy; `TumorRegion` as the converted object set of a request on the lazy windowed route | `MASK_WINDOW_CONVERTED` with the exact message, raised once by the preflight, before any read; no output written |
 | F08b | BM5 windowed region and fraction uses | described with the policy; `TumorRegion` converted as objects by a whole-plane request, and the region mask and the fraction mask of a patch request on the windowed route | succeeds; the windowed request reads `TumorRegion` only by `read_mask_window` (never `read_objects`, never labelled); its fractions and its region restriction equal the whole-plane route's `!= 0` on the same patches, bit for bit; no `MASK_WINDOW_CONVERTED` |
-| F08c | BM2/BM5 one mask, two uses | described; one run with a whole-plane request using `TumorRegion` as objects with the policy and a windowed patch request using it as a fraction mask | succeeds; the resolver request holds `("TumorRegion", "objects", "connected_components")` and `("TumorRegion", "region", None)`; `mask_conversions` has exactly one record, F02's; the objects are F02's labels; the fraction equals F08b's. The same run with a second object set reading `TumorRegion` as objects **without** the policy is refused by the resolver's "two different conversions" `ValueError`, verbatim, before any read |
+| F08c | BM2/BM5 one mask, two uses | described; one run with a whole-plane request whose object set `CellsA` reads `TumorRegion` as objects with the policy, and a windowed patch request using it as a fraction mask; then the same run with a second object set `CellsB` reading `TumorRegion` as objects (i) with the policy, (ii) without it | succeeds; MorphoFeature's request to the resolver holds one entry per use, in run order: `("TumorRegion", "objects", "connected_components")` and `("TumorRegion", "region", None)`; `mask_conversions` has exactly one record, F02's; the objects are F02's labels; the fraction equals F08b's. (i) succeeds with three entries sent, the two `objects` entries collapsed into one selection and still one record; (ii) is refused by the resolver's "two different conversions" `ValueError`, propagated by MorphoFeature with its message verbatim (`'TumorRegion' is requested as objects with two different conversions ('connected_components' and None); ...`), before any read; MorphoFeature raises no refusal of its own about the policies |
 | F09 | BM5 volumes | described; a position with `z_count = 2`; `TumorRegion` as objects with the policy, (a) as `plane`, (b) as `volume` with `volume_support` | (a) and (b) `A_VOLUME_NOT_SUPPORTED`, no selection; the same request on a `z_count = 1` position is accepted; `TumorRegion` as a region only on the `z_count = 2` position is accepted |
-| F10 | BM11 strict binary at the mask step (experiment-v1 §4.5) | described; `binary` files holding (a) {0, 3, 7}; (b) {3, 7}; (c) {0, -1} (`int16`); (d) all 0; (e) all 255; (f) {0, 255}; (g) bool; (h) a T = 2 file whose planes hold {0, 3} and {0, 7} | (a), (b), (c), (h) refused by the mask step with `R_MASK_CONTRADICTS_REPRESENTATION` and the exact message (values `[3, 7]`, `[3, 7]`, `[-1]`, `[3, 7]`); never `checked`, so a run naming them is `A_MASK_UNCHECKED` without reading them. (d)-(g) `checked`; as objects with the policy (d) gives zero objects, (e) one object covering the plane, (f) and (g) the foreground's components; (d) as a region is an empty region (F06). `read_objects` on a plane holding {0, 3, 7} (a stubbed read) raises the same message from the same function |
-| F11 | BM12 binary → instances | (a) a checked `binary` mask of F02's two blobs; rejected: (b) an `instances` mask; (c) a `binary` file `not yet checked`; (d) a `binary` file with `z_count = 2` | (a) one `int32` output whose labels equal `read_objects` on the source (connectivity 8, same numbering) and whose `mask_lineage.jsonl` line is exactly the [schema](#the-conversion-helpers-bm12) with `operation: "binary_to_instances"`, `connectivity: 8`, `class_value: null`, both `content_sha256` equal to an independent SHA-256 of the pixel bytes, and `helper_version` the installed version; (b)-(d) refused with their messages, no output and no record written |
-| F12 | BM12 class labels → per-class binary | (a) an `uint16` class image with values {0, 1, 2}; (b) an `int32` one with {0, 2, 5}; rejected: (c) `int16` with a `-1`; (d) `float32`; (e) bool; (f) shape `(2, 8, 8)`; (g) a one-hot `(8, 8, 3)`; and (h) an all-zero image | (a) two `uint8` `binary` outputs, class 1 then class 2, disjoint, union `image != 0`, each with its exact lineage line (`operation: "classes_to_binary"`, `connectivity: null`, `class_value` 1 and 2); (b) outputs for 2 then 5 only; (c)-(g) refused with the exact messages of the [input table](#the-conversion-helpers-bm12), no output and no record; (h) no output, "no class present" |
+| F10 | BM11 strict binary at the mask step (experiment-v1 §4.5) | described; `binary` files holding (a) {0, 3, 7}; (b) {3, 7}; (c) {0, -1} (`int16`); (d) all 0; (e) all 255; (f) {0, 255}; (g) bool; (h) a T = 2 file whose planes hold {0, 3} and {0, 7}; (i) `float32` holding 0.0 and 1.0 only | (a), (b), (c), (h), (i) refused by the mask step with `R_MASK_CONTRADICTS_REPRESENTATION` and the exact message (values `[3, 7]`, `[3, 7]`, `[-1]`, `[3, 7]`; for (i) the dtype message naming `float32`): (h) shows the check is **file-wide**, since each plane alone would pass; never `checked`, so a run naming them is `A_MASK_UNCHECKED` without reading them. (d)-(g) `checked`; as objects with the policy (d) gives zero objects, (e) one object covering the plane, (f) and (g) the foreground's components; (d) as a region is an empty region (F06). `read_objects` on a plane holding {0, 3, 7} (a stubbed read) raises the same message from the same constructor, through `label_binary` |
+| F11 | BM12 binary → instances | (a) `run.binary_to_instances(fov, "TumorRegion", output_mask_id="TumorObjects")` on a checked `binary` mask of F02's two blobs; then (b) the same call again; rejected: (c) a mask ID that is not declared; (d) an `instances` mask; (e) a source file `not yet checked`; (f) a source file **changed since its check** (rewritten with other pixels after the mask step); (g) a `binary` file with `z_count = 2`; (h) `output_mask_id` already declared, and an output file already present that was not written by this conversion; (i) the lineage write fails (an injected error when `mask_lineage.jsonl` is replaced), then the call is repeated; (j) the digest rule: two arrays with identical pixel bytes and (j1) shapes `(8, 8)` and `(4, 16)`, (j2) axes `"TYX"` and `"ZYX"` at shape `(1, 8, 8)` | (a) one `int32` output `TumorObjects` whose labels equal `read_objects` on the source (connectivity 8, same numbering) and whose `mask_lineage.jsonl` line is exactly the [schema](#the-conversion-helpers-bm12) with `operation: "binary_to_instances"`, `connectivity: 8`, `class_value: null`, `axes`, `shape` and `dtype` of both files, both `content_sha256` equal to an independent SHA-256 of the canonical header and pixel bytes, and `helper_version` the installed version; (b) a no-op, files and lines byte-identical; (c)-(h) refused before anything is written, with their messages (`A_MASK_UNCHECKED` for (e) and (f)), no output, no line, no temporary file, existing files unchanged; (i) no output file, no temporary file, `mask_lineage.jsonl` byte-identical to before; the repeated call gives exactly (a)'s files and line; (j) the digests differ in both pairs |
+| F12 | BM12 class labels → per-class binary | `run.classes_to_binary(fov, mask_id, output_prefix="Tissue")` on (a) an `uint16` class image with values {0, 1, 2}; (b) an `int32` one with {0, 2, 5}; rejected: (c) `int16` with a `-1`; (d) `float32`; (e) bool; (f) shape `(2, 8, 8)`; (g) a one-hot `(8, 8, 3)`; (k) a mask declared `binary`; (l) a source file changed since its check; (m) `Tissue_class2` already declared; and (h) an all-zero image; (i) (a) with the lineage write of class 2 failing, then repeated | (a) two `uint8` `binary` outputs, `Tissue_class1` then `Tissue_class2`, disjoint, union `image != 0`, each with its exact lineage line (`operation: "classes_to_binary"`, `connectivity: null`, `class_value` 1 and 2, `axes`, `shape`, `dtype`, digests as in F11); (b) `Tissue_class2` and `Tissue_class5` only; (c)-(g), (k), (l), (m) refused before anything is written, with the exact messages of the [input table](#the-conversion-helpers-bm12) (`A_MASK_UNCHECKED` for (l)), no output, no line; (h) no output, "no class present"; (i) `Tissue_class1` and its line present, no `Tissue_class2` file, line or temporary file; the repeated call skips class 1 and publishes class 2, ending exactly as (a) |
 | F13 | BM10 resolver version | each run-record owner (CellPatcher, MorphoRelate, fiberfeatures, MorphoFeature) given a resolver whose `Provenance.resolver_version` is (a) 2, (b) 4, (c) 3; for (a), a cache entry written under version 3 for the same request | (a), (b) `RESOLVER_VERSION_UNSUPPORTED` with the exact message, before any read, with no output or record file written and the cache entry not read; (c) accepted |
 
 ## Amendments made by this ADR
 
 - **`experiment-v1.md`** §4.5 (`representation` rule), §4.5b ("Declared wrongly") and §8
-  (`R_MASK_CONTRADICTS_REPRESENTATION`): a `binary` file holds values in {0, v} for one v > 0;
-  all-zero and all-foreground files are accepted; two or more distinct positive values, or a negative
-  value, are refused at the mask step (BM11). It replaces "more than two distinct values", under which
+  (`R_MASK_CONTRADICTS_REPRESENTATION`): a `binary` file is stored as integers or booleans and holds,
+  over all its planes, values in {0, v} for one v > 0; all-zero and all-foreground files are accepted;
+  two or more distinct positive values, a negative value or a float file are refused at the mask step
+  (BM11). It replaces "more than two distinct values", under which
   {3, 7} passed and which ADR 0001 says the normative text wins over. §4.5c is unchanged: its "for
   example CellPatcher `binary_mask_policy`" names the request field, which stays, and "the numerical
   method stays in the brick that owns it" holds with preprocessing as the owner.
@@ -560,13 +626,20 @@ Not owner decisions; the owner may amend them.
 8. The in-memory message names the described-run route, not a labelling function, so that BM2's "one
    labeller, decided once by the resolver" holds in notebooks too.
 9. The names of this encoding: the uses `objects`/`region`/`fraction`, `mask_rules` and its
-   constructors, `masks.binary.label_binary`, `RegionEstimate`, `mask_conversion` and
-   `mask_lineage.jsonl`, `SUPPORTED_RESOLVER_VERSIONS`, `check_window_objects`.
+   constructors, `masks.binary.label_binary`, `RegionEstimate`, `mask_conversion`,
+   `mask_lineage.jsonl` and its temporary-file protocol, `SUPPORTED_RESOLVER_VERSIONS`,
+   `check_window_objects`, `contracts.refuse_resolver_version`.
 10. The `stain` wrappers refuse an undefined estimate instead of returning it (an absent white means
     "not given" to `to_scalar`).
 11. `content_sha256` over the pixel bytes in stored axis order and dtype, not over the file.
-12. `RESOLVER_VERSION_UNSUPPORTED` constructed in each consumer, because it must refuse a
-    preprocessing that predates this ADR.
+12. `RESOLVER_VERSION_UNSUPPORTED` constructed once, in normalization (`contracts`), not in
+    preprocessing: it must refuse a preprocessing that predates this ADR, and normalization is the
+    lowest brick every consumer can import.
+13. `classes_to_binary` takes a source declared `parent_labels` or `instances`, refuses `binary`;
+    output files go to the mask-type folder named by the output mask ID, at the source's relative
+    path.
+14. The lineage digest's canonical header is sorted-key compact JSON of `axes`, `dtype` and
+    `shape`, then one newline byte.
 
 ## Open points
 
