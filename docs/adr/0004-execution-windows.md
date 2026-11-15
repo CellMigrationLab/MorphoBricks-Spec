@@ -1,6 +1,6 @@
 # ADR 0004: execution windows, typed coordinates and the patch catalogue (first slice)
 
-- **Status:** **Accepted** (owner, 14 November 2026). The owner decisions it encodes are recorded in
+- **Status:** **Accepted** (owner, 14 November 2026); amended by EW11 (window histograms, owner, 15 November 2026). The owner decisions it encodes are recorded in
   [the one-route design](../design/one-route.md) (section 7 and the decisions table; the design itself
   stays proposed until its gates are met). Specification only: no fixture, golden or validator of `experiment-v1.md` changes
   (`python -I tools/audit/refval.py fixtures .` unchanged). The coordinate conversions are executable
@@ -41,6 +41,7 @@ for typed coordinates and globally planned identities **before** any scheduler c
 | EW8 | **Column fields.** Every feature column computed under a windowed scope carries `scaling_scope` and, when the provider defines one, `feature_group` (a provider-defined label such as fiberfeatures' `structure`, `amount` or `not_assessed`). Both are recorded in the run's per-column section. Amount features are computed and flagged, not refused (owner decision). | Dropping unknown column fields (today's behaviour). |
 | EW9 | **Execution record (operational, not scientific identity).** Device, precision and thread counts per library (for example torch, SciPy FFT workers) of every windowed unit are fixed for the run and recorded. Serial and pooled CPU runs must give identical values. CPU vs CUDA is held to a stated per-feature tolerance. | Library defaults (thread counts that change bits between serial and pooled runs). |
 | EW10 | **Additive provider contract.** Windowed execution is declared by an optional manifest field (`windowed_execution`, MorphoFeature provider API v3, its contract §6a). A provider that does not declare it is never called on a window. Asking for a windowed scope from such a provider is refused when the run is planned, before any pixel is read. | A provider API version 4: discovery accepts version 3 exactly, so every provider would break at once. |
+| EW11 | **Window histograms** (amendment, owner, 15 November 2026). A windowed run stores, for every catalogue patch and every image it measured, a histogram of the **patch interior** (never the margin), so that downstream normalization strategies (group pooling, the later `run` scope, design §4.6) can use and reproduce what each window saw. They are written with the run, in the normalization brick's histogram table format ([below](#window-histograms-ew11)). | Recomputing from the source later (a second full read); histograms of the whole window (margins overlap, so counts double); not storing them (the per-window scaling is not reproducible downstream). |
 
 ## Coordinate types (EW1)
 
@@ -80,6 +81,50 @@ pixels and a plane of shape `(H, W)`:
   x1 - origin_x)`.
 
 A provider declares the smallest window it accepts; a smaller one is refused, never padded.
+
+## Window histograms (EW11)
+
+Owner decision of 15 November 2026: store per-window histograms so the normalization strategy can be
+kept downstream. Pixels counted: the **patch interior** only (`local_interior` of the window record),
+which is also where `patch_window` takes its percentiles (EW7).
+
+**What is stored, per catalogue patch:**
+
+1. **Source channels** (fluorescence channels and the `R`, `G`, `B` of an RGB unit): one histogram
+   per channel read for the patch, binned with **exactly the plane's binning** that preprocessing
+   recorded in `plane_histograms.csv` (`bin_count`, `binning_min`, `binning_max`, and the robust
+   tails with the same limits; normalization contract §1.2.2, §1.4). Consequences:
+   - histograms of the interiors of a grid whose patches do not overlap **sum exactly**
+     (bin counts, valid and total pixel counts, tail counts) to the plane's histogram, and tail sums
+     and means agree within the float rounding of §1.2.2's block rule. This is the conformance test;
+   - 8-bit `R`, `G`, `B` are exact (256 values, 256 bins).
+   - A plane without a recorded histogram (no preprocessing statistics) is refused for windowed
+     histograms, never binned with guessed limits.
+2. **Derived images** (the scalar image of a stain preset, for example `Eosin` from `he_eosin`): one
+   histogram of the derived interior, which cannot be rebuilt from the `R`, `G`, `B` histograms (the
+   conversion mixes the three channels nonlinearly). Because no whole plane is ever seen, the binning
+   is **fixed in advance per preset and options**: the normalization brick states each preset's
+   output bounds for 8-bit input and a declared white (for optical density, from
+   `log10(white / 255)` to `log10(white / 1)` per channel, mapped through the stain matrix), and a
+   recorded bin count. Pixels the conversion excludes (its `exclusion` map: above white, saturated)
+   are **not counted**; their number is recorded as `excluded_pixel_count`. Each row carries the
+   conversion record (preset and version, white, stain vectors, polarizer, scikit-image version where
+   used) so histograms of different conversions are never pooled together.
+3. **The scaling applied**: for each windowed feature column, the provider's interior percentiles (or
+   other scaling values) actually used, recorded per patch so that every value is reproducible.
+
+**Table.** `window_histograms` is written with the run's patch outputs, next to the patch catalogue
+(EW3), in the normalization brick's histogram table format extended with `patch_set`, `patch_id`,
+the global `bounds` and the `local_interior` (`pixel_edge`), `image` (channel ID or derived image
+name) and, for derived images, the conversion record and `excluded_pixel_count`. A table of another
+schema version is refused, never converted. Only windowed runs write it; the default `whole_plane`
+route is unchanged.
+
+**Implementation order:** (1) normalization: the table schema with the window columns, the per-preset
+output bounds and a function binning a window interior with given limits; (2) MorphoFeature: computes
+the histograms from the window pixels it already holds (no extra read) and writes the table, plus the
+exact-sum test against `plane_histograms.csv`; (3) fiberfeatures (and any windowed provider): reports
+the scaling values it applied, recorded by MorphoFeature per patch and column.
 
 ## Consequences
 
