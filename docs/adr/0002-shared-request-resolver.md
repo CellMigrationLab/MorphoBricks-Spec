@@ -5,6 +5,9 @@
   answered the same day, [below](#owner-answers-10-november-2026)). Amended on 11 November 2026
   for parent-label masks (resolver contract version 2,
   [below](#resolver-contract-version-2-parent-label-masks-11-november-2026); ADR 0001 PL1).
+  AR5 is amended by [ADR 0005](0005-binary-masks.md) (proposed, 15 November 2026): one helper in
+  preprocessing applies the conversion, 8-connected and fixed, and the resolver records it (resolver
+  contract version 3, [below](#resolver-contract-version-3-the-conversion-record-adr-0005)).
   Specification only: it changes no fixture, golden or validator (`python -I tools/audit/refval.py fixtures .` unchanged).
   The first implementation is a **draft** pull request in morphobricks-preprocessing
   (`claude/resolve-request`, target v0.5.1), unmerged until after the v0.5.0 tag.
@@ -61,7 +64,7 @@ an adversarial self-audit; the owner decided on 10 November 2026 as recorded bel
 | AR2 | **Both routes kept.** Direct runs (`fiberfeatures`, `morphorelate run`, CellPatcher) **and** the MorphoFeature route stay. No brick depends on MorphoFeature. MorphoFeature orchestrates multi-brick runs, shared fits, caching, exports and keeps the provider capability checks | Retiring the direct runners (removes 128 fiberfeatures columns, its statistics and Optuna layer and notebooks, MorphoRelate's whole-FOV table and project workflow); thin direct wrappers around MorphoFeature (same loss, plus the pin coupling) | roadmap §6 | conformance §4 "Cross-route" |
 | AR3 | **3-D stays open, enabled later.** A selection is **one plane or one Z-volume**. A consumer capability flag `volume_support` **refuses** a volume request by default (`A_VOLUME_NOT_SUPPORTED`, a resolver-contract code). 3-D is for the fiberfeatures direct route only and is enabled later under its own ADR; nothing enables it now. MorphoFeature stays 2-D. A one-slice volume reads exactly what the plane selection reads | A plane-only selection type (would need a breaking change of the resolver contract for 3-D); enabling volumes now (preprocessing refuses Z-stacks, `z_stack_not_supported`; whether the fiberfeatures direct route uses fitted normalization is unknown) | roadmap §9; conformance §4 "Volume" | a plane and a volume request on `v01` (refused by default; accepted with the flag and equal to the plane selection) |
 | AR4 | **Mandatory cross-route conformance** for every brick with two routes (fiberfeatures, MorphoRelate), on the **shared 2-D capabilities**. The comparison is defined exactly in conformance §4 ("Cross-route"): the same object set, FOV, plane and time point; the shared columns, values, units, missingness and refusals identical; an explicit list of direct-only capabilities that the test does **not** compare (fiberfeatures: the 137-column table against the provider's 9, its statistics and Optuna; MorphoRelate: the whole-FOV table, and its direct run measuring one time point per run). The **device** is explicit and recorded on both routes; the test fixes the device or states a tolerance | A "same outputs" claim without a definition (direct and provider shapes differ, so it is false as stated); comparing only numbers (misses the refusals and the missingness) | conformance §4 "Cross-route" | the 0/1 two-blob mask, an instance mask with labels 1 and 7, a T=2 time-lapse (the evidence report's fixtures, to be checked into each brick) |
-| AR5 | **One mask rule.** A `binary` mask used as an object set is refused (`A_MASK_NOT_INSTANCES`) unless the request records the explicit P27 `binary_mask_policy` (ADR 0001 AQ9, experiment-v1 §4.5c). The resolver **returns the policy decision** (it cannot import CellPatcher, which depends on preprocessing) and **each route applies it with CellPatcher's labeller**, the one shared labeller: two call sites (MorphoFeature; the direct runners), each with a test, and the cross-route conformance test proves equal objects. MorphoFeature's automatic #180 relabelling is removed (AR10, AR11). Fixes MorphoFeature #200 | Preprocessing's mask step labelling once on disk (a larger change to the mask step, and a labelled copy of every mask); each route keeping its own labeller (the 1-vs-2-objects discrepancy stays) | conformance §4 "Mask rule"; experiment-v1 §4.5c unchanged | `v08` (P27 a/b/c) through the resolver, plus the two-blob 0/1 mask on both routes |
+| AR5 | **One mask rule.** A `binary` mask used as an object set is refused (`A_MASK_NOT_INSTANCES`) unless the request records the explicit P27 `binary_mask_policy` (ADR 0001 AQ9, experiment-v1 §4.5c). The resolver **returns the policy decision** (it cannot import CellPatcher, which depends on preprocessing) and **each route applies it with CellPatcher's labeller**, the one shared labeller: two call sites (MorphoFeature; the direct runners), each with a test, and the cross-route conformance test proves equal objects. MorphoFeature's automatic #180 relabelling is removed (AR10, AR11). Fixes MorphoFeature #200. *Amended by [ADR 0005](0005-binary-masks.md) (BM1, BM2, BM6): the one labeller is preprocessing's `RunInputs.read_objects`, called at the read, not each route calling CellPatcher's labeller; its connectivity is 8 and is not a parameter anywhere; the resolver records `{mask_id, conversion, connectivity, labeller}` and every brick copies it as is* | Preprocessing's mask step labelling once on disk (a larger change to the mask step, and a labelled copy of every mask); each route keeping its own labeller (the 1-vs-2-objects discrepancy stays) | conformance §4 "Mask rule"; experiment-v1 §4.5c unchanged | `v08` (P27 a/b/c) through the resolver, plus the two-blob 0/1 mask on both routes |
 | AR6 | **One statistics rule.** Inferential outputs name the **biological unit** (the canonical repeat, `repeat_group`); FOV-level and position-level scores are labelled **exploratory**. Fixes fiberfeatures #195: its default scoring unit changes (with a release note; the Optuna results of existing studies change) | Keeping `sample_id` (position stem) as the default unit (merges technical repeats that share a stem, scores N = FOVs); relying on MorphoFeature's route to avoid the statistics (the direct route keeps them) | conformance §4 "Statistics rule"; roadmap §6 | the two-wells-of-one-repeat fixture of the evidence report (§3.5) |
 | AR7 | **Ownership split.** The resolver **classifies** (what exists: present / absent per image, full / partial / unavailable per repeat). MorphoFeature **decides** provider capability (`rgb_support`, devices, the provider API) and **records** the scope and the device in the run manifest. The bricks own their kernels and their direct-run tables | The resolver deciding capability (it would import provider manifests); MorphoFeature re-classifying scope (a second copy of the rules) | roadmap §6 | conformance §4 "Resolver", "Scope record" |
 | AR8 | **Versioned resolver contract.** The resolver has a small contract with a **version number** (`RESOLVER_VERSION`, 1 at first) and its own conformance suite driven by the Spec fixtures through `RunInputs`. Preprocessing **v0.5.1** = `Fov.image_type`, the partial-mask test helper, the lab-tool links input (`--lab-links` JSON, as decided) and the resolver, plus the AR10 removals (the first change of v0.5.1), **only** | Shipping the resolver in v0.5.0 (the release candidate is under review; preprocessing is the release bottleneck); an unversioned method (a consumer could not state which rules it was tested against) | conformance §4 "Resolver" | the resolver suite (`test_spec_resolve_request.py` in preprocessing) |
@@ -101,7 +104,10 @@ run's SHA-256) and the mask step's status file only; it never reads a pixel, lab
 chooses a device or imports a brick, CellPatcher or provider module (a test scans its modules).
 A malformed request (an ID twice; an unknown role, policy, plane kind or device; a policy on a
 mask that is not `binary` or in a `region` role) is a programming error (`ValueError`), not a
-refusal. A run without a published description is refused by the resolver with `A_DESCRIPTION_REQUIRED`,
+refusal. *For mask IDs, "an ID twice" is superseded by contract version 3
+([below](#resolver-contract-version-3-the-conversion-record-adr-0005)): a mask ID may repeat, and only
+its `objects` requests with two different conversions are malformed; a channel ID twice stays
+malformed.* A run without a published description is refused by the resolver with `A_DESCRIPTION_REQUIRED`,
 naming the fix (run the notebook or `describe`); there is no header-name path (AR10).
 
 Codes: `A_VOLUME_NOT_SUPPORTED` and `A_DESCRIPTION_REQUIRED` are defined by this contract, not by
@@ -126,6 +132,37 @@ is version 2 (`RESOLVER_VERSION = 2`, AR8); everything else above stands, and no
 - **Objects.** In the role `objects` it is `A_MASK_NOT_INSTANCES`, with or without the
   capability. A `binary_mask_policy` on it is a malformed request (`ValueError`), as for any mask
   that is not `binary`.
+
+### Resolver contract version 3: the conversion record (ADR 0005)
+
+[ADR 0005](0005-binary-masks.md) (proposed, 15 November 2026) adds one output, one refusal and one
+request rule, so the contract is version 3 (`RESOLVER_VERSION = 3`); everything above stands, and no
+`A_*` code is added.
+
+- **Output.** `Provenance.mask_conversions`: one record `{mask_id, conversion, connectivity,
+  labeller}` per mask of the request whose selection has a `conversion`, in request order
+  (`connected_components`: `connectivity` 8, `labeller` `morphobricks_preprocessing.RunInputs.read_objects`;
+  `parent_labels_as_area`: both null). Every consumer copies the list as is into its run record under
+  `mask_conversions`.
+- **Refusal.** A `binary_mask_policy` on a position whose images have more than one Z plane is
+  `A_VOLUME_NOT_SUPPORTED`, for a `plane` or a `volume` request, with or without `volume_support`.
+- **Request.** A mask request is identified by `(mask_id, role)`, and a mask ID may appear in any
+  number of `MaskRequest`s: a consumer sends **one entry per use** (each object set, each region or
+  fraction use) without merging them, so that the resolver, not the consumer, validates them together.
+  Entries of one `(mask_id, role)` with the same conversion collapse into one `MaskSelection`; one mask
+  ID can therefore be `objects` (converted or not) and `region` in the same request, with one
+  `MaskSelection` per role. The version-1 "a mask ID is requested twice" `ValueError` is replaced by
+  one: the same mask ID as `objects` with two different conversions (a policy and none count as two).
+  Coverage and the mask refusals are computed once per mask ID. A mask ID has at most one conversion
+  record ([ADR 0005, uses of one mask](0005-binary-masks.md#uses-of-one-mask-in-one-run-bm2-bm5)).
+- **Application.** The resolver still reads no pixel and labels nothing; `RunInputs.read_objects`
+  (a reading module, not a resolver module) applies the recorded conversion, replacing AR5's "each
+  route applies it with CellPatcher's labeller".
+- **Consumers check the version.** Each consumer accepts exactly the versions it lists
+  (`SUPPORTED_RESOLVER_VERSIONS = {3}` in this wave), checked on `Provenance.resolver_version` before
+  any pixel read, output or cache reuse, and refuses any other with `RESOLVER_VERSION_UNSUPPORTED`,
+  built by normalization's one constructor `contracts.refuse_resolver_version`
+  ([ADR 0005](0005-binary-masks.md#resolver-version-check-bm10)); never `>= 3`.
 
 ### Consequences
 
