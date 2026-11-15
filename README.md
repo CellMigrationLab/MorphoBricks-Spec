@@ -212,6 +212,9 @@ writer or a brick that consumes the description.
 - [ADR 0004](docs/adr/0004-execution-windows.md) (**accepted**, 14 November 2026): execution windows,
   typed coordinates and the patch catalogue, the first slice of the one-route design; reference
   conversions in `tools/execution_frames.py`.
+- [ADR 0005](docs/adr/0005-binary-masks.md) (**proposed**, owner decisions of 15 November 2026):
+  one policy for binary masks: 8-connected and fixed, one labeller in preprocessing with one
+  recorded conversion, one region checker, `empty_region` for an empty region, and the PR order per brick.
 
 ### Fixtures and goldens
 

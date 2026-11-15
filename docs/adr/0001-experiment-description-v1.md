@@ -6,7 +6,9 @@
   third round below answers its questions; the fourth round (FR1, FR2) separates condition and
   technical-repeat IDs from their folder labels and states the limit of CSV byte-identity; the
   fifth round (7 November 2026, SQ2, SQ6-SQ8) settles the Stage 1 design questions. PL1
-  (11 November 2026) supersedes AQ8: `parent_labels` masks are described in v1.
+  (11 November 2026) supersedes AQ8: `parent_labels` masks are described in v1. Amended by
+  [ADR 0005](0005-binary-masks.md) (proposed, 15 November 2026): the connectivity of a binary
+  mask's pieces and objects is 8, fixed (BM1); the stale "4-connected" evidence of PL1 is marked.
 - **Tracking:** [RFC #1](https://github.com/CellMigrationLab/MorphoBricks-Spec/issues/1);
   [roadmap §2 and §5 Stage 0](../roadmap.md);
   [feasibility audit](../audits/rfc1-feasibility-2026-11-05.md);
@@ -363,12 +365,15 @@ Evidence, read at these commits:
   measured these masks in memory (PRs #242, #243: CellProfiler parity, HPMEC, JUMP mito).
 - morphobricks-preprocessing `main` `a775ebf`: the mask step suggests the kind `grouped` (median
   pieces per label > 2) and the relation `grouped_by` as evidence (`mask_scan.py:7-11`, `:18-19`,
-  `:536-537`, `:557-563`); its pieces are 4-connected (`mask_scan.py:299-326`); v1 lists
+  `:536-537`, `:557-563`); its pieces are 4-connected (`mask_scan.py:299-326`; dated evidence at `a775ebf`: they are
+  8-connected since, `mask_pairs.py:19-21`, and [ADR 0005](0005-binary-masks.md) BM1 fixes every
+  connectivity of MorphoBricks at 8, never a parameter); v1 lists
   `instances` and `binary` only (`description_rules.py:107`); the resolver already refuses any
   non-`instances` mask used as objects (`run_inputs_request.py:418-429`) and takes the consumer's
   capabilities as booleans (`run_inputs_request.py:86-100`); `instances` files are `checked`
   once read, since pixels cannot prove them (`mask_representation.py:14-17`).
-- CellPatcher `main` `2bbeaf3`: the shared labeller is 8-connected (`object_geometry.py:40-43`,
+- CellPatcher `main` `2bbeaf3` (dated evidence: [ADR 0005](0005-binary-masks.md) BM6 moves the one
+  labeller to preprocessing's `RunInputs.read_objects`): the shared labeller is 8-connected (`object_geometry.py:40-43`,
   owner decision of 11 November 2026) and refuses an integer mask with more than one foreground
   value (`object_geometry.py:206-209`), so it can never split a `parent_labels` mask.
 
