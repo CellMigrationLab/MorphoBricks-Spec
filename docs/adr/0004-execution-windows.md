@@ -238,7 +238,10 @@ For every bounded family:
   changing it is a change of `spec_version` and of the `window_histograms.csv` schema.
 - `analytic_min`, `analytic_max`: the family's analytic bounds of the output for every 8-bit input
   under the given options (table below), as float64.
-- `tolerance = 4 * math.ulp(max(abs(analytic_min), abs(analytic_max)))`, in Python float64.
+- `tolerance = 4 * float(numpy.spacing(numpy.float32(m)))` with `m = max(abs(analytic_min),
+  abs(analytic_max))`: four float32 units in the last place at the bound's magnitude, because the
+  derived image is float32 and its rounding at the bound is up to half a float32 unit, so a value
+  that is within the analytic bounds before rounding always lies inside the widened limits.
 - `binning_min = analytic_min − tolerance`, `binning_max = analytic_max + tolerance` (float64).
 - Values below `binning_min` or above `binning_max` go to the explicit underflow and overflow
   (count and moments), never to an end bin. The bins follow the float rule of §1.2.2 with these
@@ -265,8 +268,8 @@ ruling 3) **no derived window histogram and no `conversion_id`** are written for
 the features still run, and the patch's source-channel histograms are still written. A derived image
 is never binned with guessed limits and never clipped into end bins. The normalization tests feed
 each bounded family its extreme 8-bit inputs (all 2**24 colours for `cielab` and `luminance`) and
-require empty tails; the derived image is float32, so a value can exceed the float64 bound by its
-float32 rounding, and such a value is counted in a tail, which these tests would show.
+require empty tails. The float32-sized tolerance above covers the derived image's float32 rounding,
+so a non-empty tail in these tests is a defect (a wrong analytic bound or conversion), not rounding.
 
 **What is counted.** **Every finite derived pixel** of the interior, with nothing excluded (owner
 ruling 2): `ScalarResult.exclusion` is a continuous image (the exclusion stain's concentration), not
