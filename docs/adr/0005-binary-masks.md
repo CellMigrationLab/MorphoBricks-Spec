@@ -70,7 +70,7 @@ preprocessing's `RunInputs`; normalization can import neither preprocessing nor 
 
 ## Decisions
 
-The owner decided BM1-BM5 on 15 November 2026 (final). BM6-BM10 are this ADR's encoding of them.
+The owner decided BM1-BM5 and BM11-BM14 on 15 November 2026 (final). BM6-BM10 are this ADR's encoding of them.
 
 | ID | Decision | Rejected alternative |
 | --- | --- | --- |
@@ -84,6 +84,10 @@ The owner decided BM1-BM5 on 15 November 2026 (final). BM6-BM10 are this ADR's e
 | BM8 | **One undefined reason for an empty region, `empty_region`** ([vocabulary](#undefined-reason-vocabulary-bm8)). A value whose denominator is the region's pixels is undefined; a value whose denominator is another, non-empty area (the fraction of a patch inside the region) is defined and may be 0. | A refusal (`sampling_mask_empty`, fiberfeatures' row stop, normalization's `ValueError`); 0 for a mean over no pixels. |
 | BM9 | **Refusal codes and messages are fixed here** ([table](#refusal-codes-and-messages)): `A_MASK_NOT_INSTANCES` (resolver and in memory), `A_VOLUME_NOT_SUPPORTED` (a conversion of a Z-stack), `MASK_WINDOW_CONVERTED`, `MASK_REGION_INVALID`, and `R_MASK_CONTRADICTS_REPRESENTATION` at read. Each is raised by one function; bricks re-raise it unchanged. | Each brick rewording the shared refusals (I11, I12). |
 | BM10 | **Resolver contract version 3.** The resolver adds the conversion record to its `Provenance` and refuses a conversion on a Z-stack. Nothing else in the contract changes. | Recording the conversion only in each brick (I13); leaving the version at 2 (a consumer could not tell whether its resolver gives the record). |
+| BM11 | **Strict binary at the mask step** (owner, 15 November 2026): a mask declared `binary` holds exactly 0 and **one** positive value; any other content (for example {0, 3, 7}) is refused at the mask step with `R_MASK_CONTRADICTS_REPRESENTATION`, so the refusal comes before any run, not at read (closes I14; F10 moves to the mask step). | Any non-zero as foreground (a mask that is really labels or classes passes as binary and is labelled silently). |
+| BM12 | **Explicit conversion helpers in preprocessing** (owner): the user converts masks on purpose, as a recorded step that writes **new mask files** declared with their own representation: **binary → instance labels** (the BM1/BM6 labelling: connected components, 8-connected) and **class label image → one binary mask per class value** (for class/semantic segmentation). Each output carries a conversion record (source mask and its fingerprint, operation, class value or connectivity, helper and version), like preprocessing's existing named-axis copies (`convert`). The run then declares the outputs and reads them like any mask. | Converting implicitly at read only (users cannot produce instance or per-class masks they can inspect, share or edit); a labelled copy of every binary mask, made automatically (AR5, still rejected: here nothing is converted unless the user asks, and the source is unchanged). |
+| BM13 | **Notebook display** (owner): CellPatcher's notebook shows the recorded conversion of a file run **read-only**; it offers no binary-mask setting. | A file-run-only control (a second place to decide what BM2 decides once). |
+| BM14 | **Grouping inside `parent_labels` is a measurement, not a labeller** (owner): MorphoRelate's rows per group of an already-labelled `parent_labels` mask (`structures_table.py:89-114`) are allowed; BM2's "no other labeller" applies to binary masks only. | Routing parent-label grouping through the recorded conversion (the user's labels already define the groups). |
 
 ### Why the helper is in preprocessing
 
@@ -243,7 +247,8 @@ ones it imports. A PR does not start before the tags it needs exist.
 | --- | --- | --- | --- |
 | 0 | MorphoBricks-Spec | this ADR; ADR 0001/0002 amendments; conformance plan "Mask rule" row | `refval.py` unchanged; tools tests |
 | 1 | morphobricks-normalization | `regions.check_region`, `EMPTY_REGION`, `RegionMaskError`; `region_white` on it | the BM3/BM7 table case by case (F04, F05); empty region in `region_white` (F06) |
-| 2 | morphobricks-preprocessing | resolver contract v3 (`mask_conversions`, Z-stack refusal); `RunInputs.read_objects`; `check_object_set`; `PIECE_STRUCTURE` from the helper module; pins normalization | F01, F02, F09, F10 through `RunInputs`; F07's message; the resolver's import scan still passes |
+| 2 | morphobricks-preprocessing | resolver contract v3 (`mask_conversions`, Z-stack refusal); `RunInputs.read_objects`; `check_object_set`; `PIECE_STRUCTURE` from the helper module; strict binary at the mask step (BM11); pins normalization | F01, F02, F09, F10 at the mask step; F07's message; the resolver's import scan still passes |
+| 2b | morphobricks-preprocessing | the conversion helpers (BM12): binary → instances, class labels → per-class binary; recorded outputs; CLI and notebook card | F11 (binary → instances equals `read_objects` on the same mask), F12 (class image with values {0, 1, 2} → two binary masks whose union is the foreground, records exact) |
 | 3 | CellPatcher | the CellPatcher removals above; file runs read objects through `read_objects`; regions through `check_region`; record copied | F01 (no connectivity key accepted), F05 on fraction/random/windowed masks, F07, the `run_config.json` record (F02) |
 | 4 | MorphoObjects | shared refusal; `check_region` | F07, F04, F06 (`empty_region` unchanged) |
 | 5 | MorphoEmbed | shared refusal; constant removed; ROADMAP | F07 |
@@ -276,7 +281,9 @@ pixel data. All arrays are 8 × 8 `uint8` unless stated; "described" means a `v0
 | F07 | BM4 in memory | a bool array as an object set (CellPatcher, MorphoFeature, MorphoObjects, MorphoRelate, MorphoEmbed); a `float32` object set; the same bool as a region | `A_MASK_NOT_INSTANCES` with the exact message in every brick for the first two; the region is accepted |
 | F08 | BM5 windowed route | described with the policy; `TumorRegion` as a converted object set of one request and the fraction mask of a windowed patch request | the windowed objects read is `MASK_WINDOW_CONVERTED` before any pixel is read; the fraction read is by window and equal to the whole-plane fraction; refused once, one message |
 | F09 | BM5 volumes | described; a position with `z_count = 2`; `TumorRegion` as objects with the policy, (a) as `plane`, (b) as `volume` with `volume_support` | (a) and (b) `A_VOLUME_NOT_SUPPORTED`, no selection; the same request on a `z_count = 1` position is accepted |
-| F10 | BM6 value rule at read | described; a `binary` file holding only {3, 7}, converted with the policy | `read_objects` raises `R_MASK_CONTRADICTS_REPRESENTATION` naming the file and the values 3 and 7; no labels are returned |
+| F10 | BM11 strict binary at the mask step | described; a `binary` file holding {0, 3, 7} (and one holding only {3, 7}) | the mask step refuses each with `R_MASK_CONTRADICTS_REPRESENTATION` naming the file and its values; no run uses them; `read_objects` keeps the same check as a guard |
+| F11 | BM12 binary → instances | a checked `binary` mask; the helper writes an `instances` mask | its labels equal `read_objects` on the source (connectivity 8, same numbering); the output's record names the source fingerprint, `binary_to_instances`, `connectivity: 8` and the helper version |
+| F12 | BM12 class labels → per-class binary | a label image with values {0, 1, 2} | two `binary` masks (classes 1 and 2), disjoint, whose union is `image != 0`; each record names the source, `classes_to_binary`, its class value and the helper version; class 0 gives no mask |
 
 ## Amendments made by this ADR
 
@@ -321,13 +328,5 @@ Not owner decisions; the owner may amend them.
 
 ## Open points
 
-1. **CellPatcher notebook.** With the checkbox removed (BM1), a notebook file run on a binary mask sets
-   `cell.binary_mask_policy` in its config cell. Whether the notebook gets a file-run-only control is
-   left to the CellPatcher PR's review.
-2. **The mask step's value rule (I14).** The mask step accepts any two values; `read_objects` wants 0
-   and one positive value, so {3, 7} passes the step and fails at read (F10). Tightening the mask step
-   would change `R_MASK_CONTRADICTS_REPRESENTATION`'s meaning in experiment-v1 §8 and needs its own
-   owner decision.
-3. **MorphoRelate's `parent_labels` pieces** (`structures_table.py:89-114`) are 8-connected rows within
-   each group. PL1 allows a brick to measure inside a group; whether these rows are "another labeller"
-   under BM2 is not decided here.
+None left from the draft: the CellPatcher notebook (BM13), the mask step's value rule (BM11) and
+MorphoRelate's `parent_labels` grouping (BM14) were decided by the owner on 15 November 2026.
