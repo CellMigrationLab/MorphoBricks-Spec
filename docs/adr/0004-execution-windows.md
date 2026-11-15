@@ -2,7 +2,7 @@
 
 - **Status:** **Accepted** (owner, 14 November 2026). EW11 (window histograms) is an **accepted owner
   decision of 15 November 2026, not implemented**: no brick has code for it yet, and its two steps
-  land in the order stated in [its section](#window-histograms-ew11). The owner decisions it encodes are recorded in
+  land in the order stated in [its section](#window-histograms-ew11). Owner answers of 15 November 2026 (evening) on its open choices: a missing or mismatched plane histogram gives `not_measured` rows and the run continues; `conversion_id` covers the resolved settings and the scikit-image version only (not numpy or normalization), with an unset white resolved to the default; one `window_scaling.csv` row per column and scaling step; exact tail sums stored beside mean and std; sparse `counts`; a disagreeing duplicate report makes the row `not_measured`; diagnostics stored as counts. The owner decisions it encodes are recorded in
   [the one-route design](../design/one-route.md) (section 7 and the decisions table; the design itself
   stays proposed until its gates are met). Specification only: no fixture, golden or validator of `experiment-v1.md` changes
   (`python -I tools/audit/refval.py fixtures .` unchanged). The coordinate conversions are executable
@@ -208,8 +208,11 @@ Then, exactly: the bin counts, `valid_pixel_count`, `total_pixel_count`, `nonfin
 (`total − valid` of `P`), the underflow and overflow counts, the smallest `pixel_min` and the largest
 `pixel_max` (the plane's `Intensity_MinIntensity_<ID>` and `Intensity_MaxIntensity_<ID>`).
 
-**Tail moments.** Pooled as in §1.4 (count-weighted mean, centred terms for the std, correctly
-rounded sums) and compared with `P`'s tail as follows. If `P`'s tail is empty, every window's tail
+**Tail moments.** Each row also stores the tail's exact `sum` and `sum_sq` (owner, 15 Nov), so the
+pooled sums are exact: `math.fsum` of the windows' sums equals the plane's tail sum computed the
+same way, bit for bit, under conditions 1-4. The mean and std are kept for reading; pooled from
+the rows as in §1.4 (count-weighted mean, centred terms for the std, correctly rounded sums) they
+are compared with `P`'s tail as follows. If `P`'s tail is empty, every window's tail
 must be empty (count 0, mean and std exactly `0.0`); nothing else is compared. If it is populated,
 the pooled count must equal `P`'s exactly, and the pooled mean and std must each satisfy
 `abs(pooled − p) ≤ 4 * math.ulp(max(abs(a), abs(b))) + 1e-12 * abs(p)`, in Python float64
@@ -282,10 +285,14 @@ in the normalization brick, needs no pixel and is defined for the bounded (RGB) 
 the SHA-256 of the canonical JSON of exactly these keys, the **fully resolved, stable** parameters:
 
 `conversion_id_version` (1), `preset`, `preset_version`, `method`, `matrix`, `target_component`,
-`exclusion_component`, `inverted`, `colour_space`, `white` (three floats, or `null` when not given),
+`exclusion_component`, `inverted`, `colour_space`, `white` (the **resolved** white: three floats, the
+preset's default `(255.0, 255.0, 255.0)` when none is given, so an unset white and an explicit
+default white give the same id; owner, 15 Nov),
 `white_rescale`, `stain_names`, `stain_matrix` (the unit rows actually used, default or user),
-`residual_completed`, `od_definition`, `polarizer`, `normalization_version`, `skimage_version`
-(`null` when scikit-image is not called) and `numpy_version`.
+`residual_completed`, `od_definition`, `polarizer` and `skimage_version` (`null` when scikit-image
+is not called). `numpy_version` and `normalization_version` are **not** keys (owner, 15 Nov): an
+upgrade of either keeps the id; both versions are recorded in the run record, and a change of the
+conversion's output in a new normalization release is a change of `preset_version`, which is a key.
 
 `input_dtype` is not a key: every preset that has a `conversion_id` takes `uint8` RGB only
 (`stain.py`, which refuses any other dtype), so it would never vary. The pixel-dependent
@@ -294,7 +301,8 @@ diagnostics (`zero_fraction`, `floored_fraction`, `negative_fraction`, `above_wh
 (`YXC` and `CYX` give bitwise identical outputs) are not keys either. Required tests: two
 conversions with identical settings on images with different fractions give the same id; changing
 any one key (white, a vector, the polarizer, the preset version, the scikit-image version) gives a
-different id; the id from the options equals the id rebuilt from any `ScalarResult.provenance` of
+different id; an unset white and `white=(255, 255, 255)` give the same id; the id does not change
+with the installed numpy or normalization version; the id from the options equals the id rebuilt from any `ScalarResult.provenance` of
 the same call. Pooling refuses rows of different `conversion_id`s or `spec_sha256`s.
 
 **Diagnostics per patch.** Stored per patch as **counts over the interior** (`zero_count`,
@@ -397,7 +405,7 @@ writer. Common format of §6.1 (UTF-8, comma-separated, one header row, floats a
   (CellPatcher) order, then source channels before derived images, each in sorted order (Python
   string order, §6.1), then `conversion_id`. Serial and pooled runs give the same bytes (EW9).
 
-**Header, complete and in this order** (61 columns):
+**Header, complete and in this order** (65 columns):
 
 ```text
 schema_version,
@@ -411,7 +419,8 @@ reference_kind,reference_sha256,histogram_range,
 preset,preset_version,conversion_id,spec_version,spec_sha256,
 bin_count,binning_min,binning_max,analytic_min,analytic_max,tolerance,
 total_pixel_count,valid_pixel_count,nonfinite_pixel_count,pixel_min,pixel_max,
-underflow_count,underflow_mean,underflow_std,overflow_count,overflow_mean,overflow_std,
+underflow_count,underflow_mean,underflow_std,underflow_sum,underflow_sum_sq,
+overflow_count,overflow_mean,overflow_std,overflow_sum,overflow_sum_sq,
 counts,
 zero_count,floored_count,negative_count,above_white_count,white_clipped_count
 ```
@@ -433,7 +442,7 @@ zero_count,floored_count,negative_count,above_white_count,white_clipped_count
 | `bin_count`, `binning_min`, `binning_max` | Reference binning, per row (a source channel's and a derived image's bin counts differ) |
 | `analytic_min`, `analytic_max`, `tolerance` | Derived rows: from the spec; empty for source rows |
 | `total_pixel_count` … `pixel_max` | Observed values |
-| `underflow_*`, `overflow_*` | Tails; `0`, `0.0`, `0.0` when empty |
+| `underflow_*`, `overflow_*` | Tails: count, mean and std (rounded once, as the plane's), and the exact float64 `sum` and `sum_sq` of the tail values (correctly rounded, `math.fsum`; written with `repr`); `0`, `0.0`, `0.0`, `0.0`, `0.0` when empty |
 | `counts` | Sparse bin counts (grammar below) |
 | `zero_count` … `white_clipped_count` | Derived diagnostics; empty where not defined and for source rows |
 
