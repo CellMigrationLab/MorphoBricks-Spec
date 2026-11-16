@@ -2,7 +2,7 @@
 
 - **Status:** **Accepted** (owner, 14 November 2026). EW11 (window histograms) is an **accepted owner
   decision of 15 November 2026, not implemented**: no brick has code for it yet, and its two steps
-  land in the order stated in [its section](#window-histograms-ew11). Owner answers of 15 November 2026 (evening) on its open choices: a missing or mismatched plane histogram gives `not_measured` rows and the run continues; `conversion_id` covers the resolved settings and the scikit-image version only (not numpy or normalization), with an unset white resolved to the default; one `window_scaling.csv` row per column and scaling step; exact tail sums stored beside mean and std; sparse `counts`; a disagreeing duplicate report makes the row `not_measured`; diagnostics stored as counts. The owner decisions it encodes are recorded in
+  land in the order stated in [its section](#window-histograms-ew11). Owner answers of 15 November 2026 (evening) on its open choices: a missing or mismatched plane histogram gives `not_measured` rows and the run continues; `conversion_id` covers the resolved settings and the scikit-image version only (not numpy or normalization), with an unset white resolved to the default; one `window_scaling.csv` row per column and scaling step; exact tail sums stored beside mean and std (**withdrawn by the owner, 16 November 2026**: no tail sums are stored, see [tail moments](#exact-sum-conformance-step-1)); sparse `counts`; a disagreeing duplicate report makes the row `not_measured`; diagnostics stored as counts. The owner decisions it encodes are recorded in
   [the one-route design](../design/one-route.md) (section 7 and the decisions table; the design itself
   stays proposed until its gates are met). Specification only: no fixture, golden or validator of `experiment-v1.md` changes
   (`python -I tools/audit/refval.py fixtures .` unchanged). The coordinate conversions are executable
@@ -208,11 +208,17 @@ Then, exactly: the bin counts, `valid_pixel_count`, `total_pixel_count`, `nonfin
 (`total − valid` of `P`), the underflow and overflow counts, the smallest `pixel_min` and the largest
 `pixel_max` (the plane's `Intensity_MinIntensity_<ID>` and `Intensity_MaxIntensity_<ID>`).
 
-**Tail moments.** Each row also stores the tail's exact `sum` and `sum_sq` (owner, 15 Nov), so the
-pooled sums are exact: `math.fsum` of the windows' sums equals the plane's tail sum computed the
-same way, bit for bit, under conditions 1-4. The mean and std are kept for reading; pooled from
-the rows as in §1.4 (count-weighted mean, centred terms for the std, correctly rounded sums) they
-are compared with `P`'s tail as follows. If `P`'s tail is empty, every window's tail
+**Tail moments.** Only the tail **counts** are exact. No tail sum is stored and **no bitwise
+equality of pooled tail sums or moments is claimed** (owner, 16 Nov, withdrawing the `sum` and
+`sum_sq` columns of 15 Nov): `math.fsum` of float64-rounded window sums is not in general the
+correctly rounded plane sum (each window's sum is already rounded once), and a sum of squares of
+finite float64 pixels can overflow float64, whereas the normalization brick's own moments
+(`tail_moments.py`) use exact rationals. The tail's mean and std are stored, each rounded once as
+the plane's are. They are pooled from the rows in exact rationals: each row's float64 `mean` and
+`std` are read exactly (`fractions.Fraction`), the pooled sum is `Σ nᵢ · meanᵢ` and the pooled sum
+of squares `Σ nᵢ · (stdᵢ² + meanᵢ²)`, and the pooled mean and std are rounded once by
+`centred_moments` and `sqrt_nearest` of `tail_moments.py` (count-weighted mean, centred std, §1.4),
+so nothing overflows for finite pixels. They are compared with `P`'s tail as follows. If `P`'s tail is empty, every window's tail
 must be empty (count 0, mean and std exactly `0.0`); nothing else is compared. If it is populated,
 the pooled count must equal `P`'s exactly, and the pooled mean and std must each satisfy
 `abs(pooled − p) ≤ 4 * math.ulp(max(abs(a), abs(b))) + 1e-12 * abs(p)`, in Python float64
@@ -504,7 +510,7 @@ writer. Common format of §6.1 (UTF-8, comma-separated, one header row, floats a
   string order, §6.1), then `conversion_id` (Python string order; empty first). Serial and pooled
   runs give the same bytes (EW9).
 
-**Header, complete and in this order** (65 columns):
+**Header, complete and in this order** (61 columns; 65 before the tail sums were withdrawn, 16 Nov):
 
 ```text
 schema_version,
@@ -518,8 +524,8 @@ reference_kind,reference_sha256,histogram_range,
 preset,preset_version,conversion_id,spec_version,spec_sha256,
 bin_count,binning_min,binning_max,analytic_min,analytic_max,tolerance,
 total_pixel_count,valid_pixel_count,nonfinite_pixel_count,pixel_min,pixel_max,
-underflow_count,underflow_mean,underflow_std,underflow_sum,underflow_sum_sq,
-overflow_count,overflow_mean,overflow_std,overflow_sum,overflow_sum_sq,
+underflow_count,underflow_mean,underflow_std,
+overflow_count,overflow_mean,overflow_std,
 counts,
 zero_count,floored_count,negative_count,above_white_count,white_clipped_count
 ```
@@ -541,7 +547,7 @@ zero_count,floored_count,negative_count,above_white_count,white_clipped_count
 | `bin_count`, `binning_min`, `binning_max` | Reference binning, per row (a source channel's and a derived image's bin counts differ) |
 | `analytic_min`, `analytic_max`, `tolerance` | Derived rows: from the spec; empty for source rows |
 | `total_pixel_count` … `pixel_max` | Observed values |
-| `underflow_*`, `overflow_*` | Tails: count, mean and std (rounded once, as the plane's), and the exact float64 `sum` and `sum_sq` of the tail values (correctly rounded, `math.fsum`; written with `repr`); `0`, `0.0`, `0.0`, `0.0`, `0.0` when empty |
+| `underflow_*`, `overflow_*` | Tails: count (exact) and mean and std (each the float64 nearest its exact value, rounded once, as the plane's; written with `repr`); `0`, `0.0`, `0.0` when empty. No sum or sum of squares is stored |
 | `counts` | Sparse bin counts (grammar below) |
 | `zero_count` … `white_clipped_count` | Derived diagnostics; empty where not defined and for source rows |
 
@@ -608,10 +614,12 @@ repository's `fixtures/` (which holds `experiment-v1.md` data only):
 | Two patch sets on one plane | Each set conforms on its own; pooling across sets refused |
 | A catalogue patch without a window unit | `not_measured`, `no_window_unit`; equality refused, partial sum allowed |
 | Overlapping bounds | Pooling refused |
-| All-NaN float plane | Plane limits blank; every patch: `valid` 0, `nonfinite` = area, reference blank, counts `empty`; the sums still equal the plane's |
+| All-NaN float plane | Plane limits blank; every patch: `valid` 0, `nonfinite` = area, reference blank, counts `empty`; the pooled counts still equal the plane's exactly |
 | All-NaN patch in a plane with finite pixels | `valid` 0, observed extrema blank, reference limits kept |
 | `+inf` and `−inf` pixels | In `nonfinite_pixel_count`, never in a bin or a tail |
 | Robust range with hot pixels | Tail counts sum exactly; a patch without tail pixels has empty tails; `pixel_min > binning_min` accepted; an empty plane tail compared by the empty-tail rule |
+| Tail double rounding (N1): a tail whose per-window float64 sums, added with `math.fsum`, differ from the correctly rounded plane sum (for example values `1.0`, `2**-53`, `2**-53` split over windows so each window's sum rounds) | Counts equal exactly; pooled mean and std within the stated ulp tolerance; no sum column exists and none is compared bitwise |
+| Tail overflow (N1): finite float64 tail values near `1e300`, whose squares overflow float64 | Window and pooled mean and std finite and within the tolerance (exact-rational pooling); no `inf` and no refusal |
 | 8-bit `R`, `G`, `B` with a plane minimum above 0 | Bin `i` holds `binning_min + i`; exact |
 | Constant plane | Every valid pixel in bin 0, in every patch |
 | Plane without a `plane_histograms.csv` row, or a SHA-256 mismatch | `not_measured` with the reason; features unchanged |
