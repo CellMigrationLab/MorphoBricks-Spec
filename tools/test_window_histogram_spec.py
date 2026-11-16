@@ -167,6 +167,15 @@ class WhiteIdentity(unittest.TestCase):
         # custom_od records its white and no rescale key; fixed_deconvolution records neither.
         self.assertEqual(w.resolved_white_from_provenance("required", {"white": (230.0, 225.0, 240.0)}), ((230.0, 225.0, 240.0), None))
         self.assertEqual(w.resolved_white_from_provenance("none", {}), (None, None))
+        # custom_od and fixed_deconvolution never record white_applied (stain.py at c6a9f9d).
+        for mode, record in (
+            ("required", {"white": (230.0, 225.0, 240.0), "white_applied": True}),
+            ("required", {"white": (230.0, 225.0, 240.0), "white_applied": False}),
+            ("none", {"white_applied": True}),
+            ("none", {"white_applied": False}),
+        ):
+            with self.subTest(mode=mode, record=record), self.assertRaises(ValueError):
+                w.resolved_white_from_provenance(mode, record)
 
     def test_white_scope(self) -> None:
         with self.assertRaises(ValueError):

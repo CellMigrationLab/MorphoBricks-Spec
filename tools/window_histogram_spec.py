@@ -97,6 +97,8 @@ def resolved_white_from_provenance(mode: str, provenance: Mapping[str, Any]) -> 
         if applied is True and white is not None and rescale == WHITE_RESCALE:
             return _three_floats(white), WHITE_RESCALE
         raise ValueError("inconsistent white provenance (white, white_applied, white_rescale)")
+    if mode in ("required", "none") and "white_applied" in provenance:
+        raise ValueError("only a preset with an optional white records white_applied")
     if mode == "required":
         if white is None or provenance.get("white_rescale") is not None:
             raise ValueError("a custom_od provenance records its white and no rescale")
