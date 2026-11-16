@@ -631,11 +631,13 @@ zero_count,floored_count,negative_count,above_white_count,white_clipped_count
 | `counts` | Sparse bin counts (grammar below) |
 | `zero_count` … `white_clipped_count` | Derived diagnostics; empty where not defined and for source rows |
 
-**Sparse `counts` grammar.** Either the literal `empty` (no pixel in a bin), or one or more pairs
-`index:count` joined by `;`, where `index` is `0` or a decimal integer without a leading zero, the
-indices are strictly increasing and each lies in `[0, bin_count)`, and `count` is a positive decimal
-integer without a leading zero (zero bins are not written). No spaces, signs or other characters.
-The reader checks that the counts sum to `valid − underflow_count − overflow_count`.
+**Sparse `counts` grammar.** The cell follows the shared grammar of
+[`docs/sparse-counts.md`](../sparse-counts.md) (first written here on 15 November 2026 and moved
+there, unchanged in meaning, so that `plane_histograms.csv` version 6 can cite the same definition,
+[ADR 0008](0008-plane-histograms-v6.md), proposed): the literal `empty` or strictly increasing
+`index:count` pairs, zero bins not written. The reader checks that the counts sum to
+`valid_pixel_count − underflow_count − overflow_count`; a blank `counts` cell follows the cell table
+below, never the grammar.
 
 **Reasons, frozen for schema 1.** `no_window_unit`, `no_plane_histogram`, `plane_histogram_mismatch`
 (source rows); `preset_has_no_fixed_range`, `patch_not_measured`, `no_provider_report`,
