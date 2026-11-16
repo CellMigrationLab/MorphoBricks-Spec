@@ -447,10 +447,17 @@ actually applied for that column, each with its own `map`, `scale_index` and `sc
 record's form (unique keys, contiguous `stage_index` from 0, the cell rules above).
 
 **Unmeasured columns.** `not_measured` follows the provider output that MorphoFeature already
-validates (`patch_output.py`): reason `patch_not_measured` when the provider lists the patch in its
-manifest's `patches_not_measured` (its own reason is kept in `provider_reason`), `valid_empty` when the
-window's output has `status = valid_empty` (zero rows), `no_provider_report` when the provider does
-not declare `window_report`. **A `not_measured` column never has `transform = none`**, and a measured
+validates (`patch_output.py`). The reason of a column on a patch is the first that applies (F2):
+
+1. `no_provider_report`: the provider does not declare `window_report`;
+2. `patch_not_measured`: the provider lists the patch in its manifest's `patches_not_measured` (its
+   own reason is kept in `provider_reason`), **whatever the output's `status`**;
+3. `valid_empty`: the output has `status = valid_empty` (zero rows) and the patch is not listed.
+
+Today `_not_measured` (`patch_output.py`, MorphoFeature `7ac7487`) refuses a sent patch with neither
+a row nor a listing, and `valid_empty` means every table has zero rows, so a `valid_empty` window
+always lists its patch and gets `patch_not_measured`; rule 3 is reachable only if step 4 relaxes that
+check for windowed calls (see the open points). **A `not_measured` column never has `transform = none`**, and a measured
 row of the provider's table must have `measured` stages; MorphoFeature refuses any other combination
 as a provider output error.
 
@@ -469,21 +476,59 @@ invariants. Today's `check_patch_output` (`patch_output.py:201–253`) reads onl
 `manifest` and `applicability`, and `PatchOutput` has no field for this: step 2 adds the field and
 its validation. Until then no scaling or derived histogram is recorded.
 
-**Two providers, one derived image.** When two providers report a derived histogram for the same key
-`(plane_id, patch_set, patch_id, image_kind, image, conversion_id)` (`image_kind = derived`):
+**Two providers, one derived image.** Several providers can make the same derived image of one
+patch. Their entries for the key `(plane_id, patch_set, patch_id, image_kind, image, conversion_id)`
+(`image_kind = derived`) give one row, by the rules below. One provider contributes at most one
+entry per key; a second entry from the same provider is a provider output error. An entry that breaks
+the invariants (a NaN or infinite value in a float field included) is refused as a provider output
+error before any comparison, so only valid entries are compared.
 
-- if their entries are equal in full (reference and spec hash, every count, extrema, both tails,
-  `counts`, every diagnostic count), one row is written, `measured`;
+**Compared fields, in this order** (the canonical comparison order; the order of the header below):
+`dtype`, `reference_kind`, `reference_sha256`, `preset`, `preset_version`, `conversion_id`,
+`spec_version`, `spec_sha256`, `bin_count`, `binning_min`, `binning_max`, `analytic_min`,
+`analytic_max`, `tolerance`, `total_pixel_count`, `valid_pixel_count`, `nonfinite_pixel_count`,
+`pixel_min`, `pixel_max`, `underflow_count`, `underflow_mean`, `underflow_std`, `overflow_count`,
+`overflow_mean`, `overflow_std`, `counts` (the full array of `bin_count` integers, bin 0 first, not
+its sparse text), `zero_count`, `floored_count`, `negative_count`, `above_white_count`,
+`white_clipped_count`. The key columns are equal by construction; `status`, `reason` and the two
+provider columns are outputs of the rule, not compared.
+
+**Equality.** Integers by value; text by code points; blank equals only blank (a blank and a `0`
+differ). Floats by their **IEEE-754 binary64 bit pattern** (recommended over decimal text or a
+tolerance: the writer's `repr` round-trips, so equal bits are equal cells), after mapping `-0.0` to
+`0.0` (as the writer does); for the finite values allowed here this is exact numeric equality. NaN
+never reaches the comparison (refused above). Reference implementation:
+`tools/window_histogram_spec.py` (`comparable`, `first_difference`).
+
+**Order of comparison.** The reporting providers in Python string order; the first, `P1`, is the
+reference; each other provider, in that order, is compared with `P1` field by field in the order
+above, and the first difference found names the pair and the field (`counts[i]` for the first
+differing bin). Then:
+
+- every entry equal to `P1`'s: one row, `measured`;
 - otherwise the row is `not_measured` with the reason `duplicate_report_disagrees`, and the run
-  record's `window_histogram_errors` lists the key, the providers and the first differing field.
-  Features are unaffected; the histogram write of every other key goes on.
+  record's `window_histogram_errors` gains `{key, providers (the reporting providers, sorted),
+  first_difference: {providers: [P1, Pk], field}}`. Features are unaffected; the histogram write of
+  every other key goes on.
 
-Which providers reported is recorded per row, apart from the measurement, so a provider that reported
-nothing is never hidden by another's measurement: `providers_reporting` (providers whose entry is in
-the row, `;`-separated, sorted) and `providers_not_reporting` (providers with a request using that
-derived image that sent no histogram: no `window_report`, or `not_measured`; same format). A derived
-row with no reporting provider is `not_measured` with `no_provider_report` (or the providers' common
-reason, `preset_has_no_fixed_range` or `patch_not_measured`).
+**Which providers reported**, recorded per row apart from the measurement, so a provider that
+reported nothing is never hidden by another's measurement. Let `R` be the providers with a request
+using that derived image on that patch (never empty for a derived row). Each provider of `R` is in
+**exactly one** of the two columns: `providers_reporting`, the providers that sent a measured entry
+for the key; `providers_not_reporting`, the providers that sent none (no `window_report`, or a
+`not_measured` entry). A provider outside `R` is in neither. Both columns are `;`-separated in
+Python string order, blank when empty, never with a repeated name, and their union is `R`.
+
+**Reason of a derived row** (F2), the first that applies:
+
+1. `preset_has_no_fixed_range`: `output_histogram_spec` returns `NoFixedRange` for the request's
+   preset and options (MorphoFeature recomputes it; a provider entry with a histogram for such an
+   image is a provider output error);
+2. `duplicate_report_disagrees`: two or more measured entries, not all equal;
+3. `measured` (no reason): one or more measured entries, all equal;
+4. `patch_not_measured`: no measured entry, and at least one provider of `R` lists the patch in its
+   `patches_not_measured`;
+5. `no_provider_report`: otherwise.
 
 ### The `window_histograms.csv` table, schema 1 (normalization)
 
@@ -504,7 +549,8 @@ writer. Common format of §6.1 (UTF-8, comma-separated, one header row, floats a
   key (`ValueError` naming the key); neither keeps one of them.
 - **Rows written:** for every catalogue patch of a set with a windowed request on the plane, one row
   per source channel read by any unit of that set on the plane, and (step 2) one per derived image of
-  its requests; a patch with no window unit gets `not_measured` rows.
+  its requests; a patch with no window unit gets `not_measured` source rows (`no_window_unit`) and no
+  derived row (no derived image was made; the pooling's condition 4 counts it as missing).
 - **Order:** planes in the run's order, patch sets in the order they were cut, patches in catalogue
   (CellPatcher) order, then `image_kind` (`source_channel` before `derived`), then `image` (Python
   string order, §6.1), then `conversion_id` (Python string order; empty first). Serial and pooled
@@ -561,10 +607,46 @@ The reader checks that the counts sum to `valid − underflow_count − overflow
 (source rows); `preset_has_no_fixed_range`, `patch_not_measured`, `no_provider_report`,
 `duplicate_report_disagrees` (derived rows). A new reason is a schema revision.
 
-A `not_measured` row has its identity, image, status, reason and provider columns, every other cell
-empty; the reader refuses a value there, so a zero histogram never stands for a missing one. A
-measured row's cells are checked against the invariants above. The reader refuses another
-`schema_version`, a missing, extra or reordered column, an unknown reason or `image_kind`, a
+**Required and blank cells** (B3), by `image_kind` and status. R: required (a blank is refused);
+B: blank (a value is refused, so a zero histogram never stands for a missing one); `schema_version`
+and `image_kind` are required in **every** row, because the reader picks the reason list and the cell
+rules by them. The reasons a status allows depend on `image_kind`: a source reason in a derived row,
+or the reverse, is refused.
+
+| Columns | Source, `measured` | Source, `not_measured` | Derived, `measured` | Derived, `not_measured` |
+| --- | --- | --- | --- | --- |
+| `schema_version`, `image_kind`, `image`, `status` | R | R | R | R |
+| `position_id` … `plane_id` | R (blank only where §6.1 allows) | as measured | as measured | as measured |
+| `patch_set`, `patch_id`, `catalogue_version`, `bounds_*` | R | R | R | R |
+| `origin_*`, `interior_*` | R | B for `no_window_unit` (there is no window); R for `no_plane_histogram`, `plane_histogram_mismatch` | R | R |
+| `dtype` | R (the plane's) | B | R (`float32`) | B |
+| `reason` | B | R: `no_window_unit`, `no_plane_histogram`, `plane_histogram_mismatch` | B | R: `preset_has_no_fixed_range`, `patch_not_measured`, `no_provider_report`, `duplicate_report_disagrees` |
+| `providers_reporting` | B | B | R (one or more) | R (two or more) for `duplicate_report_disagrees`; B otherwise |
+| `providers_not_reporting` | B | B | R if a provider of `R` sent no measured entry, else B | R (one or more) except for `duplicate_report_disagrees`, where it is R if a provider of `R` sent none, else B |
+| `reference_kind`, `reference_sha256` | R (`plane_histogram`) | B | R (`output_histogram_spec`) | B |
+| `histogram_range` | R | B | B | B |
+| `preset`, `preset_version` | B | B | R | R |
+| `conversion_id` | B | B | R (B for `passthrough`, which is never measured) | R; B for `preset_has_no_fixed_range` |
+| `spec_version`, `spec_sha256` | B | B | R | B |
+| `bin_count` | R | B | R (`1024`) | B |
+| `binning_min`, `binning_max` | R; both B only when the plane has no finite pixel | B | R | B |
+| `analytic_min`, `analytic_max`, `tolerance` | B | B | R | B |
+| `total_pixel_count`, `valid_pixel_count`, `nonfinite_pixel_count`, `counts` | R (`counts` may be `empty`) | B | R | B |
+| `pixel_min`, `pixel_max` | R if `valid_pixel_count > 0`, else B | B | R if `valid_pixel_count > 0`, else B | B |
+| `underflow_*`, `overflow_*` | R (`0`, `0.0`, `0.0` when empty) | B | R | B |
+| `zero_count` | B | B | R for `fixed_deconvolution`, else B | B |
+| `floored_count`, `negative_count` | B | B | R for `custom_od`, else B | B |
+| `above_white_count` | B | B | R for `custom_od` and the four optional-white presets, else B | B |
+| `white_clipped_count` | B | B | R for the four optional-white presets, else B | B |
+
+The diagnostics follow the provenance of `stain.py` (`zero_fraction` for `fixed_deconvolution`;
+`floored_fraction`, `negative_fraction`, `above_white_fraction` for `custom_od`;
+`above_white_fraction`, `white_clipped_fraction` for `luminance` and `cielab`, with the canonical
+white of B1B).
+
+A measured row's cells are also checked against the invariants above. The reader refuses another
+`schema_version`, a missing, extra or reordered column, an unknown reason or `image_kind`, a reason
+of the other `image_kind`, a cell against the table above, a provider in both provider columns, a
 duplicate key, and a `plane_histograms.csv` given in its place; it never converts. If a measurement
 fails (other than with a listed reason), the writer writes nothing, as for `plane_histograms.csv`
 (§6.2).
@@ -613,6 +695,7 @@ repository's `fixtures/` (which holds `experiment-v1.md` data only):
 | Grid without partial edges | Coverage below `H · W` reported; no equality claimed; the pooling function says so |
 | Two patch sets on one plane | Each set conforms on its own; pooling across sets refused |
 | A catalogue patch without a window unit | `not_measured`, `no_window_unit`; equality refused, partial sum allowed |
+| `not_measured` cell rules (B3), each status and `image_kind` | A row following the required/blank table is read; one value in a B cell, one blank in an R cell, a blank `schema_version` or `image_kind`, or a source reason in a derived row is refused |
 | Overlapping bounds | Pooling refused |
 | All-NaN float plane | Plane limits blank; every patch: `valid` 0, `nonfinite` = area, reference blank, counts `empty`; the pooled counts still equal the plane's exactly |
 | All-NaN patch in a plane with finite pixels | `valid` 0, observed extrema blank, reference limits kept |
@@ -636,7 +719,12 @@ repository's `fixtures/` (which holds `experiment-v1.md` data only):
 | Two providers report one derived image, equal | One `measured` row, both in `providers_reporting` |
 | Two providers report one derived image, different | `not_measured`, `duplicate_report_disagrees`; error recorded; features unchanged |
 | One provider reports, the other has no `window_report` | `measured`; the other in `providers_not_reporting` |
-| A valid-empty window | Scaling rows `not_measured`, `valid_empty`; no `transform = none` |
+| Duplicate floats (B4): two entries equal except `underflow_mean` one ulp apart; equal except `pixel_min` `-0.0` vs `0.0`; three providers `a`, `b`, `c` with `b` differing in `zero_count` and `c` in `pixel_min` | Disagreement naming `[a, b]` and `underflow_mean`; equal (one `measured` row); disagreement naming `[a, b]` and `zero_count` (first pair in provider order, then first field in the comparison order) |
+| Duplicate `counts` (B4): two entries differing only in bins 17 and 40 | Disagreement naming `counts[17]` |
+| A NaN in a provider's `underflow_mean` | Provider output error before any comparison; not a disagreement |
+| Provider columns (B4): `a` measured, `b` `not_measured`, `c` without `window_report`, `d` with no request using the image | `providers_reporting = a`, `providers_not_reporting = b;c`, `d` in neither; a name in both columns refused by the reader |
+| Derived reason precedence (F2): one provider lists the patch in `patches_not_measured`, another has no `window_report` | `patch_not_measured` |
+| A valid-empty window that lists its patch in `patches_not_measured` (F2; the only valid-empty window today's check accepts) | Scaling rows `not_measured`, `patch_not_measured` (not `valid_empty`), the provider's reason kept; no `transform = none` |
 | A patch in `patches_not_measured` | Scaling rows `not_measured`, `patch_not_measured`, the provider's reason kept |
 | `robust_normalize` whose 99th percentile equals the 1st (sparse structure) | `upper_fallback = true`, `high_value` the maximum, not the declared 99th percentile |
 | NumPy `robust_normalize`, positive constant sample (B2) | `constant`, `constant_value = 1.0`, `degenerate_range`, `fallback_rule = hi_le_lo`, `upper_fallback = true` |
@@ -699,3 +787,6 @@ feature value.
 1. Whether the catalogue file lives with the run's patch outputs or with CellPatcher's export.
 2. The per-feature CPU/CUDA tolerances for fiberfeatures, measured in the CUDA-lane PR (design 7.5,
    PR 7).
+3. Whether a windowed call may return `valid_empty` without listing its patch in
+   `patches_not_measured` (EW11 step 4). Recommendation: keep today's check, so the scaling reason
+   `valid_empty` stays unused and every empty window is `patch_not_measured` with the provider's reason.
