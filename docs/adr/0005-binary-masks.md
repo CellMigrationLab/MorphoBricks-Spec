@@ -552,9 +552,24 @@ skips the classes already published (idempotent, as above) and continues.
 
 ## Derived region masks (BM15)
 
-A BM15 helper takes the opened run and one FOV whose unit is declared `rgb` (RH1 honoured as
-recorded). It refuses, before any pixel is read, a FOV with more than one Z plane or time point, a
-pixel type other than 8-bit, a run without a masks folder and an unknown rule. Its output file, its
+**The FOV is the run's, resolved before any read.** A BM15 helper takes the opened run
+(`RunInputs`) and one FOV, given as a `Fov` or as its image path. Before any pixel is read it
+resolves that FOV **by its image path, relative to the experiment folder,** to the run's own
+authoritative description of it: the position as the run's manifest and published description
+record it (`RunInputs.fovs()`), with its unit's declared `image_type`, its stored axes, its Z, T and
+C counts and its pixel type. Every check and every lineage value uses that record only. An
+`image_type`, axes, counts or pixel type carried by a caller-supplied `Fov` object are ignored:
+never trusted, never compared, never used to fill a gap. An image path that is not an image of the
+run is refused. On the resolved record the helper refuses, before any pixel is read, a unit not
+declared `rgb`, a FOV with more than one Z plane or time point, a C count other than 3, a pixel type
+other than 8-bit (`uint8`), a run without a masks folder and an unknown rule. RH1 is honoured as
+recorded, **per image**: a unit declared `rgb` whose override the run accepted is valid input; the
+helper never reads the image header itself and never decides the override again. The unit's
+declared `rgb_header_override` and, when it is declared, that image's own recorded override item
+(`override` `used` or `unused`, `unused_reason`, `header_photometric`; experiment-v1 §4.4b, "Declared
+and effective are recorded separately") are copied into the lineage unchanged. The plane is read
+through the run (`RunInputs.read_plane`), which refuses an image changed since the run, and the
+image fingerprint is checked again after the read, as BM12 does. Its output file, its
 mask ID rules, its collision refusals, its idempotent retry and its paired publication are those of
 BM12. Its lineage line goes in the same `mask_lineage.jsonl` and has these keys, in this order:
 `source`, `output`, `operation`, `rule_id`, `rule_version`, `thresholds`, `white`,
