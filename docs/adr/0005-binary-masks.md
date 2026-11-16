@@ -616,6 +616,14 @@ acquisition provenance (scanner vendor, model where the source states it, source
 licence); a criterion about scanners counts vendors from that provenance, never from file
 formats or dataset names.
 
+**Freezing a rule makes a new mask, never a relabelled one.** `status` is part of the rule
+record and so of `rule_sha256`, so a frozen rule is another record. Freezing therefore needs a
+**new output mask ID**: the helper is run again with the frozen rule under that new ID, the user
+declares the new output, and the mask step is run again before anything reads it. The
+provisional mask file and its lineage line are never overwritten, renamed or relabelled as
+frozen; a call with the frozen rule under the provisional mask's ID is a collision and is
+refused by the retry comparator below.
+
 **Code identity.** For each of the distributions `morphobricks-preprocessing` (the helper) and
 `morphobricks-normalization` (the colour maths), the helper records an object with keys exactly
 `distribution`, `version`, `verified`, `record_sha256`, `vcs_commit` and `reason`, in this order,
