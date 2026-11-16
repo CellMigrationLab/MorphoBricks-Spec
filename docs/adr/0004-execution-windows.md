@@ -2,7 +2,7 @@
 
 - **Status:** **Accepted** (owner, 14 November 2026). EW11 (window histograms) is an **accepted owner
   decision of 15 November 2026, not implemented**: no brick has code for it yet, and its two steps
-  land in the order stated in [its section](#window-histograms-ew11). Owner answers of 15 November 2026 (evening) on its open choices: a missing or mismatched plane histogram gives `not_measured` rows and the run continues; `conversion_id` covers the resolved settings and the scikit-image version only (not numpy or normalization), with an unset white resolved to the default (for the presets with an optional white only; canonical values of 16 November in [the conversion identity](#step-2-derived-images)); one `window_scaling.csv` row per column and scaling step; exact tail sums stored beside mean and std (**withdrawn by the owner, 16 November 2026**: no tail sums are stored, see [tail moments](#exact-sum-conformance-step-1)); sparse `counts`; a disagreeing duplicate report makes the row `not_measured`; diagnostics stored as counts. The owner decisions it encodes are recorded in
+  land in the order stated in [its section](#window-histograms-ew11). Owner answers of 15 November 2026 (evening) on its open choices: a missing or mismatched plane histogram gives `not_measured` rows and the run continues; `conversion_id` covers the resolved settings and the scikit-image version only (not numpy or normalization), with an unset white resolved to the default (for the presets with an optional white only; canonical values of 16 November in [the conversion identity](#step-2-derived-images)); one `window_scaling.csv` row per column and scaling step; exact tail sums stored beside mean and std (**withdrawn by the owner, 16 November 2026**: no tail sums are stored, see [tail moments](#exact-sum-conformance-step-1)); sparse `counts`; a disagreeing duplicate report makes the row `not_measured`; diagnostics stored as counts. Owner decisions of 16 November 2026: `image_kind` in the histogram key; the tail sums withdrawn (above); the scaling reason `valid_empty` removed (an empty window is `patch_not_measured`); the analytic bounds of a derived-image spec rounded outward to float32 (numeric policy of step 2). The owner decisions it encodes are recorded in
   [the one-route design](../design/one-route.md) (section 7 and the decisions table; the design itself
   stays proposed until its gates are met). Specification only: no fixture, golden or validator of `experiment-v1.md` changes
   (`python -I tools/audit/refval.py fixtures .` unchanged). The coordinate conversions are executable
@@ -275,7 +275,7 @@ for every preset in `stain_presets.py` today), which stays as it is.
 | `luminance` (`luminance_inverted`, `psr_polarized`) | `[0.0, 1.0]` exactly (weights 0.2125, 0.7154, 0.0721 on values in `[0, 1]`). |
 | `passthrough` (`fluorescence`, `shg`) | None: `NoFixedRange("preset_has_no_fixed_range")`. |
 
-**Numeric policy** (F1). The float64 bound of a family is evaluated exactly as its row states (plain
+**Numeric policy** (F1; the outward float32 rounding is an owner decision of 16 November 2026). The float64 bound of a family is evaluated exactly as its row states (plain
 IEEE-754 binary64 operations, the stated order, no fused multiply-add; `math.log10` is the only
 library function of `custom_od`), then rounded outward to float32 as above. The outward rounding makes
 `spec_sha256` insensitive to a last-bit difference of a float64 bound between platforms (`log10` is
@@ -484,13 +484,14 @@ validates (`patch_output.py`). The reason of a column on a patch is the first th
 
 1. `no_provider_report`: the provider does not declare `window_report`;
 2. `patch_not_measured`: the provider lists the patch in its manifest's `patches_not_measured` (its
-   own reason is kept in `provider_reason`), **whatever the output's `status`**;
-3. `valid_empty`: the output has `status = valid_empty` (zero rows) and the patch is not listed.
+   own reason is kept in `provider_reason`), **whatever the output's `status`**.
 
-Today `_not_measured` (`patch_output.py`, MorphoFeature `7ac7487`) refuses a sent patch with neither
-a row nor a listing, and `valid_empty` means every table has zero rows, so a `valid_empty` window
-always lists its patch and gets `patch_not_measured`; rule 3 is reachable only if step 4 relaxes that
-check for windowed calls (see the open points). **A `not_measured` column never has `transform = none`**, and a measured
+There is no `valid_empty` reason (owner, 16 Nov): an empty window is always `patch_not_measured`
+with the provider's own reason. `_not_measured` (`patch_output.py`, MorphoFeature `7ac7487`) refuses a
+sent patch with neither a row nor a listing, and `status = valid_empty` means every table has zero
+rows, so a valid-empty window always lists its patch; step 4 keeps that check for windowed calls (a
+windowed `valid_empty` output that does not list its patch is a provider output error). **A
+`not_measured` column never has `transform = none`**, and a measured
 row of the provider's table must have `measured` stages; MorphoFeature refuses any other combination
 as a provider output error.
 
@@ -707,8 +708,8 @@ clip_order,clip_low,clip_high,
 parameters
 ```
 
-`schema_version` is `1`. Reasons, frozen for schema 1: `patch_not_measured`, `valid_empty`,
-`no_provider_report`. Frozen enumerations: `transform` (`none`, `percentile_range`, `fixed_range`,
+`schema_version` is `1`. Reasons, frozen for schema 1: `patch_not_measured`,
+`no_provider_report` (`valid_empty` removed by the owner, 16 Nov; a row with it is refused). Frozen enumerations: `transform` (`none`, `percentile_range`, `fixed_range`,
 `local_contrast`, `constant`), `fallback_rule` (`hi_le_lo`, `range_lt_1e-8`), `constant_cause`
 (`empty_sample`, `nonfinite_quantile`, `degenerate_range`), `clip_order` (`none`,
 `clip_then_scale`, `scale_then_clip`). The reader refuses another version, header, reason or
@@ -758,7 +759,8 @@ repository's `fixtures/` (which holds `experiment-v1.md` data only):
 | A NaN in a provider's `underflow_mean` | Provider output error before any comparison; not a disagreement |
 | Provider columns (B4): `a` measured, `b` `not_measured`, `c` without `window_report`, `d` with no request using the image | `providers_reporting = a`, `providers_not_reporting = b;c`, `d` in neither; a name in both columns refused by the reader |
 | Derived reason precedence (F2): one provider lists the patch in `patches_not_measured`, another has no `window_report` | `patch_not_measured` |
-| A valid-empty window that lists its patch in `patches_not_measured` (F2; the only valid-empty window today's check accepts) | Scaling rows `not_measured`, `patch_not_measured` (not `valid_empty`), the provider's reason kept; no `transform = none` |
+| A valid-empty window that lists its patch in `patches_not_measured` (F2) | Scaling rows `not_measured`, `patch_not_measured`, the provider's reason kept; no `transform = none` |
+| A valid-empty window that does not list its patch; a `window_scaling.csv` row with reason `valid_empty` (F2) | Provider output error; the row refused by the reader (not a schema-1 reason) |
 | A patch in `patches_not_measured` | Scaling rows `not_measured`, `patch_not_measured`, the provider's reason kept |
 | `robust_normalize` whose 99th percentile equals the 1st (sparse structure) | `upper_fallback = true`, `high_value` the maximum, not the declared 99th percentile |
 | NumPy `robust_normalize`, positive constant sample (B2) | `constant`, `constant_value = 1.0`, `degenerate_range`, `fallback_rule = hi_le_lo`, `upper_fallback = true` |
@@ -821,6 +823,6 @@ feature value.
 1. Whether the catalogue file lives with the run's patch outputs or with CellPatcher's export.
 2. The per-feature CPU/CUDA tolerances for fiberfeatures, measured in the CUDA-lane PR (design 7.5,
    PR 7).
-3. Whether a windowed call may return `valid_empty` without listing its patch in
-   `patches_not_measured` (EW11 step 4). Recommendation: keep today's check, so the scaling reason
-   `valid_empty` stays unused and every empty window is `patch_not_measured` with the provider's reason.
+3. ~~Whether a windowed call may return `valid_empty` without listing its patch in
+   `patches_not_measured`.~~ **Resolved by the owner, 16 November 2026:** no; the scaling reason
+   `valid_empty` is removed and every empty window is `patch_not_measured` with the provider's reason.
