@@ -342,36 +342,103 @@ the provider never reimplements them. They are separate from the conversion iden
 ### Step 2: the scaling applied
 
 For every windowed feature column (`scaling_scope = patch_window`, EW7, EW8) and every patch it is
-requested on, the provider reports each scaling **stage** applied on the way to that column, in
-order. fiberfeatures at `752b1dd` has, for example:
+requested on, the provider reports each scaling **stage** applied on the way to that column. The
+NumPy and the Torch percentile scalings of fiberfeatures differ in their threshold, their degenerate
+output and their order of clipping, so they are specified separately. Read at fiberfeatures
+`752b1dd` and checked unchanged at `main` `36819a3`: the only change to these functions between the
+two commits is how the analysed region is read (`region_pixels(mask, shape)`, `mask != 0`, instead of
+`mask > 0`; #224), which selects the same pixels for a binary mask and does not touch the scaling
+arithmetic below.
 
-- `robust_normalize` (`preprocessing.py`, applied twice by `preprocess_image`): the image as
-  float32; `lo, hi = np.percentile(values, [1.0, 99.0])` (NumPy's default `linear` method, float64
-  results); if `hi ≤ lo`, `hi` is replaced by the maximum; then **clip to `[lo, hi]` first**, then
-  `(clipped − lo) / (hi − lo + 1e-8)`, computed in float64 and stored as float32;
-- `_normalize_map_torch` (`tensor_ops.py`, `ridge_support` and the other maps per scale): float32
-  tensors, the 1st and 99th linear quantiles, the same maximum fallback, then `(x − lo) / (hi − lo +
-  1e-8)` **then clamp to `[0, 1]`**, in float32;
-- `local_contrast_normalize` (opt-in): `p1` (1st percentile), the region mean, `floor`, `sigma`.
+**NumPy: `robust_normalize`** (`preprocessing.py`, applied twice by `preprocess_image`; recorded
+as stages `robust_normalize_1` and `robust_normalize_2`).
 
-So the record states what was really done, not the declared settings. One entry per (plane, patch
-set, patch, `image_kind`, image, `conversion_id`, column, stage):
+1. The image as float32. Sample: the finite pixels of the analysed region (all pixels without a
+   mask), restricted to `sample_region` (the patch interior under `patch_window`; an empty
+   `sample_region` is refused, `ValueError`). Output pixels: the finite pixels of the analysed
+   region; every other output pixel is `0.0`.
+2. **Empty sample** (no sample pixel, possible only through the mask): output all `0.0`, float32.
+   Recorded `transform = constant`, `constant_value = 0.0`, `constant_cause = empty_sample`.
+3. `lo, hi = np.percentile(vals, [1.0, 99.0])`: NumPy's default `linear` method, float64 results.
+   If either is not finite: output all `0.0`, `constant_cause = nonfinite_quantile` (not reachable
+   from finite float32 input; written down because the code has the branch).
+4. **Fallback test `hi <= lo`** (float64 comparison, threshold 0): if true, `hi = float(np.max(vals))`
+   and `upper_fallback = true`; otherwise `upper_fallback = false`.
+5. If still `hi <= lo` (a constant sample): output `1.0` on every output pixel when `lo > 0`, else
+   `0.0`. Recorded `transform = constant`, `constant_value` `1.0` or `0.0`, `constant_cause =
+   degenerate_range`, `fallback_rule = hi_le_lo`, `upper_fallback = true`, `low_value = lo`,
+   `high_value = hi` (the maximum).
+6. Otherwise **clip first, then scale**: `(np.clip(x, lo, hi) − lo) / (hi − lo + 1e-8)`, computed in
+   float64 (the limits are float64) and stored as float32. Recorded `transform = percentile_range`,
+   `fallback_rule = hi_le_lo`, `offset = lo`, `scale = hi − lo + 1e-8` (float64), `clip_order =
+   clip_then_scale`, `clip_low = lo`, `clip_high = hi`, `arithmetic_dtype = float64`, `output_dtype
+   = float32`.
+
+**Torch: `_normalize_map_torch`** (`tensor_ops.py`; called per scale in `multiscale.py` for
+`ridge_support`, and for `cornerness` (2D) or `junctionness` (3D); recorded as stage
+`normalize_map_torch` with its `map` and scale, below).
+
+1. Sample: `x[mask > 0]`, or every element without a mask; non-finite map values are refused
+   before this point (`_stack_symmetric_matrix`, `check_finite`).
+2. **Empty sample**: `torch.zeros_like(x)` (x's dtype, float32 at `752b1dd`). Recorded `transform =
+   constant`, `constant_value = 0.0`, `constant_cause = empty_sample`, `low_value`, `high_value`
+   blank.
+3. `lo`, `hi`: the 0.01 and 0.99 quantiles by `_quantile_torch` (`linear`: position `q · (n − 1)` in
+   Python float64, the two order statistics by `torch.kthvalue`, interpolated in float32), so float32
+   values.
+4. **Fallback test `float(hi − lo) < 1e-8`** (the float32 difference, converted to float64, compared
+   with `1e-8`): if true, `hi = vals.max()` and `upper_fallback = true`. Unlike NumPy, this also fires
+   when `0 < hi − lo < 1e-8`.
+5. If still `float(hi − lo) < 1e-8`: output `torch.zeros_like(x)`, **`0.0` everywhere even when `lo
+   > 0`** (a positive constant map gives 0 here and 1 in NumPy). Recorded `transform = constant`,
+   `constant_value = 0.0`, `constant_cause = degenerate_range`, `fallback_rule = range_lt_1e-8`,
+   `upper_fallback = true`, `low_value = lo`, `high_value = hi` (the maximum).
+6. Otherwise **scale first, then clamp**: `((x − lo) / (hi − lo + 1e-8)).clamp(0.0, 1.0)`, all in
+   x's dtype (float32: the Python `1e-8` does not promote, so `scale` is the float32 value of
+   `float32(hi − lo) + 1e-8`). Recorded `transform = percentile_range`, `fallback_rule =
+   range_lt_1e-8`, `offset = lo`, `scale` as used, `clip_order = scale_then_clip`, `clip_low = 0.0`,
+   `clip_high = 1.0`, `arithmetic_dtype = output_dtype = float32`.
+
+`local_contrast_normalize` (opt-in) is recorded as `local_contrast` with `p1` (1st percentile), the
+region mean, `floor` and `sigma` in `parameters`.
+
+So the record states what was really done, not the declared settings. A float32 value is written as
+the float64 `repr` of that float32 (exact). One entry per (plane, patch set, patch, `image_kind`,
+image, `conversion_id`, column, stage):
 
 | Field | Meaning |
 | --- | --- |
-| `stage_index`, `stage` | Position in the column's chain (from 0) and the provider's stage name (`robust_normalize_1`, …) |
+| `stage_index`, `stage` | Position in the column's record (from 0, order below) and the provider's stage name (`robust_normalize_1`, `normalize_map_torch`, …) |
+| `map`, `scale_index`, `scale_value` | For a stage applied to an intermediate map: the map's name (`ridge_support`, `cornerness`, `junctionness`), the position of its scale in the provider's declared scale list (from 0) and that scale's value (fiberfeatures: `sigma_h`, unit in `parameters` as `scale_unit`); all three blank for a stage applied to the image itself, and `scale_index`, `scale_value` blank for a single-scale map |
 | `state`, `reason` | `measured`; or `not_measured` with a reason (below) and every other field blank |
-| `transform` | `none` (the column uses unscaled values at this point; written only for a measured patch), `percentile_range`, `fixed_range`, `local_contrast` or `constant` (the degenerate branch: `hi ≤ lo` after the fallback, output 1 where `lo > 0`, else 0) |
-| `quantile_method`, `low_quantile`, `high_quantile`, `low_value`, `high_value`, `upper_fallback` | `percentile_range`: the method (`linear`, `inverted_cdf`, …), the quantiles in percent, the values **actually used** (after any fallback) and whether the maximum replaced the upper value (`true`/`false`) |
-| `offset`, `scale` | The applied linear map `y = (x − offset) / scale`, exactly as used (fiberfeatures: `offset = lo`, `scale = hi − lo + 1e-8`) |
-| `arithmetic_dtype`, `output_dtype` | The dtype the map is computed in and the dtype stored (`float64`/`float32` for `robust_normalize`; `float32`/`float32` for the torch maps) |
+| `transform` | `none` (only as the single row of a measured column with no scaling stage, below), `percentile_range`, `fixed_range`, `local_contrast` or `constant` (a degenerate branch, NumPy step 2, 3 or 5, Torch step 2 or 5) |
+| `fallback_rule` | `percentile_range`, and `constant` with `degenerate_range`: the implementation's fallback test, `hi_le_lo` (NumPy) or `range_lt_1e-8` (Torch); blank otherwise |
+| `constant_value`, `constant_cause` | `constant` only: the value written to every output pixel (`0.0` or `1.0`) and why (`empty_sample`, `nonfinite_quantile`, `degenerate_range`); blank otherwise |
+| `quantile_method`, `low_quantile`, `high_quantile`, `low_value`, `high_value`, `upper_fallback` | `percentile_range` (and `constant` with `degenerate_range`): the method (`linear`, `inverted_cdf`, …), the quantiles in percent, the values **actually used** (after any fallback) and whether the maximum replaced the upper value (`true`/`false`) |
+| `offset`, `scale` | The applied linear map `y = (x − offset) / scale`, exactly as used (fiberfeatures: `offset = lo`, `scale = hi − lo + 1e-8` in the arithmetic dtype) |
+| `arithmetic_dtype`, `output_dtype` | The dtype the map is computed in and the dtype stored (`float64`/`float32` for `robust_normalize`; `float32`/`float32` for the torch maps); `constant`: arithmetic blank, output the stored dtype |
 | `clip_order`, `clip_low`, `clip_high` | `none`, `clip_then_scale` (limits in input units: `lo`, `hi`) or `scale_then_clip` (limits in output units: `0.0`, `1.0`) |
-| `parameters` | Canonical JSON of the stage's other numbers (`local_contrast`: `p1`, `region_mean`, `floor`, `sigma`); `{}` when there are none |
+| `parameters` | Canonical JSON of the stage's other numbers (`local_contrast`: `p1`, `region_mean`, `floor`, `sigma`; a per-scale stage: `scale_unit`); `{}` when there are none |
 
 **Canonical cells.** Numbers are float64 `repr`; blank means "not applicable to this transform".
 `transform = none`: every numeric cell blank, `clip_order = none`, `parameters = {}`. `constant`:
-`low_value`, `high_value` as used, `offset`, `scale` blank, `clip_order = none`. A stage the provider
-does not apply to a column is not written.
+`low_value`, `high_value` as used (blank for `empty_sample` and `nonfinite_quantile`), `offset`,
+`scale`, `clip_low`, `clip_high` blank, `clip_order = none`. A stage the provider does not apply to a
+column is not written.
+
+**A measured column without scaling** (F3; for example a count, or fiberfeatures' `curvature_proxy`
+if its only scaling, `sigma_h · |grad θ|` clamped to `[0, 1]`, is not declared a stage) has exactly
+**one** row: `stage_index = 0`, `stage`, `map`, `scale_index`, `scale_value` blank, `state = measured`,
+`transform = none`. A column with at least one stage has no `none` row. Its key is the ordinary key
+with `stage_index = 0`, so it can never coincide with a stage row.
+
+**Several maps or scales feeding one column** (F3; fiberfeatures computes `ridge_support` per
+`sigma_h` of `config.scales` and combines the scales afterwards): one row per (map, scale) stage
+actually applied for that column, each with its own `map`, `scale_index` and `scale_value`. **Order of
+`stage_index`:** the stages applied to the image, in the order applied (`robust_normalize_1`,
+`robust_normalize_2`); then the map stages, by `map` (Python string order), then `scale_index`
+(ascending). The provider declares which stages feed a column; MorphoFeature checks only the
+record's form (unique keys, contiguous `stage_index` from 0, the cell rules above).
 
 **Unmeasured columns.** `not_measured` follows the provider output that MorphoFeature already
 validates (`patch_output.py`): reason `patch_not_measured` when the provider lists the patch in its
@@ -503,24 +570,30 @@ entry (key: plane, patch set, patch, `image_kind`, image, `conversion_id`, colum
 unique, a duplicate refused by the writer and the reader); a
 `not_measured` column has one row with `stage_index` 0 and `stage` empty. Order: the row order of
 `window_histograms.csv` up to the image, then `conversion_id`, column name (Python string order),
-`stage_index`. Header, complete and in this order (40 columns):
+`stage_index`. Header, complete and in this order (46 columns):
 
 ```text
 schema_version,
 position_id,image_file,z,t,condition,biological_repeat,technical_repeat,source_relative_path,plane_id,
 patch_set,patch_id,catalogue_version,
 image,image_kind,preset,preset_version,conversion_id,
-column,provider,stage_index,stage,
+column,provider,stage_index,stage,map,scale_index,scale_value,
 state,reason,provider_reason,
-transform,quantile_method,low_quantile,high_quantile,low_value,high_value,upper_fallback,
+transform,fallback_rule,constant_value,constant_cause,
+quantile_method,low_quantile,high_quantile,low_value,high_value,upper_fallback,
 offset,scale,arithmetic_dtype,output_dtype,
 clip_order,clip_low,clip_high,
 parameters
 ```
 
 `schema_version` is `1`. Reasons, frozen for schema 1: `patch_not_measured`, `valid_empty`,
-`no_provider_report`. The reader refuses another version, header or reason, and a `not_measured`
-row with any transform cell filled.
+`no_provider_report`. Frozen enumerations: `transform` (`none`, `percentile_range`, `fixed_range`,
+`local_contrast`, `constant`), `fallback_rule` (`hi_le_lo`, `range_lt_1e-8`), `constant_cause`
+(`empty_sample`, `nonfinite_quantile`, `degenerate_range`), `clip_order` (`none`,
+`clip_then_scale`, `scale_then_clip`). The reader refuses another version, header, reason or
+enumerated value; a `not_measured` row with any transform cell filled; a cell filled or blank
+against the cell rules above; a `none` row beside a stage row of the same column; and a column whose
+`stage_index` values are not `0, 1, …` without gaps.
 
 ### Conformance matrix
 
@@ -558,6 +631,13 @@ repository's `fixtures/` (which holds `experiment-v1.md` data only):
 | A valid-empty window | Scaling rows `not_measured`, `valid_empty`; no `transform = none` |
 | A patch in `patches_not_measured` | Scaling rows `not_measured`, `patch_not_measured`, the provider's reason kept |
 | `robust_normalize` whose 99th percentile equals the 1st (sparse structure) | `upper_fallback = true`, `high_value` the maximum, not the declared 99th percentile |
+| NumPy `robust_normalize`, positive constant sample (B2) | `constant`, `constant_value = 1.0`, `degenerate_range`, `fallback_rule = hi_le_lo`, `upper_fallback = true` |
+| NumPy `robust_normalize`, zero constant sample | `constant`, `constant_value = 0.0`, `degenerate_range` |
+| Torch `_normalize_map_torch`, positive constant map (B2) | `constant`, `constant_value = 0.0` (not 1), `degenerate_range`, `fallback_rule = range_lt_1e-8` |
+| Torch map with `0 < hi − lo < 1e-8` and a maximum well above `lo` (B2) | Fallback fires (`upper_fallback = true`, `high_value` the maximum), `percentile_range`, `scale_then_clip`, float32 `offset` and `scale`; the same values in NumPy do not fire the fallback (`hi_le_lo` false) |
+| Torch map with an empty sample (mask without a positive pixel) | `constant`, `constant_value = 0.0`, `empty_sample`, `low_value` and `high_value` blank |
+| A measured column with no scaling stage (F3) | Exactly one row, `stage_index = 0`, `stage` blank, `transform = none`; a `none` row beside a stage row is refused |
+| A column fed by `ridge_support` at three scales after two `robust_normalize` stages (F3) | Five rows: `stage_index` 0-1 the image stages in order, 2-4 `normalize_map_torch` with `map = ridge_support`, `scale_index` 0, 1, 2 and each `scale_value`; a gap or repeat in `stage_index` refused |
 | Sparse `counts` with a leading zero, a zero count, a repeated or decreasing index, an index ≥ `bin_count` | Refused by the reader |
 | A table of `schema_version` 0 or 2, or a `plane_histograms.csv`, read as either table | Refused |
 | Serial vs pooled run | Identical bytes of both tables |
