@@ -71,6 +71,34 @@ class RepresentationEnum(unittest.TestCase):
         self.assertEqual(used, set(_refval().REPRESENTATIONS))
 
 
+class FastLayout(unittest.TestCase):
+    """ADR 0006: the field tables of experiment-v1 and the audit validator agree."""
+
+    @staticmethod
+    def _table_keys(heading: str) -> tuple[str, ...]:
+        text = _read("docs/experiment-v1.md")
+        start = text.index(heading)
+        table = text[text.index("| Key |", start):].split("\n\n", 1)[0]
+        return tuple(re.match(r"\| `([a-z_]+)` \|", line)[1]
+                     for line in table.splitlines()[2:])
+
+    def test_channel_layout_fields_equal_validator(self) -> None:
+        self.assertEqual(self._table_keys("### 4.3a `channel_layout`"), _refval().LAYOUT)
+
+    def test_unit_fields_equal_validator(self) -> None:
+        text = _read("docs/experiment-v1.md")
+        anchor = "`repeats.<R>.members.<C>.technical_repeats.<technical repeat ID>`"
+        table = text[text.index("| Key |", text.index(anchor)):].split("\n\n", 1)[0]
+        keys = tuple(re.match(r"\| `([a-z_]+)` \|", line)[1] for line in table.splitlines()[2:])
+        self.assertEqual(keys, _refval().UNIT)
+
+    def test_new_codes_are_catalogued(self) -> None:
+        text = _read("docs/experiment-v1.md")
+        for code in ("E_FAST_LAYOUT_MISMATCH", "E_FAST_MARKER_WITHOUT_LAYOUT"):
+            self.assertIn(f"| 5 | `{code}` |", _section(text, "## 6."))
+        self.assertIn("| `R_FAST_LAYOUT_CONTRADICTION` |", _section(text, "## 8."))
+
+
 class AnalysisCodes(unittest.TestCase):
     def test_every_a_code_is_defined(self) -> None:
         defined = set(A_CODE.findall(_section(SPEC.read_text(encoding="utf-8"), "## 8.")))
