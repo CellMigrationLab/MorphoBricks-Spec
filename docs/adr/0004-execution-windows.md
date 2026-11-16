@@ -194,8 +194,8 @@ as before.
 For one plane `P`, one source channel `c` and one patch set `S`, the window histograms of `S` sum
 **exactly** to `P`'s histogram of `c` only when all of these hold:
 
-1. **One patch set, one plane, one image**: every row has the same `plane_id`, `patch_set` and
-   `image`; histograms of different patch sets are never added together.
+1. **One patch set, one plane, one image**: every row has the same `plane_id`, `patch_set`,
+   `image_kind` and `image`; histograms of different patch sets are never added together.
 2. **Exact cover**: the interiors cover every pixel of the plane exactly once, checked from the
    catalogue (EW3) and the rows, never assumed from the mode: every patch's global `bounds` lies in
    `[0, H) × [0, W)`, the bounds are pairwise disjoint, their areas sum to `H · W`, and each row's
@@ -285,14 +285,36 @@ in the normalization brick, needs no pixel and is defined for the bounded (RGB) 
 the SHA-256 of the canonical JSON of exactly these keys, the **fully resolved, stable** parameters:
 
 `conversion_id_version` (1), `preset`, `preset_version`, `method`, `matrix`, `target_component`,
-`exclusion_component`, `inverted`, `colour_space`, `white` (the **resolved** white: three floats, the
-preset's default `(255.0, 255.0, 255.0)` when none is given, so an unset white and an explicit
-default white give the same id; owner, 15 Nov),
-`white_rescale`, `stain_names`, `stain_matrix` (the unit rows actually used, default or user),
+`exclusion_component`, `inverted`, `colour_space`, `white`, `white_rescale` (both canonical, table
+below), `stain_names`, `stain_matrix` (the unit rows actually used, default or user),
 `residual_completed`, `od_definition`, `polarizer` and `skimage_version` (`null` when scikit-image
 is not called). `numpy_version` and `normalization_version` are **not** keys (owner, 15 Nov): an
 upgrade of either keeps the id; both versions are recorded in the run record, and a change of the
 conversion's output in a new normalization release is a change of `preset_version`, which is a key.
+A key the preset does not use is `null` (for example `matrix` for `luminance`, `stain_matrix` for
+`cielab`).
+
+**Canonical `white` and `white_rescale`.** The provenance does not record them uniformly
+(`stain.py` at `b8aa65b`, unchanged at `v0.7.0` `c6a9f9d`): `_white_rescaled` writes `white: None,
+white_applied: False, white_rescale: None` for an unset optional white and the white's three floats,
+`white_applied: True, white_rescale: WHITE_RESCALE` for a given one; `_custom_od` writes `white`
+and no `white_rescale` or `white_applied` key; a `fixed_deconvolution` preset writes none of the
+three. The id therefore uses the canonical values below, by how the preset takes `white` (`needs`
+or `accepts` of `stain_presets.py`, identical at both commits). `WHITE_RESCALE` is the frozen text
+`clip(rint(I * 255 / white), 0, 255) as uint8, rint half to even` (`stain.WHITE_RESCALE` at both
+commits); a change of that text is a change of `conversion_id_version`.
+
+| Presets (how `white` is taken) | Canonical `white` | Canonical `white_rescale` | Rebuilt from `ScalarResult.provenance` |
+| --- | --- | --- | --- |
+| `luminance_inverted`, `lab_a`, `psr_polarized`, `trichrome_green` (optional, `accepts`) | The given white as three float64 (`check_white`), or `[255.0, 255.0, 255.0]` when unset | `WHITE_RESCALE`, whether the white is given or not (with `(255, 255, 255)` the rescale is the identity, bit for bit: `optical_density.rescale_to_white`) | `white_applied = False` with `white` and `white_rescale` both `None` gives `[255.0, 255.0, 255.0]` and `WHITE_RESCALE`; `white_applied = True` with three floats and `white_rescale == WHITE_RESCALE` gives those floats and `WHITE_RESCALE`; any other combination is refused (`ValueError`) |
+| `psr_brightfield`, `he_custom`, `trichrome_custom` (required, `needs`; `custom_od`) | The given white as three float64; never defaulted (`check_options` refuses an unset white) | `null` (no rescale: the white enters the optical density) | `white` (three floats) and a `white_rescale` absent or `None`; anything else refused |
+| `he_eosin`, `he_hematoxylin`, `trichrome_blue` (not taken; `fixed_deconvolution`) | `null` (a given white is refused by `check_options`) | `null` | `white` and `white_rescale` absent or `None`; anything else refused |
+
+So an unset white and `white = (255, 255, 255)` give the same id **only for the four presets with an
+optional white**, and the same derived image bit for bit. For those presets the diagnostics
+`above_white_count` and `white_clipped_count` are computed with the canonical white, so both are
+`0` when the white is unset or `(255, 255, 255)` (no 8-bit value exceeds 255), never blank: the two
+requests give equal derived entries (duplicate rule below).
 
 `input_dtype` is not a key: every preset that has a `conversion_id` takes `uint8` RGB only
 (`stain.py`, which refuses any other dtype), so it would never vary. The pixel-dependent
@@ -301,9 +323,13 @@ diagnostics (`zero_fraction`, `floored_fraction`, `negative_fraction`, `above_wh
 (`YXC` and `CYX` give bitwise identical outputs) are not keys either. Required tests: two
 conversions with identical settings on images with different fractions give the same id; changing
 any one key (white, a vector, the polarizer, the preset version, the scikit-image version) gives a
-different id; an unset white and `white=(255, 255, 255)` give the same id; the id does not change
-with the installed numpy or normalization version; the id from the options equals the id rebuilt from any `ScalarResult.provenance` of
-the same call. Pooling refuses rows of different `conversion_id`s or `spec_sha256`s.
+different id; for each of the four presets with an optional white, an unset white and
+`white=(255, 255, 255)` give the same id (and `white=(250, 255, 255)` a different one); for a
+`custom_od` preset an unset white is refused and for a `fixed_deconvolution` preset a given white is
+refused, before any id is made; the id does not change with the installed numpy or normalization
+version; the id from the options equals the id rebuilt from any `ScalarResult.provenance` of the same
+call (both white states, every preset family), and an inconsistent white provenance is refused.
+Pooling refuses rows of different `conversion_id`s or `spec_sha256`s.
 
 **Diagnostics per patch.** Stored per patch as **counts over the interior** (`zero_count`,
 `floored_count`, `negative_count`, `above_white_count`, `white_clipped_count`: each the numerator of
@@ -329,7 +355,7 @@ order. fiberfeatures at `752b1dd` has, for example:
 - `local_contrast_normalize` (opt-in): `p1` (1st percentile), the region mean, `floor`, `sigma`.
 
 So the record states what was really done, not the declared settings. One entry per (plane, patch
-set, patch, image, `conversion_id`, column, stage):
+set, patch, `image_kind`, image, `conversion_id`, column, stage):
 
 | Field | Meaning |
 | --- | --- |
@@ -371,7 +397,7 @@ invariants. Today's `check_patch_output` (`patch_output.py:201–253`) reads onl
 its validation. Until then no scaling or derived histogram is recorded.
 
 **Two providers, one derived image.** When two providers report a derived histogram for the same key
-`(plane_id, patch_set, patch_id, image, conversion_id)`:
+`(plane_id, patch_set, patch_id, image_kind, image, conversion_id)` (`image_kind = derived`):
 
 - if their entries are equal in full (reference and spec hash, every count, extrema, both tails,
   `counts`, every diagnostic count), one row is written, `measured`;
@@ -395,15 +421,21 @@ writer. Common format of §6.1 (UTF-8, comma-separated, one header row, floats a
 `repr`, blanks for missing values, temporary file then replace).
 
 - **File:** `window_histograms.csv`.
-- **Row:** one per plane x patch x image, key `(plane_id, patch_set, patch_id, image,
-  conversion_id)`, unique (two derived images of one name but different options differ by
-  `conversion_id`; it is empty for source channels and for `passthrough` rows).
+- **Row:** one per plane x patch x image, key `(plane_id, patch_set, patch_id, image_kind, image,
+  conversion_id)`, unique (owner, 16 Nov). `image_kind` is in the key because a source channel and
+  a derived `passthrough` image can share a name and both have an empty `conversion_id`: the source
+  channel `SHG` and the `shg` preset's derived image `SHG` (`image_name` in `stain_presets.py`) are
+  two rows, `(…, source_channel, SHG, "")` and `(…, derived, SHG, "")`. Two derived images of one
+  name but different options differ by `conversion_id`; it is empty for source channels and for
+  `passthrough` rows. The writer refuses to write, and the reader refuses to read, two rows with one
+  key (`ValueError` naming the key); neither keeps one of them.
 - **Rows written:** for every catalogue patch of a set with a windowed request on the plane, one row
   per source channel read by any unit of that set on the plane, and (step 2) one per derived image of
   its requests; a patch with no window unit gets `not_measured` rows.
 - **Order:** planes in the run's order, patch sets in the order they were cut, patches in catalogue
-  (CellPatcher) order, then source channels before derived images, each in sorted order (Python
-  string order, §6.1), then `conversion_id`. Serial and pooled runs give the same bytes (EW9).
+  (CellPatcher) order, then `image_kind` (`source_channel` before `derived`), then `image` (Python
+  string order, §6.1), then `conversion_id` (Python string order; empty first). Serial and pooled
+  runs give the same bytes (EW9).
 
 **Header, complete and in this order** (65 columns):
 
@@ -467,7 +499,8 @@ fails (other than with a listed reason), the writer writes nothing, as for `plan
 ### The `window_scaling.csv` table, schema 1 (MorphoFeature)
 
 Written by MorphoFeature next to `window_histograms.csv`, from the `scaling` entries. One row per
-entry (key: plane, patch set, patch, image, `conversion_id`, column, `stage_index`); a
+entry (key: plane, patch set, patch, `image_kind`, image, `conversion_id`, column, `stage_index`;
+unique, a duplicate refused by the writer and the reader); a
 `not_measured` column has one row with `stage_index` 0 and `stage` empty. Order: the row order of
 `window_histograms.csv` up to the image, then `conversion_id`, column name (Python string order),
 `stage_index`. Header, complete and in this order (40 columns):
@@ -512,7 +545,10 @@ repository's `fixtures/` (which holds `experiment-v1.md` data only):
 | Each bounded family at its extreme 8-bit inputs | `bin_count` 1024, limits `analytic ± tolerance`, empty tails |
 | A derived value outside the widened limits (injected) | Counted in the tail, never an end bin |
 | `passthrough` preset | Derived row `not_measured`, `preset_has_no_fixed_range`, `conversion_id` empty; features and source rows present |
+| Source channel `SHG` and the `shg` preset's derived image `SHG` on one patch (B1A) | Two rows, keys differing only by `image_kind` (`source_channel` first); a table holding two rows with the same six-part key is refused by the reader, and the writer refuses to write it |
 | `conversion_id`: same settings, different fractions / changed settings | Same id / different id |
+| `conversion_id` white identity (B1B), each optional-white preset (`luminance_inverted`, `lab_a`, `psr_polarized`, `trichrome_green`) | Unset white and `(255, 255, 255)`: same id, same derived image bit for bit, `above_white_count` and `white_clipped_count` both `0`; `(250, 255, 255)`: another id; the id rebuilt from each `provenance` equals the id from the options; an inconsistent white provenance refused |
+| `conversion_id` white scope (B1B) | `custom_od` preset without white, and `fixed_deconvolution` preset with a white: refused before any id |
 | `canonical_json`: NumPy scalars, `-0.0`, `None`, NaN | Same text as the Python values; `0.0`; `null`; NaN refused |
 | Mixed `conversion_id`s or `spec_sha256`s | Pooling refused |
 | Diagnostics pooled from the patches of a clipped grid | Each count equals `conversion_diagnostic_counts` on the whole plane |
