@@ -6,7 +6,9 @@
   [the one-route design](../design/one-route.md) (section 7 and the decisions table; the design itself
   stays proposed until its gates are met). Specification only: no fixture, golden or validator of `experiment-v1.md` changes
   (`python -I tools/audit/refval.py fixtures .` unchanged). The coordinate conversions are executable
-  in `tools/execution_frames.py`, with their cases in `tools/test_execution_frames.py`.
+  in `tools/execution_frames.py`, with their cases in `tools/test_execution_frames.py`; EW11's canonical
+  JSON, conversion identity, histogram spec goldens and duplicate comparison in
+  `tools/window_histogram_spec.py`, with their cases in `tools/test_window_histogram_spec.py`.
 - **Tracking:** umbrella [#2](https://github.com/CellMigrationLab/MorphoBricks-Spec/issues/2); the
   design `docs/design/one-route.md` (PR #38), section 7.5, PR 1 of 8. The implementing PRs follow in
   order: CellPatcher (`context_bounds`), MorphoFeature (manifest field, window units, pool, CUDA lane),
@@ -246,12 +248,15 @@ For every bounded family:
 - `bin_count = 1024`, the same for every bounded preset and option. It is recorded in every row, and
   changing it is a change of `spec_version` and of the `window_histograms.csv` schema.
 - `analytic_min`, `analytic_max`: the family's analytic bounds of the output for every 8-bit input
-  under the given options (table below), as float64.
+  under the given options (table below), evaluated in float64 as stated there and then **rounded
+  outward to float32** (`analytic_min` the largest float32 `≤` the float64 bound, `analytic_max` the
+  smallest float32 `≥` it), stored as the float64 of that float32 (numeric policy below).
 - `tolerance = 4 * float(numpy.spacing(numpy.float32(m)))` with `m = max(abs(analytic_min),
-  abs(analytic_max))`: four float32 units in the last place at the bound's magnitude, because the
+  abs(analytic_max))` (exact: `m` is a float32): four float32 units in the last place at the bound's magnitude, because the
   derived image is float32 and its rounding at the bound is up to half a float32 unit, so a value
   that is within the analytic bounds before rounding always lies inside the widened limits.
-- `binning_min = analytic_min − tolerance`, `binning_max = analytic_max + tolerance` (float64).
+- `binning_min = analytic_min − tolerance`, `binning_max = analytic_max + tolerance` (float64, one
+  rounding each).
 - Values below `binning_min` or above `binning_max` go to the explicit underflow and overflow
   (count and moments), never to an end bin. The bins follow the float rule of §1.2.2 with these
   limits.
@@ -264,11 +269,38 @@ for every preset in `stain_presets.py` today), which stays as it is.
 
 | Family (presets) | Analytic bounds |
 | --- | --- |
-| `custom_od` (`psr_brightfield`, `he_custom`, `trichrome_custom`, user or default vectors) | Per channel `OD ∈ [lo_j, hi_j] = [log10(white_j/255), log10(white_j/1)]` (`I` floored at 1). The target concentration is a linear map of the OD with the target column `a` of `inv(M)`, so the bound is **sign-aware**: `Σ_j min(a_j·lo_j, a_j·hi_j)` to `Σ_j max(a_j·lo_j, a_j·hi_j)`. Negative concentrations are kept (§3.4), so the lower bound can be negative. |
-| `fixed_deconvolution` (`he_eosin`, `he_hematoxylin`, `trichrome_blue`; scikit-image `separate_stains`) | Per channel `log(max(I/255, 1e-6)) / log(1e-6) ∈ [0, 1]`; the component is that vector times the matrix column, then set to 0 where negative, so `[0, Σ_j max(0, m_jk)]`, from the pinned scikit-image version's matrix. |
-| `cielab` (`lab_a`, `trichrome_green`) | The extremes of `rgb2lab(...)[..., 1]` over all 2**24 8-bit colours at the pinned scikit-image version (exhaustive), negated for `trichrome_green`; the white rescale keeps the input 8-bit, so the same bounds hold with `white`. |
-| `luminance` (`luminance_inverted`, `psr_polarized`) | `[0, 1]` (weights 0.2125, 0.7154, 0.0721 on values in `[0, 1]`). |
+| `custom_od` (`psr_brightfield`, `he_custom`, `trichrome_custom`, user or default vectors) | Per channel `OD ∈ [lo_j, hi_j]`, evaluated as the conversion does, `lo_j = −log10(255 / white_j)`, `hi_j = −log10(1 / white_j)` (`I` floored at 1; `math.log10`). The target concentration is a linear map of the OD with the target column `a` of `inv(M)` (`concentrations = OD @ inv(M)`, target first), so the bound is **sign-aware**: `Σ_j min(a_j·lo_j, a_j·hi_j)` to `Σ_j max(a_j·lo_j, a_j·hi_j)`. `a` is evaluated by the adjugate, not LAPACK: `a_j = C_0j / det` with the row-0 cofactors `C_00 = M11·M22 − M12·M21`, `C_01 = −(M10·M22 − M12·M20)`, `C_02 = M10·M21 − M11·M20` and `det = M00·C_00 + M01·C_01 + M02·C_02`, `M` the recorded `stain_matrix` rows; every sum left to right (`j = 0, 1, 2`), plain float64 operations (`tools/window_histogram_spec.py`, `custom_od_bounds`). Negative concentrations are kept (§3.4), so the lower bound can be negative. |
+| `fixed_deconvolution` (`he_eosin`, `he_hematoxylin`, `trichrome_blue`; scikit-image `separate_stains`) | Per channel `log(max(I/255, 1e-6)) / log(1e-6) ∈ [0, 1]`; the component is that vector times the matrix column, then set to 0 where negative, so `[0, Σ_j max(0, m_jk)]`, from the pinned scikit-image version's matrix, added left to right in float64. |
+| `cielab` (`lab_a`, `trichrome_green`) | The float64 minimum and maximum of `rgb2lab(...)[..., 1]` over all 2**24 8-bit colours at the pinned scikit-image version (exhaustive), negated (and swapped) for `trichrome_green`; the white rescale keeps the input 8-bit, so the same bounds hold with `white`. |
+| `luminance` (`luminance_inverted`, `psr_polarized`) | `[0.0, 1.0]` exactly (weights 0.2125, 0.7154, 0.0721 on values in `[0, 1]`). |
 | `passthrough` (`fluorescence`, `shg`) | None: `NoFixedRange("preset_has_no_fixed_range")`. |
+
+**Numeric policy** (F1). The float64 bound of a family is evaluated exactly as its row states (plain
+IEEE-754 binary64 operations, the stated order, no fused multiply-add; `math.log10` is the only
+library function of `custom_od`), then rounded outward to float32 as above. The outward rounding makes
+`spec_sha256` insensitive to a last-bit difference of a float64 bound between platforms (`log10` is
+not correctly rounded everywhere), except when the bound lies within that difference of a float32
+boundary; the golden cases below are exact, and a platform that misses one bit of them is a defect to
+report, never a tolerance. `spec_sha256` is the SHA-256 of the canonical JSON of exactly the ten
+fields of the spec (below).
+
+**Golden cases** (`tools/test_window_histogram_spec.py`, reproduced bit for bit by the normalization
+brick). Stain rows are what `optical_density.stain_matrix` returns at `c6a9f9d` for the vectors given
+(they enter as recorded rows; G3 to G5 call no scikit-image, so `skimage_version` is `null`; G1 and
+G2 state `skimage_version = "0.26.0"` as an input). Hashes are truncated here to 16 hex digits; the
+test holds them in full.
+
+| Case | Inputs | `conversion_id` | `analytic_min`, `analytic_max` | `tolerance` | `binning_min`, `binning_max` | `spec_sha256` |
+| --- | --- | --- | --- | --- | --- | --- |
+| G1 | `luminance_inverted`, white unset | `ce13f97f2d55b509…` | `0.0`, `1.0` | `4.76837158203125e-07` | `-4.76837158203125e-07`, `1.0000004768371582` | `a25dd0952d26d8f8…` |
+| G2 | `luminance_inverted`, `white = (255, 255, 255)` | same as G1 | same | same | same | same as G1 |
+| G3 | `he_custom`, `white = (230, 225, 240)`, default vectors (residual completed) | `d29672aa039c5694…` | `-3.27630352973938`, `2.6812243461608887` | `9.5367431640625e-07` | `-3.2763044834136963`, `2.681225299835205` | `5d4f141a41cba08b…` |
+| G4 | `he_custom`, same white, user vectors `eosin (0.10, 0.95, 0.20)`, `hematoxylin (0.60, 0.75, 0.30)` | `05354c067033bc5d…` | `-3.8533785343170166`, `2.9239346981048584` | `9.5367431640625e-07` | `-3.853379487991333`, `2.923935651779175` | `9d87fcd655d5e9dd…` |
+| G5 | `psr_brightfield`, `white = (250, 248, 252)`, user vectors `psr (0.15, 0.85, 0.50)`, `counterstain (0.70, 0.40, 0.55)`, `residual (0.30, 0.20, 0.90)` | `acd54b73791cd9bd…` | `-1.8734703063964844`, `3.200230598449707` | `9.5367431640625e-07` | `-1.8734712600708008`, `3.2002315521240234` | `3c3fddfc661b1638…` |
+
+For G3 to G5, `to_scalar` on all 2**24 8-bit colours at normalization `c6a9f9d` gives extremes inside
+`[analytic_min, analytic_max]` (checked when these cases were written; G3: `-3.27630352973938`,
+`2.6812241077423096`).
 
 A preset the brick cannot bound (a future family, or options for which it states no bound) also
 returns `NoFixedRange("preset_has_no_fixed_range")`, the only reason of schema 1. Then (owner
@@ -707,6 +739,7 @@ repository's `fixtures/` (which holds `experiment-v1.md` data only):
 | Constant plane | Every valid pixel in bin 0, in every patch |
 | Plane without a `plane_histograms.csv` row, or a SHA-256 mismatch | `not_measured` with the reason; features unchanged |
 | Each bounded family at its extreme 8-bit inputs | `bin_count` 1024, limits `analytic ± tolerance`, empty tails |
+| `OutputHistogramSpec` goldens G1-G5 (F1) | `conversion_id`, every float bit for bit (`float.hex`) and `spec_sha256` as in `tools/test_window_histogram_spec.py` |
 | A derived value outside the widened limits (injected) | Counted in the tail, never an end bin |
 | `passthrough` preset | Derived row `not_measured`, `preset_has_no_fixed_range`, `conversion_id` empty; features and source rows present |
 | Source channel `SHG` and the `shg` preset's derived image `SHG` on one patch (B1A) | Two rows, keys differing only by `image_kind` (`source_channel` first); a table holding two rows with the same six-part key is refused by the reader, and the writer refuses to write it |
