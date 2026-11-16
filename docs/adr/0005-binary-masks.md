@@ -609,16 +609,36 @@ canonical header; a reader refuses a line whose `rule_sha256` is not the SHA-256
 canonical JSON.
 
 **Code identity.** For each of the distributions `morphobricks-preprocessing` (the helper) and
-`morphobricks-normalization` (the colour maths), the helper records `{"distribution", "version",
-"kind", "value"}`, with the version from the installed distribution's metadata. The identity is
-**verified** only when the distribution is not an editable install and every file its installed
-`RECORD` lists with a hash still has that hash on disk. A verified identity has `kind`
-`"vcs_commit"` and `value` the 40-hex commit when the installation records one (PEP 610
-`direct_url.json`, `vcs_info.commit_id`), else `kind` `"record_sha256"` and `value` the SHA-256 of
-the installed `RECORD` file. Any other case (an editable install, a source tree on the import path,
-a missing or unreadable `RECORD`, a listed file missing or with another hash) is `kind`
-`"unverified"`, `value` `null`, and adds `"reason"`. A version string alone is never a code
-identity.
+`morphobricks-normalization` (the colour maths), the helper records an object with keys exactly
+`distribution`, `version`, `verified`, `record_sha256`, `vcs_commit` and `reason`, in this order,
+all always present. `version` is from the installed distribution's metadata. `record_sha256` is
+the **installed-artifact digest**: the lower-case hex SHA-256 of the exact bytes of the installed
+distribution's `RECORD` file (`<name>-<version>.dist-info/RECORD`, read as bytes, never parsed
+or normalised first), or `null` when there is no readable `RECORD`. `vcs_commit` is the 40-hex
+commit when the installation records one (PEP 610 `direct_url.json`, `vcs_info.commit_id`), else
+`null`; it is extra provenance only and never stands in for `record_sha256`. The identity is
+**verified** (`verified` `true`, `reason` `null`) only when all of these hold, checked once per
+process after the helper has imported every module it uses from both distributions:
+
+1. the distribution is not an editable install (PEP 610 `dir_info.editable` is not `true`);
+2. its `RECORD` exists and is readable, and `record_sha256` is its digest;
+3. every file `RECORD` lists with a hash still has that hash on disk;
+4. every **executable package file** of the distribution is listed in `RECORD` **with a hash**:
+   every `.py` file and every extension module (`.so`, `.pyd`) on disk under each of the
+   distribution's import packages (the directories its `RECORD` places them in), files under
+   `__pycache__` excepted; one that is missing from `RECORD`, or listed without a hash, refuses
+   verified status;
+5. every imported module of the distribution's import packages (each `sys.modules` entry named
+   as the package or below it) has a `__file__` whose resolved real path is the resolved path of
+   a `RECORD` entry with a hash: the code that runs is that installation's, not a source tree
+   or another installation earlier on the import path.
+
+Otherwise `verified` is `false`, `reason` names the first failed check (for example
+`"editable install"`, `"RECORD missing"`, `"hash differs: <file>"`, `"not in RECORD: <file>"`,
+`"no hash in RECORD: <file>"`, `"module not from this installation: <module>"`), and
+`record_sha256` and `vcs_commit` are recorded as found. A version string or a commit alone is
+never a code identity: two builds of one commit with different `RECORD` bytes are two
+identities.
 
 **An unverified mask is written but never reused.** When either code identity is unverified the
 mask is still computed, written and published, with `reusable` `false`; the helper and its result
@@ -630,9 +650,11 @@ both have `reusable` `true`; (2) they are equal in every key except `output.cont
 `fractions` (the results): `source` in every key, `output` `root`, `mask_id`, `path`, `axes`,
 `shape` and `dtype`, `operation`, `rule`, `rule_sha256`, `code`, `numpy_version`,
 `scikit_image_version`, `scipy_version`, `image_type`, `rgb_header_override`, `pixel_size`,
-`helper` and `helper_version`; and (3) the existing file's digest equals the line's
+`helper` and `helper_version` (`code` in every key: an equal `vcs_commit` with another
+`record_sha256` is another identity); and (3) the existing file's digest equals the line's
 `output.content_sha256`. Anything else is a collision and is refused, never overwritten: a
-different source with identical pixels, another code identity or library version, another rule
+different source with identical pixels, another code identity (another installed-artifact
+digest included) or library version, another rule
 record (a provisional and a frozen record included), and every line with `reusable` `false` on
 either side. BM12's comparator never decides a BM15 line, and a BM15 line never matches a BM12
 call (their operations differ).
