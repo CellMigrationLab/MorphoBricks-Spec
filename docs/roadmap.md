@@ -249,6 +249,7 @@ shared 2-D capabilities ([conformance plan §4](conformance-plan.md#4-later-stag
 
 **S3.3 Preprocessing and CellPatcher migration**
 - Replace experiment-global channel-count/name refusals with per-imaging-unit validation only when all downstream consumers are ready.
+- Status (owner decision of 11 November 2026, recorded in preprocessing `docs/plan.md` item 79): preprocessing `main` processes units with different channel lists of one image type, checked per unit; `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` refuses only units of different image types (`v29`), pending a further owner decision (experiment-v1 §8, conformance P04). CellPatcher followed in its roadmap item G1 (v0.7.0; CellPatcher's own numbering, not this roadmap's gate G1).
 - Name CellPatcher's patch columns and the summary columns by canonical channel ID (ADR 0003 HV2).
 - Ensure patch extraction/export never selects the wrong semantic channel after a source order swap.
 - Record per-unit and per-repeat channel coverage; scope partial repeats explicitly.
