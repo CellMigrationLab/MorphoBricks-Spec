@@ -216,6 +216,11 @@ writer or a brick that consumes the description.
   one policy for binary masks: 8-connected and fixed, one labeller in preprocessing with one
   recorded conversion, one region checker, `empty_region` for an empty region, and the PR order per brick;
   amends experiment-v1 §4.5, §4.5b and §8 (a `binary` file holds values in {0, v} for one positive v).
+- [ADR 0007](docs/adr/0007-run-folder-entry.md) (**proposed**, owner request of 16 November 2026):
+  one entry per brick on a validated run folder (`<brick>.run_folder`, `<brick> run <run_folder>`, a
+  notebook card), the `RUN_FOLDER_*` and `ENTRY_*` refusals, defaults only where the Spec defines
+  one, fixed output names and reuse by identity; the per-brick inventory is
+  [`docs/design/run-folder-entry-inventory.md`](docs/design/run-folder-entry-inventory.md).
 
 ### Fixtures and goldens
 
