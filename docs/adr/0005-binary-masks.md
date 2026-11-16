@@ -97,7 +97,7 @@ preprocessing's `RunInputs`; normalization can import neither preprocessing nor 
 
 ## Decisions
 
-The owner decided BM1-BM5 and BM11-BM14 on 15 November 2026 (final). BM6-BM10 are this ADR's encoding of them.
+The owner decided BM1-BM5 and BM11-BM14 on 15 November 2026 and BM15 on 16 November 2026 (final). BM6-BM10 are this ADR's encoding of them.
 
 | ID | Decision | Rejected alternative |
 | --- | --- | --- |
@@ -115,6 +115,7 @@ The owner decided BM1-BM5 and BM11-BM14 on 15 November 2026 (final). BM6-BM10 ar
 | BM12 | **Explicit conversion helpers in preprocessing** (owner): the user converts masks on purpose, as a recorded step that writes **new mask files** declared with their own representation: **binary → instance labels** (the BM1/BM6 labelling: connected components, 8-connected) and **class label image → one binary mask per class value** (for class/semantic segmentation). Each output carries a lineage record (source and output with their content SHA-256, operation, class value or connectivity, helper and version; [schema](#the-conversion-helpers-bm12)), like preprocessing's existing named-axis copies (`convert`). The run then declares the outputs and reads them like any mask. | Converting implicitly at read only (users cannot produce instance or per-class masks they can inspect, share or edit); a labelled copy of every binary mask, made automatically (AR5, still rejected: here nothing is converted unless the user asks, and the source is unchanged). |
 | BM13 | **Notebook display** (owner): CellPatcher's notebook shows the recorded conversion of a file run **read-only**; it offers no binary-mask setting. | A file-run-only control (a second place to decide what BM2 decides once). |
 | BM14 | **Grouping inside `parent_labels` is a measurement, not a labeller** (owner): MorphoRelate's rows per group of an already-labelled `parent_labels` mask (`structures_table.py:89-114`) are allowed; BM2's "no other labeller" applies to binary masks only. | Routing parent-label grouping through the recorded conversion (the user's labels already define the groups). |
+| BM15 | **Derived region masks from an image** (owner, 16 November 2026): preprocessing may offer an opt-in helper that computes a `binary` **region** mask from one declared image with a **named, versioned, fixed rule** whose colour maths is called from normalization's `stain` module (never reimplemented). The first is `RunInputs.he_tissue_mask` (rule `he_tissue_v1`: nuclei, red blood cells and near-white background excluded) on a unit declared `image_type = "rgb"`. Like BM12, it writes a **new mask file** with a lineage line, never runs by default, and nothing reads the output until the user declares it (`representation = "binary"`) and the mask step has checked it. The output is a region (BM3), never an object set (`experiment-v1.md` §4.5c). | A mask built inside each consuming brick (fiberfeatures builds none); a mask made automatically for every RGB run; per-image tuned thresholds. |
 
 ### Why the helper is in preprocessing
 
@@ -531,7 +532,7 @@ these, in this order, all always present:
 
 `root` names the folder `path` is relative to; in this wave it is always `"masks"`, the run's
 standalone masks folder (`RunInputs.masks_root`), for the source and the output alike (OME-Zarr label
-images are refused above). A reader refuses a line with any other `root` value. `path` is relative to
+images are refused above). A reader refuses a line with any other `root` value (BM15 adds one exception, the `source` of a [derived region mask](#derived-region-masks-bm15)). `path` is relative to
 that root, with `/`, and never absolute, so the record holds when the masks folder is on another
 volume than the experiment folder or is moved. `axes` is the stored axis letters of the file
 as the run recorded them (for example `"YX"`, `"TYX"`), `shape` the stored shape in that order,
@@ -563,6 +564,136 @@ pending and ignore it, and the next call for the same conversion completes or ro
 anything else, so a retry gives the same files and lines as one uninterrupted call. A multi-output
 `classes_to_binary` publishes output by output in ascending class order; a retry after a failure
 skips the classes already published (idempotent, as above) and continues.
+
+## Derived region masks (BM15)
+
+**The FOV is the run's, resolved before any read.** A BM15 helper takes the opened run
+(`RunInputs`) and one FOV, given as a `Fov` or as its image path. Before any pixel is read it
+resolves that FOV **by its image path, relative to the experiment folder,** to the run's own
+authoritative description of it: the position as the run's manifest and published description
+record it (`RunInputs.fovs()`), with its unit's declared `image_type`, its stored axes, its Z, T and
+C counts and its pixel type. Every check and every lineage value uses that record only. An
+`image_type`, axes, counts or pixel type carried by a caller-supplied `Fov` object are ignored:
+never trusted, never compared, never used to fill a gap. An image path that is not an image of the
+run is refused. On the resolved record the helper refuses, before any pixel is read, a unit not
+declared `rgb`, a FOV with more than one Z plane or time point, a C count other than 3, a pixel type
+other than 8-bit (`uint8`), a run without a masks folder and an unknown rule. RH1 is honoured as
+recorded, **per image**: a unit declared `rgb` whose override the run accepted is valid input; the
+helper never reads the image header itself and never decides the override again. The unit's
+declared `rgb_header_override` and, when it is declared, that image's own recorded override item
+(`override` `used` or `unused`, `unused_reason`, `header_photometric`; experiment-v1 §4.4b, "Declared
+and effective are recorded separately") are copied into the lineage unchanged. The plane is read
+through the run (`RunInputs.read_plane`), which refuses an image changed since the run, and the
+image fingerprint is checked again after the read, as BM12 does.
+
+**Output and publication.** The output is one `uint8` `(Y, X)` file, `1` where the rule keeps the
+pixel and `0` where it excludes it, declared by the user `binary` and used as a region (BM3). Its
+path, its mask ID rules, its collision refusals and its paired publication (with the pending-line
+rollback) are those of BM12. Its retry comparator is **its own** (below), not BM12's.
+
+**Lineage line.** One per output, in the same `mask_lineage.jsonl` as BM12's lines. Keys exactly
+these, in this order, all always present:
+
+| Key | Value |
+| --- | --- |
+| `source` | `{"root": "experiment", "image": ..., "axes": ..., "shape": [...], "dtype": ..., "content_sha256": ...}`: `image` is the FOV image's path relative to the experiment folder, with `/`; `axes`, `shape` and `dtype` are those of the plane as read (`"CYX"`, `[3, Y, X]`, `"\|u1"`); the digest is BM12's canonical digest of the pixels read |
+| `output` | BM12's file object of the file written, with `root` `"masks"` |
+| `operation` | the rule's operation name (`"he_tissue_mask"` for `he_tissue_v1`) |
+| `rule` | the rule's complete canonical record (below) |
+| `rule_sha256` | the lower-case hex SHA-256 of the canonical JSON of `rule` |
+| `code` | `{"preprocessing": <code identity>, "normalization": <code identity>}` (below) |
+| `reusable` | `true` when both code identities are verified, else `false` |
+| `numpy_version`, `scikit_image_version`, `scipy_version` | each package's `__version__` as imported by the process that computed the mask |
+| `image_type` | `"rgb"`, from the run's record of the FOV |
+| `rgb_header_override` | `{"declared": <true or false>, "image": <that image's recorded override item, or null when not declared>}`, from the run's record |
+| `pixel_size` | the run's recorded X and Y size and unit of the FOV, or `null`; information only, never used |
+| `fractions` | results: the kept share and each excluded component's share of all pixels, and normalization's optical-density `floored_fraction` |
+| `helper`, `helper_version` | the helper's qualified name; `morphobricks_preprocessing.__version__` |
+
+**The rule record.** A rule is identified by `rule.id` and `rule.version`; thresholds are never
+chosen per image, and a change of **any** value in the record is a new version. The record is
+complete: it states the input it takes (image type, pixel type, white), the stain preset and its
+version, the HED matrix's source (the qualified name of the matrix normalization's `stain` module
+passes to the deconvolution) and the SHA-256 of that matrix as imported (float64, little-endian,
+C order), the optical-density function and its floor, every excluded component in order with every
+pixel comparison (quantity, operator, value), every clean-up operation in order with its parameters
+(disk radii and minimum piece sizes, in pixels), the connectivity (`8`), the disk definition, how
+the components combine, and the rule's `status` (`"provisional"` or `"frozen"`). Its canonical JSON
+is the UTF-8 bytes of `json.dumps(rule, sort_keys=True, separators=(",", ":"))`, as for BM12's
+canonical header; a reader refuses a line whose `rule_sha256` is not the SHA-256 of that
+canonical JSON.
+
+**Acceptance before freezing.** A rule's `status` becomes `"frozen"` only when a report meets
+acceptance criteria that the owning brick's design states with numeric thresholds **before** any
+evaluation of the rule is run. Thresholds are never set, moved or reinterpreted after results are
+seen; changed criteria need a new evaluation. Every evaluation dataset is named with its
+acquisition provenance (scanner vendor, model where the source states it, source URL and
+licence); a criterion about scanners counts vendors from that provenance, never from file
+formats or dataset names.
+
+**Freezing a rule makes a new mask, never a relabelled one.** `status` is part of the rule
+record and so of `rule_sha256`, so a frozen rule is another record. Freezing therefore needs a
+**new output mask ID**: the helper is run again with the frozen rule under that new ID, the user
+declares the new output, and the mask step is run again before anything reads it. The
+provisional mask file and its lineage line are never overwritten, renamed or relabelled as
+frozen; a call with the frozen rule under the provisional mask's ID is a collision and is
+refused by the retry comparator below.
+
+**Code identity.** For each of the distributions `morphobricks-preprocessing` (the helper) and
+`morphobricks-normalization` (the colour maths), the helper records an object with keys exactly
+`distribution`, `version`, `verified`, `record_sha256`, `vcs_commit` and `reason`, in this order,
+all always present. `version` is from the installed distribution's metadata. `record_sha256` is
+the **installed-artifact digest**: the lower-case hex SHA-256 of the exact bytes of the installed
+distribution's `RECORD` file (`<name>-<version>.dist-info/RECORD`, read as bytes, never parsed
+or normalised first), or `null` when there is no readable `RECORD`. `vcs_commit` is the 40-hex
+commit when the installation records one (PEP 610 `direct_url.json`, `vcs_info.commit_id`), else
+`null`; it is extra provenance only and never stands in for `record_sha256`. The identity is
+**verified** (`verified` `true`, `reason` `null`) only when all of these hold, checked once per
+process after the helper has imported every module it uses from both distributions:
+
+1. the distribution is not an editable install (PEP 610 `dir_info.editable` is not `true`);
+2. its `RECORD` exists and is readable, and `record_sha256` is its digest;
+3. every file `RECORD` lists with a hash still has that hash on disk;
+4. every **executable package file** of the distribution is listed in `RECORD` **with a hash**:
+   every `.py` file and every extension module (`.so`, `.pyd`) on disk under each of the
+   distribution's import packages (the directories its `RECORD` places them in), files under
+   `__pycache__` excepted; one that is missing from `RECORD`, or listed without a hash, refuses
+   verified status;
+5. every imported module of the distribution's import packages (each `sys.modules` entry named
+   as the package or below it) has a `__file__` whose resolved real path is the resolved path of
+   a `RECORD` entry with a hash: the code that runs is that installation's, not a source tree
+   or another installation earlier on the import path.
+
+Otherwise `verified` is `false`, `reason` names the first failed check (for example
+`"editable install"`, `"RECORD missing"`, `"hash differs: <file>"`, `"not in RECORD: <file>"`,
+`"no hash in RECORD: <file>"`, `"module not from this installation: <module>"`), and
+`record_sha256` and `vcs_commit` are recorded as found. A version string or a commit alone is
+never a code identity: two builds of one commit with different `RECORD` bytes are two
+identities.
+
+**An unverified mask is written but never reused.** When either code identity is unverified the
+mask is still computed, written and published, with `reusable` `false`; the helper and its result
+say so.
+
+**Retry comparator (BM15's own).** An existing output is the **same computation**, and the call is
+a no-op that returns the existing result, only when (1) the existing line and this call's line
+both have `reusable` `true`; (2) they are equal in every key except `output.content_sha256` and
+`fractions` (the results): `source` in every key, `output` `root`, `mask_id`, `path`, `axes`,
+`shape` and `dtype`, `operation`, `rule`, `rule_sha256`, `code`, `numpy_version`,
+`scikit_image_version`, `scipy_version`, `image_type`, `rgb_header_override`, `pixel_size`,
+`helper` and `helper_version` (`code` in every key: an equal `vcs_commit` with another
+`record_sha256` is another identity); and (3) the existing file's digest equals the line's
+`output.content_sha256`. Anything else is a collision and is refused, never overwritten: a
+different source with identical pixels, another code identity (another installed-artifact
+digest included) or library version, another rule
+record (a provisional and a frozen record included), and every line with `reusable` `false` on
+either side. BM12's comparator never decides a BM15 line, and a BM15 line never matches a BM12
+call (their operations differ).
+
+**Reading.** A reader selects the schema by `operation`: BM12's two operations select BM12's
+schema, a BM15 rule's operation selects this one; a line that matches neither is refused, as are
+BM12-schema keys under a BM15 operation and the reverse. A `root` of `"experiment"` is valid only in
+a BM15 `source`.
 
 ## Breaking changes and migration notes
 
@@ -705,8 +836,9 @@ Proposals unless marked **accepted by the owner**; the owner may amend the other
     the FOV image's relative path (choice 17).
 14. The lineage digest's canonical header is sorted-key compact JSON of `axes`, `dtype` and
     `shape`, then one newline byte.
-15. The lineage `root` is `"masks"` only in this wave; OME-Zarr label images are refused by the
-    helpers (**accepted by the owner, 15 November 2026**).
+15. The lineage `root` is `"masks"` only in this wave; a BM15 `source` has the `root`
+    `"experiment"`. OME-Zarr label images are refused by the helpers (**accepted by the owner,
+    15 November 2026**).
 16. A `fraction` use of a `parent_labels` mask counts as a consumer without
     `parent_labels_support` (a fraction is an area), under the owner's run-wide rule.
 17. Helper outputs are named from the FOV's image identity in the type-folder layout, whatever the
