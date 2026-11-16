@@ -2,7 +2,7 @@
 
 - **Status:** **Accepted** (owner, 14 November 2026). EW11 (window histograms) is an **accepted owner
   decision of 15 November 2026, not implemented**: no brick has code for it yet, and its two steps
-  land in the order stated in [its section](#window-histograms-ew11). Owner answers of 15 November 2026 (evening) on its open choices: a missing or mismatched plane histogram gives `not_measured` rows and the run continues; `conversion_id` covers the resolved settings and the scikit-image version only (not numpy or normalization), with an unset white resolved to the default; one `window_scaling.csv` row per column and scaling step; exact tail sums stored beside mean and std (**withdrawn by the owner, 16 November 2026**: no tail sums are stored, see [tail moments](#exact-sum-conformance-step-1)); sparse `counts`; a disagreeing duplicate report makes the row `not_measured`; diagnostics stored as counts. The owner decisions it encodes are recorded in
+  land in the order stated in [its section](#window-histograms-ew11). Owner answers of 15 November 2026 (evening) on its open choices: a missing or mismatched plane histogram gives `not_measured` rows and the run continues; `conversion_id` covers the resolved settings and the scikit-image version only (not numpy or normalization), with an unset white resolved to the default (for the presets with an optional white only; canonical values of 16 November in [the conversion identity](#step-2-derived-images)); one `window_scaling.csv` row per column and scaling step; exact tail sums stored beside mean and std (**withdrawn by the owner, 16 November 2026**: no tail sums are stored, see [tail moments](#exact-sum-conformance-step-1)); sparse `counts`; a disagreeing duplicate report makes the row `not_measured`; diagnostics stored as counts. The owner decisions it encodes are recorded in
   [the one-route design](../design/one-route.md) (section 7 and the decisions table; the design itself
   stays proposed until its gates are met). Specification only: no fixture, golden or validator of `experiment-v1.md` changes
   (`python -I tools/audit/refval.py fixtures .` unchanged). The coordinate conversions are executable
@@ -395,7 +395,8 @@ as stages `robust_normalize_1` and `robust_normalize_2`).
    mask), restricted to `sample_region` (the patch interior under `patch_window`; an empty
    `sample_region` is refused, `ValueError`). Output pixels: the finite pixels of the analysed
    region; every other output pixel is `0.0`.
-2. **Empty sample** (no sample pixel, possible only through the mask): output all `0.0`, float32.
+2. **Empty sample** (no finite pixel of the analysed region inside `sample_region`): output all
+   `0.0`, float32.
    Recorded `transform = constant`, `constant_value = 0.0`, `constant_cause = empty_sample`.
 3. `lo, hi = np.percentile(vals, [1.0, 99.0])`: NumPy's default `linear` method, float64 results.
    If either is not finite: output all `0.0`, `constant_cause = nonfinite_quantile` (not reachable
