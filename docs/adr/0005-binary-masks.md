@@ -569,18 +569,78 @@ declared `rgb_header_override` and, when it is declared, that image's own record
 (`override` `used` or `unused`, `unused_reason`, `header_photometric`; experiment-v1 §4.4b, "Declared
 and effective are recorded separately") are copied into the lineage unchanged. The plane is read
 through the run (`RunInputs.read_plane`), which refuses an image changed since the run, and the
-image fingerprint is checked again after the read, as BM12 does. Its output file, its
-mask ID rules, its collision refusals, its idempotent retry and its paired publication are those of
-BM12. Its lineage line goes in the same `mask_lineage.jsonl` and has these keys, in this order:
-`source`, `output`, `operation`, `rule_id`, `rule_version`, `thresholds`, `white`,
-`normalization`, `scikit_image_version`, `scipy_version`, `image_type`, `rgb_header_override`,
-`pixel_size`, `fractions`, `helper`, `helper_version`. Its `source` is `{"root": "experiment",
-"image", "axes", "shape", "dtype", "content_sha256"}`. Here `image` is the FOV image's path
-relative to the experiment folder, and the digest is BM12's canonical digest of the pixels read.
-Its `output` is BM12's file object with `root` `"masks"`. A reader selects the schema by
-`operation` and refuses a line that matches neither schema. A `root` of `"experiment"` is valid
-only in a BM15 `source`. A rule is identified by `rule_id` and `rule_version`; a change of any
-number is a new version; thresholds are never chosen per image.
+image fingerprint is checked again after the read, as BM12 does.
+
+**Output and publication.** The output is one `uint8` `(Y, X)` file, `1` where the rule keeps the
+pixel and `0` where it excludes it, declared by the user `binary` and used as a region (BM3). Its
+path, its mask ID rules, its collision refusals and its paired publication (with the pending-line
+rollback) are those of BM12. Its retry comparator is **its own** (below), not BM12's.
+
+**Lineage line.** One per output, in the same `mask_lineage.jsonl` as BM12's lines. Keys exactly
+these, in this order, all always present:
+
+| Key | Value |
+| --- | --- |
+| `source` | `{"root": "experiment", "image": ..., "axes": ..., "shape": [...], "dtype": ..., "content_sha256": ...}`: `image` is the FOV image's path relative to the experiment folder, with `/`; `axes`, `shape` and `dtype` are those of the plane as read (`"CYX"`, `[3, Y, X]`, `"\|u1"`); the digest is BM12's canonical digest of the pixels read |
+| `output` | BM12's file object of the file written, with `root` `"masks"` |
+| `operation` | the rule's operation name (`"he_tissue_mask"` for `he_tissue_v1`) |
+| `rule` | the rule's complete canonical record (below) |
+| `rule_sha256` | the lower-case hex SHA-256 of the canonical JSON of `rule` |
+| `code` | `{"preprocessing": <code identity>, "normalization": <code identity>}` (below) |
+| `reusable` | `true` when both code identities are verified, else `false` |
+| `numpy_version`, `scikit_image_version`, `scipy_version` | each package's `__version__` as imported by the process that computed the mask |
+| `image_type` | `"rgb"`, from the run's record of the FOV |
+| `rgb_header_override` | `{"declared": <true or false>, "image": <that image's recorded override item, or null when not declared>}`, from the run's record |
+| `pixel_size` | the run's recorded X and Y size and unit of the FOV, or `null`; information only, never used |
+| `fractions` | results: the kept share and each excluded component's share of all pixels, and normalization's optical-density `floored_fraction` |
+| `helper`, `helper_version` | the helper's qualified name; `morphobricks_preprocessing.__version__` |
+
+**The rule record.** A rule is identified by `rule.id` and `rule.version`; thresholds are never
+chosen per image, and a change of **any** value in the record is a new version. The record is
+complete: it states the input it takes (image type, pixel type, white), the stain preset and its
+version, the HED matrix's source (the qualified name of the matrix normalization's `stain` module
+passes to the deconvolution) and the SHA-256 of that matrix as imported (float64, little-endian,
+C order), the optical-density function and its floor, every excluded component in order with every
+pixel comparison (quantity, operator, value), every clean-up operation in order with its parameters
+(disk radii and minimum piece sizes, in pixels), the connectivity (`8`), the disk definition, how
+the components combine, and the rule's `status` (`"provisional"` or `"frozen"`). Its canonical JSON
+is the UTF-8 bytes of `json.dumps(rule, sort_keys=True, separators=(",", ":"))`, as for BM12's
+canonical header; a reader refuses a line whose `rule_sha256` is not the SHA-256 of that
+canonical JSON.
+
+**Code identity.** For each of the distributions `morphobricks-preprocessing` (the helper) and
+`morphobricks-normalization` (the colour maths), the helper records `{"distribution", "version",
+"kind", "value"}`, with the version from the installed distribution's metadata. The identity is
+**verified** only when the distribution is not an editable install and every file its installed
+`RECORD` lists with a hash still has that hash on disk. A verified identity has `kind`
+`"vcs_commit"` and `value` the 40-hex commit when the installation records one (PEP 610
+`direct_url.json`, `vcs_info.commit_id`), else `kind` `"record_sha256"` and `value` the SHA-256 of
+the installed `RECORD` file. Any other case (an editable install, a source tree on the import path,
+a missing or unreadable `RECORD`, a listed file missing or with another hash) is `kind`
+`"unverified"`, `value` `null`, and adds `"reason"`. A version string alone is never a code
+identity.
+
+**An unverified mask is written but never reused.** When either code identity is unverified the
+mask is still computed, written and published, with `reusable` `false`; the helper and its result
+say so.
+
+**Retry comparator (BM15's own).** An existing output is the **same computation**, and the call is
+a no-op that returns the existing result, only when (1) the existing line and this call's line
+both have `reusable` `true`; (2) they are equal in every key except `output.content_sha256` and
+`fractions` (the results): `source` in every key, `output` `root`, `mask_id`, `path`, `axes`,
+`shape` and `dtype`, `operation`, `rule`, `rule_sha256`, `code`, `numpy_version`,
+`scikit_image_version`, `scipy_version`, `image_type`, `rgb_header_override`, `pixel_size`,
+`helper` and `helper_version`; and (3) the existing file's digest equals the line's
+`output.content_sha256`. Anything else is a collision and is refused, never overwritten: a
+different source with identical pixels, another code identity or library version, another rule
+record (a provisional and a frozen record included), and every line with `reusable` `false` on
+either side. BM12's comparator never decides a BM15 line, and a BM15 line never matches a BM12
+call (their operations differ).
+
+**Reading.** A reader selects the schema by `operation`: BM12's two operations select BM12's
+schema, a BM15 rule's operation selects this one; a line that matches neither is refused, as are
+BM12-schema keys under a BM15 operation and the reverse. A `root` of `"experiment"` is valid only in
+a BM15 `source`.
 
 ## Breaking changes and migration notes
 
