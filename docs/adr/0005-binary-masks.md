@@ -611,7 +611,10 @@ canonical JSON.
 **Acceptance before freezing.** A rule's `status` becomes `"frozen"` only when a report meets
 acceptance criteria that the owning brick's design states with numeric thresholds **before** any
 evaluation of the rule is run. Thresholds are never set, moved or reinterpreted after results are
-seen; changed criteria need a new evaluation.
+seen; changed criteria need a new evaluation. Every evaluation dataset is named with its
+acquisition provenance (scanner vendor, model where the source states it, source URL and
+licence); a criterion about scanners counts vendors from that provenance, never from file
+formats or dataset names.
 
 **Code identity.** For each of the distributions `morphobricks-preprocessing` (the helper) and
 `morphobricks-normalization` (the colour maths), the helper records an object with keys exactly
