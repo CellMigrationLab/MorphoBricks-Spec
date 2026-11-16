@@ -88,7 +88,7 @@ preprocessing's `RunInputs`; normalization can import neither preprocessing nor 
 
 ## Decisions
 
-The owner decided BM1-BM5 and BM11-BM14 on 15 November 2026 (final). BM6-BM10 are this ADR's encoding of them.
+The owner decided BM1-BM5 and BM11-BM14 on 15 November 2026 and BM15 on 16 November 2026 (final). BM6-BM10 are this ADR's encoding of them.
 
 | ID | Decision | Rejected alternative |
 | --- | --- | --- |
@@ -106,6 +106,7 @@ The owner decided BM1-BM5 and BM11-BM14 on 15 November 2026 (final). BM6-BM10 ar
 | BM12 | **Explicit conversion helpers in preprocessing** (owner): the user converts masks on purpose, as a recorded step that writes **new mask files** declared with their own representation: **binary → instance labels** (the BM1/BM6 labelling: connected components, 8-connected) and **class label image → one binary mask per class value** (for class/semantic segmentation). Each output carries a lineage record (source and output with their content SHA-256, operation, class value or connectivity, helper and version; [schema](#the-conversion-helpers-bm12)), like preprocessing's existing named-axis copies (`convert`). The run then declares the outputs and reads them like any mask. | Converting implicitly at read only (users cannot produce instance or per-class masks they can inspect, share or edit); a labelled copy of every binary mask, made automatically (AR5, still rejected: here nothing is converted unless the user asks, and the source is unchanged). |
 | BM13 | **Notebook display** (owner): CellPatcher's notebook shows the recorded conversion of a file run **read-only**; it offers no binary-mask setting. | A file-run-only control (a second place to decide what BM2 decides once). |
 | BM14 | **Grouping inside `parent_labels` is a measurement, not a labeller** (owner): MorphoRelate's rows per group of an already-labelled `parent_labels` mask (`structures_table.py:89-114`) are allowed; BM2's "no other labeller" applies to binary masks only. | Routing parent-label grouping through the recorded conversion (the user's labels already define the groups). |
+| BM15 | **Derived region masks from an image** (owner, 16 November 2026): preprocessing may offer an opt-in helper that computes a `binary` **region** mask from one declared image with a **named, versioned, fixed rule** whose colour maths is called from normalization's `stain` module (never reimplemented). The first is `RunInputs.he_tissue_mask` (rule `he_tissue_v1`: nuclei, red blood cells and near-white background excluded) on a unit declared `image_type = "rgb"`. Like BM12, it writes a **new mask file** with a lineage line, never runs by default, and nothing reads the output until the user declares it (`representation = "binary"`) and the mask step has checked it. The output is a region (BM3), never an object set (`experiment-v1.md` §4.5c). | A mask built inside each consuming brick (fiberfeatures builds none); a mask made automatically for every RGB run; per-image tuned thresholds. |
 
 ### Why the helper is in preprocessing
 
@@ -516,7 +517,7 @@ these, in this order, all always present:
 
 `root` names the folder `path` is relative to; in this wave it is always `"masks"`, the run's
 standalone masks folder (`RunInputs.masks_root`), for the source and the output alike (OME-Zarr label
-images are refused above). A reader refuses a line with any other `root` value. `path` is relative to
+images are refused above). A reader refuses a line with any other `root` value (BM15 adds one exception, the `source` of a [derived region mask](#derived-region-masks-bm15)). `path` is relative to
 that root, with `/`, and never absolute, so the record holds when the masks folder is on another
 volume than the experiment folder or is moved. `axes` is the stored axis letters of the file
 as the run recorded them (for example `"YX"`, `"TYX"`), `shape` the stored shape in that order,
@@ -548,6 +549,23 @@ pending and ignore it, and the next call for the same conversion completes or ro
 anything else, so a retry gives the same files and lines as one uninterrupted call. A multi-output
 `classes_to_binary` publishes output by output in ascending class order; a retry after a failure
 skips the classes already published (idempotent, as above) and continues.
+
+## Derived region masks (BM15)
+
+A BM15 helper takes the opened run and one FOV whose unit is declared `rgb` (RH1 honoured as
+recorded). It refuses, before any pixel is read, a FOV with more than one Z plane or time point, a
+pixel type other than 8-bit, a run without a masks folder and an unknown rule. Its output file, its
+mask ID rules, its collision refusals, its idempotent retry and its paired publication are those of
+BM12. Its lineage line goes in the same `mask_lineage.jsonl` and has these keys, in this order:
+`source`, `output`, `operation`, `rule_id`, `rule_version`, `thresholds`, `white`,
+`normalization`, `scikit_image_version`, `scipy_version`, `image_type`, `rgb_header_override`,
+`pixel_size`, `fractions`, `helper`, `helper_version`. Its `source` is `{"root": "experiment",
+"image", "axes", "shape", "dtype", "content_sha256"}`. Here `image` is the FOV image's path
+relative to the experiment folder, and the digest is BM12's canonical digest of the pixels read.
+Its `output` is BM12's file object with `root` `"masks"`. A reader selects the schema by
+`operation` and refuses a line that matches neither schema. A `root` of `"experiment"` is valid
+only in a BM15 `source`. A rule is identified by `rule_id` and `rule_version`; a change of any
+number is a new version; thresholds are never chosen per image.
 
 ## Breaking changes and migration notes
 
@@ -689,8 +707,9 @@ Proposals unless marked **accepted by the owner**; the owner may amend the other
     the FOV image's relative path (choice 17).
 14. The lineage digest's canonical header is sorted-key compact JSON of `axes`, `dtype` and
     `shape`, then one newline byte.
-15. The lineage `root` is `"masks"` only in this wave; OME-Zarr label images are refused by the
-    helpers (**accepted by the owner, 15 November 2026**).
+15. The lineage `root` is `"masks"` only in this wave; a BM15 `source` has the `root`
+    `"experiment"`. OME-Zarr label images are refused by the helpers (**accepted by the owner,
+    15 November 2026**).
 16. A `fraction` use of a `parent_labels` mask counts as a consumer without
     `parent_labels_support` (a fraction is an area), under the owner's run-wide rule.
 17. Helper outputs are named from the FOV's image identity in the type-folder layout, whatever the
