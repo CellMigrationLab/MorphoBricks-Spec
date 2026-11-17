@@ -33,6 +33,7 @@ morphobricks-preprocessing.
 | Open | `RunInputs.open(output_folder, experiment_root=None, masks_root=None)`: the experiment and masks folders default to where the run recorded them | PP `src/morphobricks_preprocessing/run_inputs.py:201-244` |
 | Refused when opened | no `run_manifest.json` ("run preprocessing first"); no published description (`A_DESCRIPTION_REQUIRED`); unconfirmed repeat (`A_DRAFT_REFUSED`); the table, design, calibration, description or conversion record changed since the run; an image or mask changed or gone (fingerprint; content SHA-256 when the run verified content); files added since the run (`UnrecordedFilesError`); another run publishing meanwhile | PP `run_inputs.py:233-240, 246-274, 349-377, 421-438`; `run_inputs_semantic.py:56-86` |
 | Codes of those refusals | Only the description refusals carry a code. Every other refusal is a `RunInputsError` whose `code` is `None`: the brick can match the class, not the reason | PP `run_inputs_error.py:17-37` |
+| Since the read (PP `main` `1b2adc3`, PR #324) | A folder without `run_manifest.json` whose final report says the run stopped is `RunStoppedError` (`RUN_FOLDER_STOPPED`, `issues` = the run's error issues, byte-equal and in order); a report that cannot be read or is of another report version is `RunReportUnreadableError` (`RUN_FOLDER_REPORT_UNREADABLE`, `path`). Every other refusal above is unchanged (`code` `None`) | PP `run_inputs_error.py:89-135`; `run_inputs_stopped.py:37-182`; `run_inputs.py:446-451`; contract §9.1 "A stopped run" |
 | Masks checked | Not checked at open. A requested mask that the mask step has not checked is refused by the resolver (`A_MASK_UNCHECKED`), only when a request names it | PP `run_inputs_semantic.py:234-268`; `run_inputs_request.py:518-535` |
 | Output naming | The run folder defaults to `<experiment>_MorphoBricks_Preprocessing` next to the experiment | PP `discovery.py:43, 196`; `cli.py:176` |
 | Test runs from Spec fixtures | `make_described_run` writes a tree from a published description, runs preprocessing and the mask step | PP `testing_described.py:1-13, 274` |
@@ -170,7 +171,9 @@ morphobricks-preprocessing.
    MorphoFeature's fit source. Only a few defaults are the Spec's (the resolver capabilities,
    the scoring unit `repeat_group`, the whole-plane route, the description's `reference` as the
    control).
-5. **Refusals without a code.** Preprocessing's stale-folder refusals have `code = None`;
+5. **Refusals without a code.** Preprocessing's stale-folder refusals have `code = None` (since
+   PR #324 a stopped run and its unreadable report carry `RUN_FOLDER_STOPPED` and
+   `RUN_FOLDER_REPORT_UNREADABLE`);
    CellPatcher re-words them under its own codes; the others pass the text through. A user cannot
    tell "stale" from "not a run" by code.
 6. **Reruns differ.** Overwrite in place (CellPatcher), replace (MorphoRelate), a new timestamped

@@ -16,7 +16,9 @@
   [`docs/design/run-folder-entry-inventory.md`](../design/run-folder-entry-inventory.md), read at
   morphobricks-preprocessing `ce650e3`, CellPatcher `v0.7.1` (`c611101`), MorphoObjects `0eefed7`,
   MorphoEmbed `fc87537`, MorphoRelate `5f3a4df`, fiberfeatures `a7f57c5`, MorphoCoverage `9217840`,
-  MorphoFeature `7ac7487` and its PR #236 head `e83811c`.
+  MorphoFeature `7ac7487` and its PR #236 head `e83811c`. The two stopped-run codes
+  (`RUN_FOLDER_STOPPED`, `RUN_FOLDER_REPORT_UNREADABLE`) are encoded from what preprocessing
+  ships since PR #324, read at preprocessing `main` `1b2adc3` (contract §9.1 "A stopped run").
 - **Base:** MorphoBricks-Spec `main` `1167108`. [ADR 0006](https://github.com/CellMigrationLab/MorphoBricks-Spec/pull/47)
   (fast-mode channel layout) is an open pull request; this ADR does not depend on it
   ([interactions](#adr-0006-fast-mode-channel-layout-proposed)).
@@ -50,7 +52,7 @@ only MorphoRelate (`init` placeholders) and MorphoCoverage (saved answers) ask a
 | RE1 | **One entry contract, the same in every brick.** Python `<brick>.run_folder(run_folder, output=None, *, experiment_root=None, masks_root=None, check=False, choices_from=None, **choices) -> EntryResult`; CLI `<brick> run <run_folder> [--output DIR] [--choices FILE] [--<choice> VALUE ...]` and `<brick> check <run_folder> [same options]`; a notebook card "Run on a validated folder" built from the same declaration ([the contract](#the-entry-contract)) | One wrapper package that runs every brick (a new package and pin, against ADR 0002 AR2 "no brick depends on MorphoFeature"); keeping each brick's own signature and documenting it (the gap stays) | inventory, gap 1 |
 | RE2 | **Same folder in.** The run folder is the only required path. Everything the run records is taken from it: experiment and masks folders, axes, channel indices, mask pairing and representation, image type, calibration, conditions, repeats, references. Only the location of a moved experiment or masks folder may be given (`experiment_root`, `masks_root`), as `RunInputs.open` already allows; it is never part of the identity | Accepting the experiment root as an argument (CellPatcher today); letting a choice override a recorded fact (a calibration, a channel index) | inventory, gaps 2-3; preprocessing `run_inputs.py:201-244` |
 | RE3 | **Reading only through `RunInputs` and the resolver.** The entry opens the folder with `RunInputs.open`, builds one resolver `Request` from the choices, checks the resolver version (ADR 0005 BM10) and reads pixels and objects only through `RunInputs` (`read_plane`, `read_mask`, `read_objects`, the window readers). MorphoCoverage, which reads feature tables and not images, reads the entry output of a feature brick instead ([MorphoCoverage](#morphocoverage)) | A brick reading files itself (removed by ADR 0002 and the AR10 sweeps) | ADR 0002 AR1; ADR 0005 BM10 |
-| RE4 | **A folder that is not validated, or is stale, is refused before any read, with the fix named, by one code family** (`RUN_FOLDER_*`, plus the existing `A_DESCRIPTION_REQUIRED` and `A_DRAFT_REFUSED`), each built by one constructor in preprocessing and raised by `RunInputs.open` ([refusals](#refusals)) | One code per brick (CellPatcher's `preprocessing_run_refused` today); a code-less `RunInputsError` (a user cannot tell "not a run" from "stale") | inventory, gap 5; preprocessing `run_inputs_error.py:17-37` |
+| RE4 | **A folder that is not validated, or is stale, is refused before any read, with the fix named, by one code family** (`RUN_FOLDER_*`, plus the existing `A_DESCRIPTION_REQUIRED` and `A_DRAFT_REFUSED`), each built by one constructor in preprocessing and raised by `RunInputs.open` ([refusals](#refusals)) | One code per brick (CellPatcher's `preprocessing_run_refused` today); a code-less `RunInputsError` (a user cannot tell "not a run" from "stale") | inventory, gap 5; preprocessing `run_inputs_error.py:17-37` (at `ce650e3`); `RUN_FOLDER_STOPPED` and `RUN_FOLDER_REPORT_UNREADABLE` already shipped (preprocessing `1b2adc3`, `run_inputs_error.py:89-135`, `run_inputs_stopped.py:37-182`) |
 | RE5 | **Defaults only where the Spec defines one.** A closed list ([Spec defaults](#spec-defaults-closed-list)); every other choice that can change a value has no default in the entry. Brick defaults stay in the bricks' in-memory APIs and are not used by the entry | Using each brick's documented defaults (hidden choices that change results: CellPatcher's 128-pixel tiles, MorphoEmbed's normalization) | inventory, gap 4 |
 | RE6 | **Every remaining choice is asked once.** Each brick declares its choices in a static file ([declaration](#the-choice-declaration)); a call missing any is refused with one `ENTRY_CHOICE_MISSING` listing **all** of them with their allowed values from the folder; the given values are written to the output's record and can be given again from it (`--choices` with a record or a choices file) | Asking one at a time (several failed runs); notebook-only prompts (the CLI and Python ask again) | MorphoRelate `placeholders.py:1-30`; MorphoCoverage saved answers |
 | RE7 | **Execution settings are not choices.** A setting a brick shows to leave every output byte unchanged (worker counts, batch size where proven, thread counts) may keep its brick default; it is recorded in the execution record (ADR 0004 EW9), never in the identity | Treating thread counts as identity (a reuse lost for nothing); treating batch size as execution without a test (CUDA batch size can change bits) | ADR 0004 EW9; MorphoRelate `n_jobs`; MorphoEmbed `num_workers` |
@@ -125,7 +127,14 @@ Every refusal below comes **before any pixel or mask is read and before any outp
 written**. The checks stop at the first step that refuses, and that step lists every problem it
 finds:
 
-1. `run_folder` exists and is a directory holding `run_manifest.json` (`RUN_FOLDER_NOT_A_RUN`).
+1. `run_folder` exists and is a directory holding `run_manifest.json`. A folder without one is
+   refused by what its run report says (`RunInputs.open` reads the report for the brick; no brick
+   reads it): the final report of a stopped `run` is `RUN_FOLDER_STOPPED`, a report that cannot be
+   read or is of another report version is `RUN_FOLDER_REPORT_UNREADABLE`, and any other folder
+   (no report, the report of `check`, a provisional or a `written` report) is
+   `RUN_FOLDER_NOT_A_RUN`. A stopped run's issues are passed on unchanged ([a stopped
+   run](#a-stopped-run)), before any brick notice. A folder that holds a manifest is never
+   `RUN_FOLDER_STOPPED`, whatever its report says: its last good generation is opened at step 2.
 2. `RunInputs.open(run_folder, experiment_root, masks_root)`: the description, version and stale
    checks (`RUN_FOLDER_*`, `A_DESCRIPTION_REQUIRED`, `A_DRAFT_REFUSED`). It reads the manifest, the
    histogram table, the design, the calibration, the description and the conversion record, and
@@ -156,15 +165,30 @@ messages below are the proposed text, fixed at acceptance.
 
 | Code | When | Message (proposed) |
 |---|---|---|
-| `RUN_FOLDER_NOT_A_RUN` | the path is missing, not a directory, or holds no `run_manifest.json` | `RUN_FOLDER_NOT_A_RUN: {path} is not a preprocessing run folder (no run_manifest.json). Give the output folder of a preprocessing run (by default <experiment>_MorphoBricks_Preprocessing next to the experiment), or run preprocessing first. Nothing was read or written.` |
+| `RUN_FOLDER_NOT_A_RUN` | the path is missing, not a directory, or holds no `run_manifest.json` and no report of a stopped run (no report, the report of `check`, a provisional or a `written` report) | `RUN_FOLDER_NOT_A_RUN: {path} is not a preprocessing run folder (no run_manifest.json). Give the output folder of a preprocessing run (by default <experiment>_MorphoBricks_Preprocessing next to the experiment), or run preprocessing first. Nothing was read or written.` |
+| `RUN_FOLDER_STOPPED` | no `run_manifest.json`, and the folder's final report (`report_version` `"1"`, `step` `"run"`, `status` `"stopped"`, `provisional` false) says preprocessing stopped the run (for example fixture `v29`, `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED`). **Shipped** (`RunStoppedError`, preprocessing PR #324); its `issues` are the run's error issues ([a stopped run](#a-stopped-run)) | preprocessing's text, unchanged (`run_inputs_stopped.py:164-172` at `1b2adc3`): `RUN_FOLDER_STOPPED: the preprocessing run in {output} stopped with {n} error(s) ({codes}) and published no results. First: {first error's message} Fix what the errors say and run preprocessing again. No image or mask was read.` |
+| `RUN_FOLDER_REPORT_UNREADABLE` | no `run_manifest.json`, and the report cannot be read (not UTF-8, not JSON, a key given twice, `NaN`), is not of the shape report version 1 writes, says the run stopped without recording an error, or is of another `report_version`. **Shipped** (`RunReportUnreadableError`, with `path`, preprocessing PR #324); kept as its own code for now ([open question 8](#open-questions-for-the-owner)) | preprocessing's text, unchanged (`run_inputs_stopped.py:80-86, 175-182` at `1b2adc3`): `RUN_FOLDER_REPORT_UNREADABLE: {path} cannot be read as a preprocessing run report: {why}. ...` or, for another version, `RUN_FOLDER_REPORT_UNREADABLE: {path} is report version {found}; this preprocessing reads report version {expected}, ...` |
 | `A_DESCRIPTION_REQUIRED` | no published description (existing, ADR 0002 AR10, AR11) | today's message, unchanged (preprocessing `required_description.py:42-47` and `FIX`) |
 | `A_DRAFT_REFUSED` | an unconfirmed repeat (existing, experiment-v1 §8) | today's message, unchanged |
-| `RUN_FOLDER_VERSION` | the run manifest, histogram table or conversion record is of a version this preprocessing does not read | `RUN_FOLDER_VERSION: {path} was written by another preprocessing ({what} version {found}; this one reads {expected}). Run preprocessing {release} again into the same output folder; nothing is converted. Nothing was read or written.` |
+| `RUN_FOLDER_VERSION` | the run manifest, histogram table or conversion record is of a version this preprocessing does not read (not the run report: its version is `RUN_FOLDER_REPORT_UNREADABLE` today, [open question 8](#open-questions-for-the-owner)) | `RUN_FOLDER_VERSION: {path} was written by another preprocessing ({what} version {found}; this one reads {expected}). Run preprocessing {release} again into the same output folder; nothing is converted. Nothing was read or written.` |
 | `RUN_FOLDER_STALE` | a file the run recorded (histogram table, design, calibration, description, conversion record, an image, a mask) changed, was added (`calibration.csv`) or is gone since the run | `RUN_FOLDER_STALE: {n} file(s) the run recorded changed or are gone since the run: {first 10, then ", and k more"}. Run preprocessing again (and the mask step when a mask changed). Nothing was read or written.` |
 | `RUN_FOLDER_MOVED` | every recorded image is missing at the recorded experiment root (or every mask at the masks root) | `RUN_FOLDER_MOVED: none of the {n} images the run recorded is in {root}. If the experiment folder was moved, give where it is now (experiment_root / --experiment-root; masks_root / --masks-root for the masks folder). Nothing was read or written.` |
 | `RUN_FOLDER_UNRECORDED` | images or masks added since the run (today's `UnrecordedFilesError`) | `RUN_FOLDER_UNRECORDED: {n} image(s) or mask(s) were added since the run: {first 10}. Run preprocessing again to record them, or exclude them there. Nothing was read or written.` |
 | `RUN_FOLDER_BUSY` | another run kept publishing while the folder was opened | `RUN_FOLDER_BUSY: another preprocessing run kept publishing in {path} while it was opened. Run again once it has finished. Nothing was read or written.` |
 | `RUN_FOLDER_LAYOUT` | the folder rules refuse the layout (an output folder inside the masks folder, a masks folder inside the experiment, ...; today's `masks_folder_issues`) | `RUN_FOLDER_LAYOUT: ` followed by the folder rule's message, unchanged |
+
+#### A stopped run
+
+A stopped run published nothing: its refusal is only in its run report, which bricks never read.
+`RunInputs.open` reads it for them, only when the folder holds no `run_manifest.json`, before
+anything else of the run is read and before any image or mask is opened (preprocessing contract
+§9.1 "A stopped run"). `RunStoppedError.issues` holds the stopped run's **error** issues, in the
+report's order, each with its `code`, `message`, `paths` (in order) and `action` exactly as the
+report records them (byte-equal when written back with the report's serialiser); warnings are not
+carried. Under the ADR 0005 propagation rule a brick passes it on **unchanged**: the same object, or
+its own error type with the same `code`, the same `str()` and the same issues, unsorted, untrimmed
+and untranslated. It is the first thing the brick reports: no brick notice, warning or summary of
+its own comes before it, and none is added to it. No brick reads the report itself.
 
 Masks are checked by request, not by folder: an unchecked mask the choices do not use does not
 refuse the folder; one they use is `A_MASK_UNCHECKED` at step 4, with the mask step named as the fix.
@@ -348,7 +372,9 @@ Run folders are built by preprocessing's `make_described_run` from the Spec fixt
 control), `v08` (binary masks), `v13` (homogeneous), `v28` (RGB units) and `v38` (parent labels), and
 `v41` once ADR 0006 lands. A new preprocessing helper (J2-0) derives the folder states: no
 description, a draft, an image changed after the run, every image moved, an image added, a mask
-unchecked, a manifest of another version, a path that is not a run folder.
+unchecked, a manifest of another version, a path that is not a run folder, a report of another
+version and an unreadable report. The stopped run is preprocessing's own run of `v29`
+(`R_HETEROGENEOUS_LAYOUT_NOT_ENABLED`), as preprocessing's tests build it today.
 
 Every brick's suite (each test with a spy `RunInputs` counting `read_plane`, `read_mask`,
 `read_mask_window` and `read_objects`, as ADR 0005's tests do):
@@ -356,7 +382,7 @@ Every brick's suite (each test with a spy `RunInputs` counting `read_plane`, `re
 | Row | Assertion |
 |---|---|
 | E1 Same folder in | The entry runs with the run folder as its only path; every recorded fact in the record equals the run's (`RunInputs`), and a recorded fact given as a choice is `ENTRY_CHOICE_INVALID` |
-| E2 Refusals | Each folder state gives its code (table above), with `str()` equal to the constructor's output for the same arguments, 0 reads and no output folder created; on `v08` without the policy `A_MASK_NOT_INSTANCES`; on `v28` without `stain_preset` the provider's refusal; resolver versions 2 and 4 give `RESOLVER_VERSION_UNSUPPORTED` and a cached output is not read (ADR 0005 F13) |
+| E2 Refusals | Each folder state gives its code (table above), with `str()` equal to the constructor's output for the same arguments, 0 reads and no output folder created; the stopped run gives `RUN_FOLDER_STOPPED` as the brick's first report (no brick notice before it), with its issues equal, in order, to the report's error issues (code, message, paths, action, compared byte for byte); the two bad reports give `RUN_FOLDER_REPORT_UNREADABLE` naming the report file; on `v08` without the policy `A_MASK_NOT_INSTANCES`; on `v28` without `stain_preset` the provider's refusal; resolver versions 2 and 4 give `RESOLVER_VERSION_UNSUPPORTED` and a cached output is not read (ADR 0005 F13) |
 | E3 Same outputs | With the same choices, the entry's output files are byte-identical to the brick's existing route on the same folder (CellPatcher `run_patching_condition_repeat_tree`, MorphoRelate `run` and `write_run`, fiberfeatures `analyze_run` written by the entry's writer, MorphoFeature `run_from_config`), the volatile field excepted |
 | E4 Asked once | A call without choices gives one `ENTRY_CHOICE_MISSING` naming every choice with no Spec default; `--write-choices` then `--choices` reproduces E3; `choices_from=<output>` reproduces it again |
 | E5 No hidden default | Every `default` of the declaration has a citation of the closed list; a run given only the required choices records every other one as `spec_default`, `notebook_default` or `fixed` |
@@ -371,7 +397,7 @@ above for its brick.
 
 | Step | Repository | What it adds or removes |
 |---|---|---|
-| J2-0 | morphobricks-preprocessing | the `RUN_FOLDER_*` constructors, raised by `RunInputs.open` with `code` set (today's code-less refusals); the shared choice reader (`from_folder` sources); the record writer and checker (one implementation for every brick that depends on preprocessing); the notebook card renderer; the folder-state test helper |
+| J2-0 | morphobricks-preprocessing | the `RUN_FOLDER_*` constructors, raised by `RunInputs.open` with `code` set (today's code-less refusals; `RUN_FOLDER_STOPPED` and `RUN_FOLDER_REPORT_UNREADABLE` are already shipped, PR #324, and keep their text); the shared choice reader (`from_folder` sources); the record writer and checker (one implementation for every brick that depends on preprocessing); the notebook card renderer; the folder-state test helper |
 | J2-0 | morphobricks-normalization | the `ENTRY_*` constructors in `contracts` |
 | J2 | CellPatcher | `cellpatcher.run_folder`, a `cellpatcher` console script, the card in its notebook; the experiment root taken from the run (no positional path); one call for every tree depth; `entry_choices.json` (mode, patch and tile sizes, number of patches, overlap, object set, `binary_mask_policy`, `t_policy`, normalization, export format), with no brick default used by the entry; RunInputs refusals passed on, not reworded (`run_open.py:211-260`); RE9 and RE10 instead of writing into an existing folder |
 | J2 | MorphoObjects | its choices declared in the provider manifest (object sets, intensity pairs, features, observation unit), no default; its entry is `morphofeature run --brick morphoobjects` |
@@ -429,3 +455,11 @@ Each with the recommendation first.
 7. **Brick defaults in the in-memory APIs** (`CellPatcherConfig`, `analyze_run`). *Recommended:* left
    as they are now, outside this ADR, and decided in each brick's AR10 sweep. Alternative: removed
    with the entry.
+8. **A run report of another version.** *Recommended:* keep `RUN_FOLDER_REPORT_UNREADABLE` as the
+   one code for a stopped run's report that preprocessing cannot read, its unknown version included,
+   as preprocessing ships it now (preprocessing reviewer's recommendation on PR #324), and move the
+   report's and the manifest's version refusals to `RUN_FOLDER_VERSION` together, in one later
+   preprocessing PR (J2-0, when the manifest's version refusal gets its code); after that,
+   `RUN_FOLDER_REPORT_UNREADABLE` keeps only a report that cannot be read or is malformed.
+   Alternative: fold the report's unknown version into `RUN_FOLDER_VERSION` now (a second
+   preprocessing change to a shipped refusal, made ahead of and apart from the manifest's).
