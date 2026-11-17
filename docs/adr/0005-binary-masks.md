@@ -35,6 +35,9 @@
   `masks/objects.py:34-36`). The [region checker contract](#region-checker-contract-bm3-bm7), the
   `A_MASK_NOT_INSTANCES` row of the [refusal table](#refusal-codes-and-messages) and fixture F07b
   state the two rules and where they differ.
+- **Amended** on 17 November 2026 by [ADR 0002](0002-shared-request-resolver.md) AR12 (resolver
+  contract version 4, the recorded FOV subset): the supported set of BM10 becomes `{4}` in that wave,
+  checked the same way; F13 then reads (a) 3, (b) 5, (c) 4. The rest of this ADR is unchanged.
 - **Tracking:** [#42](https://github.com/CellMigrationLab/MorphoBricks-Spec/issues/42) ("one
   consistent, simpler policy for binary masks across all bricks"). The implementing PRs follow in the
   [order below](#implementation-order), one per brick.
