@@ -87,3 +87,7 @@ by design: it cannot prove the copy.
 
 `python -I -m pytest tools` (or `python -I -m unittest discover -s tools`) runs
 [`tools/test_vendor.py`](../tools/test_vendor.py).
+The other test modules under `tools/` run with it. All of them are standard library only except
+`tools/test_plane_histograms_v6.py` (ADR 0008, proposed), which needs `pyarrow`: install
+[`tools/requirements.txt`](../tools/requirements.txt) first (`pip install -r tools/requirements.txt`).
+Without it that module fails to import; it is never skipped. No brick reads that file.

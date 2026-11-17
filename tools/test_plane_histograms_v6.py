@@ -1,145 +1,192 @@
-"""Golden cases of the shared sparse-counts grammar and of ``plane_histograms.csv`` version 6.
+"""Golden cases of ``plane_histograms.parquet``, schema version 6 (ADR 0008, **proposed**).
 
-ADR 0008 is **proposed** (owner decision pending); these cases fix what it proposes. Run with
-``python -I -m pytest tools``. A brick implementing version 6 (normalization's ``csv_io``) accepts
-every file of ``tools/plane_histograms_v6/valid`` with the dense counts given here and refuses
-every file of ``tools/plane_histograms_v6/invalid``; the reason labels are this checker's, and a
-brick's test maps its own message to them.
+ADR 0008 is proposed (owner decision pending); these cases fix what it proposes. Run with
+``python -I -m pytest tools`` after ``pip install -r tools/requirements.txt`` (``pyarrow``; without
+it this module fails to import, it is never skipped). A brick implementing version 6
+(normalization's reader) accepts every file of ``tools/plane_histograms_v6/valid`` with the dense
+counts and content digests given here and refuses every file of ``tools/plane_histograms_v6/invalid``;
+the reason labels are this checker's, and a brick's test maps its own message to them.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import re
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
+import pyarrow.parquet as pq
+
 TOOLS = Path(__file__).resolve().parent
-ROOT = TOOLS.parent
 FIXTURES = TOOLS / "plane_histograms_v6"
 
 
-def _load(name: str):
-    spec = importlib.util.spec_from_file_location(name, TOOLS / f"{name}.py")
+def _load(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
 
 
-s = _load("sparse_counts")
-v6 = _load("plane_histograms_v6")
+v6 = _load("plane_histograms_v6", TOOLS / "plane_histograms_v6.py")
+mt = _load("make_tables", FIXTURES / "make_tables.py")
 
 INVALID = {
     "pi01_schema_version_5": "schema_version_refused",
-    "pi02_v5_bin_columns_labelled_6": "header",
-    "pi03_counts_space": "counts_syntax",
-    "pi04_counts_trailing_separator": "counts_syntax",
-    "pi05_counts_index_leading_zero": "counts_leading_zero",
-    "pi06_counts_count_leading_zero": "counts_leading_zero",
-    "pi07_counts_zero_count": "counts_zero",
-    "pi08_counts_unordered": "counts_order",
-    "pi09_counts_repeated_index": "counts_order",
-    "pi10_counts_index_out_of_range": "counts_index_range",
-    "pi11_counts_sum_mismatch": "counts_sum",
-    "pi12_empty_with_pixels_in_bins": "counts_sum",
-    "pi13_present_counts_blank": "counts_blank",
-    "pi14_absent_channel_empty": "absent_has_value",
-    "pi15_empty_upper_case": "counts_syntax",
-    "pi16_counts_sign": "counts_syntax",
-    "pi17_counts_non_ascii_digit": "counts_syntax",
-    "pi18_bin_count_differs": "bin_count_differs",
-    "pi19_counts_too_large": "counts_too_large",
-    "pi20_counts_pair_without_count": "counts_syntax",
-    "pi21_zero_for_absent_channel": "absent_has_value",
-    "pi22_header_channels_unsorted": "header",
+    "pi02_sparse_csv_labelled_6": "not_parquet",
+    "pi03_parquet_schema_version_5": "schema_version_refused",
+    "pi04_schema_version_7": "schema_version_unknown",
+    "pi05_channel_blocks_unsorted": "header",
+    "pi06_bins_int64": "column_type",
+    "pi07_bins_unordered": "bins_order",
+    "pi08_bins_repeated": "bins_order",
+    "pi09_bin_index_equals_bin_count": "bins_range",
+    "pi10_bin_index_negative": "bins_range",
+    "pi11_zero_count": "counts_not_positive",
+    "pi12_negative_count": "counts_not_positive",
+    "pi13_lists_length_differ": "lists_length",
+    "pi14_counts_sum_mismatch": "counts_sum",
+    "pi15_empty_lists_with_pixels": "counts_sum",
+    "pi16_listed_channel_lists_null": "present_null",
+    "pi17_absent_channel_empty_lists": "absent_has_value",
+    "pi18_absent_channel_valid_zero": "absent_has_value",
+    "pi19_bin_count_differs": "bin_count_differs",
+    "pi20_null_in_counts": "null_element",
+    "pi21_channel_count_mismatch": "channels_cell",
+    "pi22_duplicate_plane": "duplicate_plane",
+    "pi23_tail_mean_negative_zero": "float_value",
+    "pi24_truncated_file": "not_parquet",
+    "pi25_plane_column_null": "plane_value",
 }
 
 
-class Grammar(unittest.TestCase):
-    def test_canonical_text(self) -> None:
-        self.assertEqual(s.format_dense([0, 0, 0]), "empty")
-        self.assertEqual(s.format_dense([4, 0, 2, 0, 0, 1]), "0:4;2:2;5:1")
-        self.assertEqual(s.format_dense([0] * 255 + [7]), "255:7")
+def _catalogue() -> str:
+    return (FIXTURES / "README.md").read_text(encoding="utf-8")
 
-    def test_round_trip(self) -> None:
-        for dense in ([0, 0], [1], [0, 3, 0, 9223372036854775807], [5, 0, 0, 0, 1]):
-            self.assertEqual(s.to_dense(s.parse(s.format_dense(dense), len(dense)), len(dense)), dense)
 
-    def test_refusals(self) -> None:
-        cases = {
-            "": "counts_blank", " empty": "counts_syntax", "Empty": "counts_syntax", "0": "counts_syntax",
-            "0:1;": "counts_syntax", ";0:1": "counts_syntax", "0:1;;2:1": "counts_syntax", "0:1:2": "counts_syntax",
-            "0 :1": "counts_syntax", "-1:1": "counts_syntax", "1:+1": "counts_syntax", "1.0:1": "counts_syntax",
-            "0x1:1": "counts_syntax", "１:1": "counts_syntax", "01:1": "counts_leading_zero",
-            "1:01": "counts_leading_zero", "1:0": "counts_zero", "1:00": "counts_leading_zero",
-            "2:1;1:1": "counts_order", "1:1;1:1": "counts_order", "4:1": "counts_index_range",
-            "0:9223372036854775808": "counts_too_large",
-        }
-        for cell, reason in cases.items():
-            with self.subTest(cell=cell):
-                with self.assertRaises(s.SparseCountsError) as caught:
-                    s.parse(cell, 4)
-                self.assertEqual(caught.exception.reason, reason)
-
-    def test_sum_rule(self) -> None:
-        s.check_sum(s.parse("0:2;3:6", 8), valid=10, underflow=1, overflow=1)
-        s.check_sum(s.parse("empty", 8), valid=2, underflow=1, overflow=1)
-        s.check_sum(s.parse("empty", 8), valid=0, underflow=0, overflow=0)
-        with self.assertRaises(s.SparseCountsError) as caught:
-            s.check_sum(s.parse("empty", 8), valid=1, underflow=0, overflow=0)
-        self.assertEqual(caught.exception.reason, "counts_sum")
+def _valid(name: str) -> Path:
+    return FIXTURES / "valid" / f"{name}.parquet"
 
 
 class Tables(unittest.TestCase):
     def test_every_valid_file_is_accepted(self) -> None:
-        files = sorted((FIXTURES / "valid").glob("*.csv"))
-        self.assertEqual(len(files), 4)
+        files = sorted((FIXTURES / "valid").glob("*"))
+        self.assertEqual([f.suffix for f in files], [".parquet"] * 6)
         for f in files:
             with self.subTest(file=f.name):
-                v6.read_file(f)
+                v6.read_table(f)
 
     def test_dense_counts_of_the_valid_files(self) -> None:
-        pv02 = v6.read_file(FIXTURES / "valid" / "pv02_absent_channel_blank.csv")
+        pv02 = v6.dense_counts(v6.read_table(_valid("pv02_absent_channel_null")))
         ctrl = pv02["CTRL/rep1/img01.tif::z=0,t=0"]
-        self.assertIsNone(ctrl["PHASE"])  # absent: blank, never a zero histogram
+        self.assertIsNone(ctrl["PHASE"])  # absent: null, never an empty or zero histogram
         self.assertEqual(ctrl["DNA"][:5], [3, 5, 2, 6, 0])
         self.assertEqual(len(ctrl["DNA"]), 256)
-        pv03 = v6.read_file(FIXTURES / "valid" / "pv03_empty_and_tails_id_with_underscore.csv")
+        pv03 = v6.dense_counts(v6.read_table(_valid("pv03_measured_empty_and_tails_id_with_underscore")))
         plane = pv03["CTRL/rep1/img01.tif::z=0,t=0"]
-        self.assertEqual(plane["DNA"], [0] * 8)  # measured, no finite pixel: `empty`
+        self.assertEqual(plane["DNA"], [0] * 8)  # measured, no finite pixel: two empty lists
         self.assertEqual(plane["PAX_488"], [2, 0, 0, 6, 3, 0, 1, 2])  # 16 valid - 1 - 1
-        pv04 = v6.read_file(FIXTURES / "valid" / "pv04_last_bin_index.csv")
+        pv04 = v6.dense_counts(v6.read_table(_valid("pv04_last_bin_index")))
         dense = pv04["CTRL/rep1/img02.tif::z=0,t=0"]["DNA"]
         self.assertEqual((dense[0], dense[255], sum(dense)), (14, 2, 16))
+        pv05 = v6.dense_counts(v6.read_table(_valid("pv05_full_range_uint16")))
+        for cid, dense in pv05["CTRL/rep1/img03.tif::z=0,t=0"].items():
+            with self.subTest(channel=cid):
+                self.assertEqual((len(dense), sum(dense), dense[0] > 0, dense[65535]), (65536, 4096, True, 12))
 
     def test_every_invalid_file_is_refused_with_its_reason(self) -> None:
-        names = sorted(f.stem for f in (FIXTURES / "invalid").glob("*.csv"))
+        names = sorted(f.stem for f in (FIXTURES / "invalid").glob("*.*"))
         self.assertEqual(names, sorted(INVALID))
         for name, reason in INVALID.items():
-            with self.subTest(file=name):
+            path = next((FIXTURES / "invalid").glob(f"{name}.*"))
+            with self.subTest(file=path.name):
                 with self.assertRaises(v6.PlaneHistogramsError) as caught:
-                    v6.read_file(FIXTURES / "invalid" / f"{name}.csv")
+                    v6.read_table(path)
                 self.assertEqual(caught.exception.reason, reason, str(caught.exception))
 
-    def test_header_width(self) -> None:
-        # 15 plane columns + `channels`, then 11 features + the counts cell per channel ID.
+    def test_version_5_is_refused_with_the_fix(self) -> None:
+        with self.assertRaises(v6.PlaneHistogramsError) as caught:
+            v6.read_table(FIXTURES / "invalid" / "pi01_schema_version_5.csv")
+        self.assertIn("version 6", str(caught.exception))
+        self.assertIn("recompute the table with the preprocessing brick", str(caught.exception))
+
+    def test_column_count(self) -> None:
+        # 15 plane columns + `channels`, then 11 features + 2 lists per channel ID.
         for n in (1, 2, 3, 7):
-            self.assertEqual(len(v6.table_header([f"C{i}" for i in range(n)])), 16 + 12 * n)
+            self.assertEqual(len(v6.table_columns([f"C{i}" for i in range(n)])), 16 + 13 * n)
 
     def test_catalogue_lists_every_file(self) -> None:
-        catalogue = (FIXTURES / "README.md").read_text(encoding="utf-8")
-        for f in sorted(FIXTURES.glob("*/*.csv")):
+        catalogue = _catalogue()
+        for f in sorted([*FIXTURES.glob("valid/*"), *FIXTURES.glob("invalid/*")]):
             self.assertIn(f"`{f.stem}`", catalogue, f.name)
         for name, reason in INVALID.items():
             self.assertRegex(catalogue, rf"`{name}`[^\n]*`{reason}`")
 
+    def test_the_generator_wrote_the_committed_tables(self) -> None:
+        for name, rows_of in mt.VALID.items():
+            with self.subTest(file=name):
+                self.assertEqual(v6.content_sha256(mt.build(*rows_of())), v6.content_sha256(v6.read_table(_valid(name))))
 
-class OneDefinition(unittest.TestCase):
-    def test_the_grammar_is_defined_once(self) -> None:
-        defining = re.compile(r"index:count[^\n]*joined by `;`")
-        where = [p.relative_to(ROOT).as_posix() for p in sorted((ROOT / "docs").rglob("*.md"))
-                 if defining.search(p.read_text(encoding="utf-8"))]
-        self.assertEqual(where, ["docs/sparse-counts.md"])
+
+class ContentDigest(unittest.TestCase):
+    """PQ6: the identity of a table is the digest of its decoded content, not its bytes."""
+
+    def test_digests_of_the_catalogue(self) -> None:
+        listed = dict(re.findall(r"`(pv\d\d_[a-z0-9_]+)`[^\n]*`([0-9a-f]{64})`", _catalogue()))
+        self.assertEqual(sorted(listed), sorted(f.stem for f in (FIXTURES / "valid").glob("*.parquet")))
+        for name, digest in listed.items():
+            with self.subTest(file=name):
+                self.assertEqual(v6.content_sha256(v6.read_table(_valid(name))), digest)
+
+    def test_other_writer_settings_other_bytes_same_digest(self) -> None:
+        pv01, pv06 = _valid("pv01_two_channels_uint8"), _valid("pv06_pv01_other_writer_settings")
+        self.assertNotEqual(v6.file_sha256(pv01), v6.file_sha256(pv06))
+        self.assertEqual(v6.content_sha256(v6.read_table(pv01)), v6.content_sha256(v6.read_table(pv06)))
+
+    def test_digest_ignores_every_writer_setting(self) -> None:
+        table = mt.build(*mt.pv02_rows())
+        profiles = [
+            mt.PROFILE, mt.OTHER_PROFILE,
+            {"compression": "snappy"}, {"compression": "gzip", "use_dictionary": False},
+            {"compression": "zstd", "compression_level": 19, "data_page_size": 64, "row_group_size": 1},
+        ]
+        digests, sizes = set(), set()
+        with tempfile.TemporaryDirectory() as folder:
+            for k, profile in enumerate(profiles):
+                path = Path(folder) / f"{k}.parquet"
+                profile = dict(profile)
+                pq.write_table(table, path, row_group_size=profile.pop("row_group_size", None), **profile)
+                digests.add(v6.content_sha256(v6.read_table(path)))
+                sizes.add(v6.file_sha256(path))
+        self.assertEqual(len(digests), 1)
+        self.assertEqual(len(sizes), len(profiles))
+
+    def test_digest_changes_with_the_content(self) -> None:
+        base = v6.content_sha256(mt.build(*mt.pv01_rows()))
+        ids, rows = mt.pv01_rows()
+        mt._lists(0, "DNA", [0, 1, 2, 3], [4, 5, 4, 3])(ids, rows)  # one pixel moved to the next bin
+        self.assertNotEqual(v6.content_sha256(mt.build(ids, rows)), base)
+        ids, rows = mt.pv01_rows()
+        self.assertNotEqual(v6.content_sha256(mt.build(ids, rows[::-1])), base)  # row order is content
+
+    def test_null_and_empty_digest_differently(self) -> None:
+        ids, rows = mt.pv03_rows()
+        measured_empty = mt.build(ids, rows)
+        rows[0][0]["channels"], rows[0][0]["channel_count"] = "PAX_488", 1
+        del rows[0][1]["DNA"]
+        self.assertNotEqual(v6.content_sha256(mt.build(ids, rows)), v6.content_sha256(measured_empty))
+
+    def test_manifest_check(self) -> None:
+        path = _valid("pv01_two_channels_uint8")
+        content = v6.content_sha256(v6.read_table(path))
+        v6.check_manifest_entry(path, v6.file_sha256(path), content)
+        with self.assertRaises(ValueError):
+            v6.check_manifest_entry(path, v6.file_sha256(path), "0" * 64)
+        with self.assertRaises(ValueError):
+            v6.check_manifest_entry(path, "0" * 64, content)
 
 
 if __name__ == "__main__":
