@@ -5,8 +5,9 @@
   open). Specification only: it changes no fixture, golden or validator
   (`python -I tools/audit/refval.py fixtures .` unchanged) and implements nothing. The format text
   itself is brick-owned (below); the bricks change in Stage 3 (roadmap S3.2, S3.3).
-- **Proposed amendment:** [ADR 0008](0008-plane-histograms-v6.md) (schema version 6: one sparse
-  `Histogram_Counts_<ID>` cell per channel instead of the per-bin columns; amends HV2 and HV4).
+- **Proposed amendment:** [ADR 0008](0008-plane-histograms-v6.md) (schema version 6:
+  `plane_histograms.parquet`, two list columns per channel instead of the per-bin columns;
+  amends HV2 and HV4).
   **Owner decision pending**; until then this ADR is the format.
 - **Tracking:** [roadmap §5 Stage 3, S3.1](../roadmap.md#stage-3--coordinated-heterogeneous-channel-enablement);
   [conformance plan §4](../conformance-plan.md#4-later-stages-obligations-recorded-not-planned-in-detail)

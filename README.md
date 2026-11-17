@@ -217,9 +217,10 @@ writer or a brick that consumes the description.
   recorded conversion, one region checker, `empty_region` for an empty region, and the PR order per brick;
   amends experiment-v1 §4.5, §4.5b and §8 (a `binary` file holds values in {0, v} for one positive v).
 - [ADR 0008](docs/adr/0008-plane-histograms-v6.md) (**proposed, owner decision pending**):
-  `plane_histograms.csv` schema version 6, the per-bin columns replaced by one sparse
-  `Histogram_Counts_<ID>` cell per channel in the grammar shared with ADR 0004's window histograms,
-  defined once in [docs/sparse-counts.md](docs/sparse-counts.md); golden tables in
+  plane histograms schema version 6 as a Parquet table, `plane_histograms.parquet`: exact bins
+  kept, one row per plane, the per-bin columns replaced by two list columns per channel (non-zero
+  bin indices and their counts), absent = null and measured-empty = `[]`, identity by a content
+  digest of the decoded table; `pyarrow` required; golden tables in
   [`tools/plane_histograms_v6/`](tools/plane_histograms_v6/README.md).
 
 ### Fixtures and goldens
