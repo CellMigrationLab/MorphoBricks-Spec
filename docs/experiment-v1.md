@@ -872,7 +872,7 @@ Required preprocessing refusals (`R_*`):
 | `R_HEADER_CONTRADICTION` | A header name at C*i* is not, after NFC of both sides and with no trimming (§4.3), in the confirmed `header_names` of the unit's channel at *i* |
 | `R_IMAGE_TYPE_CONTRADICTS_HEADER` | A unit's declared image type (`rgb` or absent, §4.4b) contradicts the image header metadata, in either direction, and is not an accepted `rgb_header_override` (RH1); pixels are never examined; for a unit declared `rgb` the message names `rgb_header_override` when its images have three interleaved samples |
 | `R_RGB_OVERRIDE_NOT_THREE_SAMPLES` | A unit declares `rgb_header_override = true` and one of its images does not have exactly three interleaved samples per pixel (§4.4b, RH1); pixels are never examined |
-| `R_FAST_LAYOUT_CONTRADICTION` | Images of units with `channels_from = "experiment"` contradict `channel_layout` (§4.3a): a different image type (effective, after a valid RH1 override), a different channel count, header names in another order, or other header names (the §4.3 rule: NFC of both sides, no trimming). Checked from header metadata before any pixel is read; one refusal lists **every** contradicting image (FOV key, path, kind, C index, expected and found) and names the fix: tag those units on their own (`channels_from = "unit"`), then re-run. Nothing is reordered or guessed (ADR 0006) |
+| `R_FAST_LAYOUT_CONTRADICTION` | Images of units with `channels_from = "experiment"` contradict `channel_layout` (§4.3a): a different image type (effective, after a valid RH1 override), a different channel count, header names in another order, or other header names (the §4.3 rule: NFC of both sides, no trimming). Checked from header metadata before any pixel is read; one refusal lists **every** contradicting image (FOV key, path) with **every** contradiction found in it (kind, C index, expected and found) and names the fix: tag those units on their own (`channels_from = "unit"`), then re-run. Nothing is reordered or guessed (ADR 0006) |
 | `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` | Stage 1–2 only: the units do not all have the same ordered list; names the units; lifted at Stage 3 |
 | `R_MASK_TYPE_NOT_DECLARED` | A discovered mask type has no `masks` entry |
 | `R_MASK_TYPE_NAME_INVALID` | A discovered mask type name breaks the Label rules (for example `NA`, ` cells`), so it cannot be a `source_type`; refused at discovery (AQ11) |
@@ -888,13 +888,17 @@ that breaks the override's condition (owner answer of 14 November 2026).
 `channels_from = "experiment"`, preprocessing compares every included image with `channel_layout`
 from header metadata only (the channel count and channel names the format states, its colour
 interpretation and samples per pixel), before any pixel of any image is read and before anything is
-processed or published. Per image, the first that applies is its kind: `image_type` (the test of
+processed or published. Each image is checked for every kind that can be checked on it, and all that
+apply are reported for it: `image_type` (the test of
 `R_IMAGE_TYPE_CONTRADICTS_HEADER` against `channel_layout.image_type`, on the unit's effective type);
 `channel_count`; `header_order` (a non-empty name at C*i* fails the §4.3 rule for the list's channel
 at *i* and every such name is evidence for another channel of the list); `header_names` (some name is
-evidence for no channel of the list). An image without header names, or with an empty name at C*i*,
-needs no evidence there; the run manifest records per image whether the channels were
-header-verified or accepted under the statement only. Two images of one fast unit whose names at C*i*
+evidence for no channel of the list). `image_type` and `channel_count` are checked on every image;
+the two header kinds exclude each other and are checked at every index both the image and the list
+have, so a different count does not hide them. An image without header names, or with an empty name
+at C*i*, needs no evidence there. The run manifest records, per image of a fast unit
+(`fast_layout_images`, ADR 0006), `header_verified` and, per index of the list, the name as read and
+its `evidence`, `header` or `statement`; an image is header-verified only when every index is. Two images of one fast unit whose names at C*i*
 are different confirmed aliases of the same channel are both accepted. Every contradiction over all
 fast units is reported together as one `R_FAST_LAYOUT_CONTRADICTION`. In a unit with
 `channels_from = "experiment"` it is the only code for channel count, header names and image type: it
@@ -933,6 +937,11 @@ point order; fields in the order of §4; each table as a standard `[header]`; ar
 `header_names`, `source_channels` and `used_ids` arrays sorted, unit and `channel_layout` `channels` in declared order; keys bare when
 they match `[A-Za-z0-9_-]+`, else basic quoted strings; strings as TOML basic strings with the
 minimal escapes.
+
+A writer MUST validate the whole candidate model against §6 (every phase) before writing. When any
+`E_*` applies it writes nothing (no file, no partial bytes) and reports every error with its path;
+for example a fast-mode model whose unit marked `experiment` lists another order is refused
+(`E_FAST_LAYOUT_MISMATCH`, `i142`; ADR 0006).
 
 ### 9.2 Round trip
 

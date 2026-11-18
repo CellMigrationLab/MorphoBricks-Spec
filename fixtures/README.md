@@ -12,6 +12,9 @@ their section.
   (none unless stated).
 - For every file in `invalid/` it MUST report exactly the listed **set** of error codes, all from
   the first failing validation phase (experiment-v1 §6), and nothing from later phases.
+  A file whose header has a `# Paths:` line (`CODE path` pairs separated by `; `; the fast-mode
+  fixtures `i142`-`i151`, ADR 0006) states its exact error paths too: the fixture oracle
+  (`refval.py fixtures`) asserts that exact set of (code, path) pairs, not only the codes.
 - "Homogeneous: **no**" marks a valid file whose units have different ordered channel lists. The
   spec accepts it; the Stage 1-2 runtime MUST refuse to process it with
   `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` (lifted at Stage 3).

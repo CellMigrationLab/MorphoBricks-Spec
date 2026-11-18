@@ -1,5 +1,6 @@
 # Fixture i145_channels_from_without_layout
 # Expected: E_FAST_MARKER_WITHOUT_LAYOUT
+# Paths: E_FAST_MARKER_WITHOUT_LAYOUT repeats.rep2.members.DrugA.technical_repeats.single.channels_from
 # Source: ADR 0006 (owner decisions FC1-FC4, 16 November 2026)
 # A strict per-unit file (no `channel_layout`) whose DrugA/rep2 unit says `channels_from = "experiment"`: there is no experiment list to follow. The marker exists only in a fast-mode file.
 schema = "morphobricks-experiment"

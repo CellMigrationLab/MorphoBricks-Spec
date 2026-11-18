@@ -1,5 +1,6 @@
 # Fixture i148_layout_rgb_override_field
 # Expected: E_UNKNOWN_FIELD
+# Paths: E_UNKNOWN_FIELD channel_layout.rgb_header_override
 # Source: ADR 0006 (owner decisions FC1-FC4, 16 November 2026)
 # v43 with `rgb_header_override = true` in `channel_layout`: the RH1 override is declared per unit only (experiment-v1 4.4b), never experiment-wide.
 schema = "morphobricks-experiment"

@@ -1,5 +1,6 @@
 # Fixture i144_fast_unit_marker_missing
 # Expected: E_MISSING_FIELD
+# Paths: E_MISSING_FIELD repeats.rep2.members.CTRL.technical_repeats.single.channels_from
 # Source: ADR 0006 (owner decisions FC1-FC4, 16 November 2026)
 # v41 with the `channels_from` key of CTRL/rep2 left out: in a file with `channel_layout` every unit states how its list was confirmed; there is no default inside a fast-mode file.
 schema = "morphobricks-experiment"

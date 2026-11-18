@@ -1,5 +1,6 @@
 # Fixture i150_layout_confirmed_on_missing
 # Expected: E_MISSING_FIELD
+# Paths: E_MISSING_FIELD channel_layout.confirmed_on
 # Source: ADR 0006 (owner decisions FC1-FC4, 16 November 2026)
 # v41 without `channel_layout.confirmed_on`: the date of the user's statement is a user fact and has no default (experiment-v1 4.4a).
 schema = "morphobricks-experiment"

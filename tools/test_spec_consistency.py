@@ -98,6 +98,66 @@ class FastLayout(unittest.TestCase):
             self.assertIn(f"| 5 | `{code}` |", _section(text, "## 6."))
         self.assertIn("| `R_FAST_LAYOUT_CONTRADICTION` |", _section(text, "## 8."))
 
+    def test_writer_refuses_i142_model_and_writes_nothing(self) -> None:
+        """experiment-v1 9.1: a writer validates the whole model first (ADR 0006, i142)."""
+        import tempfile
+        import tomllib
+
+        refval = _refval()
+        doc = tomllib.loads(_read("fixtures/invalid/i142_fast_unit_order_differs.toml"))
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "morphobricks.toml"
+            with self.assertRaises(refval.WriteRefused) as refused:
+                refval.write_file(doc, target)
+            self.assertFalse(target.exists())
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+        self.assertEqual(
+            {(c, p) for c, p, _ in refused.exception.errors},
+            {("E_FAST_LAYOUT_MISMATCH", "repeats.rep1.members.DrugA.technical_repeats.single")},
+        )
+
+    def test_writer_writes_a_valid_fast_model(self) -> None:
+        import tempfile
+        import tomllib
+
+        refval = _refval()
+        doc = tomllib.loads(_read("fixtures/valid/v41_fast_layout.toml"))
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "morphobricks.toml"
+            refval.write_file(doc, target)
+            self.assertEqual(target.read_bytes(), refval.canonical_bytes(doc))
+
+    def test_fast_invalid_fixtures_state_exact_paths(self) -> None:
+        """The fixture oracle checks the exact (code, path) pairs of i142-i151, not only codes."""
+        refval = _refval()
+        for number in range(142, 152):
+            (path,) = (ROOT / "fixtures" / "invalid").glob(f"i{number}_*.toml")
+            data = path.read_bytes()
+            stated = refval.expected_paths(data)
+            self.assertIsNotNone(stated, path.name)
+            report, _ = refval.validate(data)
+            self.assertEqual({(c, p) for c, p, _ in report.errors}, stated, path.name)
+
+    def test_oracle_fails_on_a_wrong_unit_path(self) -> None:
+        """Same code, another unit: `refval.py fixtures` reports a mismatch."""
+        import contextlib
+        import io
+        import shutil
+        import tempfile
+
+        refval = _refval()
+        with tempfile.TemporaryDirectory() as tmp:
+            shutil.copytree(ROOT / "fixtures", Path(tmp) / "fixtures")
+            (target,) = (Path(tmp) / "fixtures" / "invalid").glob("i142_*.toml")
+            data = target.read_bytes().replace(
+                b"# Paths: E_FAST_LAYOUT_MISMATCH repeats.rep1.members.DrugA",
+                b"# Paths: E_FAST_LAYOUT_MISMATCH repeats.rep1.members.CTRL", 1)
+            target.write_bytes(data)
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                bad = refval.run_fixtures(Path(tmp))
+        self.assertEqual(bad, 1)
+        self.assertIn("MISMATCH invalid/i142_fast_unit_order_differs", out.getvalue())
+
 
 class AnalysisCodes(unittest.TestCase):
     def test_every_a_code_is_defined(self) -> None:

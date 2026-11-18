@@ -1,5 +1,6 @@
 # Fixture i149_layout_channels_empty
 # Expected: E_EMPTY
+# Paths: E_EMPTY channel_layout.channels
 # Source: ADR 0006 (owner decisions FC1-FC4, 16 November 2026)
 # v41 whose `channel_layout.channels` is empty: the fast-mode statement needs at least one channel.
 schema = "morphobricks-experiment"

@@ -1,5 +1,6 @@
 # Fixture i146_channels_from_case
 # Expected: E_ENUM
+# Paths: E_ENUM repeats.rep2.members.CTRL.technical_repeats.single.channels_from
 # Source: ADR 0006 (owner decisions FC1-FC4, 16 November 2026)
 # v41 with `channels_from = "Experiment"` on CTRL/rep2: the enumeration is exact and lower case (`experiment`, `unit`), never case-folded.
 schema = "morphobricks-experiment"

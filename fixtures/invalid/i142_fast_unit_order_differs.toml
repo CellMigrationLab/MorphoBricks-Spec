@@ -1,5 +1,6 @@
 # Fixture i142_fast_unit_order_differs
 # Expected: E_FAST_LAYOUT_MISMATCH
+# Paths: E_FAST_LAYOUT_MISMATCH repeats.rep1.members.DrugA.technical_repeats.single
 # Source: ADR 0006 (owner decisions FC1-FC4, 16 November 2026)
 # v41 with DrugA/rep1 marked `channels_from = "experiment"` but listing ACTIN, DNA: a unit that follows the experiment list must list it exactly (materialised); a unit with another order must be tagged on its own (`"unit"`).
 schema = "morphobricks-experiment"

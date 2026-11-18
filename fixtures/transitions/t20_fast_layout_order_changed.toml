@@ -1,7 +1,7 @@
 # Fixture t20_fast_layout_order_changed
 # Expected: `R_CONFIRMED_ID_CHANGED` (against predecessor valid/v41, without a recorded confirmation)
 # Source: ADR 0006 (owner decisions FC1-FC4, 16 November 2026)
-# Against v41 the fast-mode list is restated as ACTIN, DNA and materialised in every unit that follows it (both repeats reopened and re-dated 2026-11-17); DrugA/rep2, tagged on its own, keeps DNA, ACTIN. DNA and ACTIN lose positions they held, so a changed entity (experiment-v1 4.6 c): a new statement never reorders published units silently and needs the recorded confirmation. Valid alone (heterogeneous: no).
+# Against v41 the fast-mode list is restated as ACTIN, DNA and materialised in every unit that follows it (both repeats reopened and re-dated 2026-11-17); DrugA/rep2, tagged on its own, keeps DNA, ACTIN. DNA and ACTIN lose positions they held, so a changed entity (experiment-v1 4.6 c): a new statement never reorders published units silently and needs the recorded confirmation. Valid alone (heterogeneous: yes; same image type; permitted in Stage 3).
 schema = "morphobricks-experiment"
 schema_version = 1
 

@@ -1,5 +1,6 @@
 # Fixture i143_fast_unit_image_type_differs
 # Expected: E_FAST_LAYOUT_MISMATCH, E_RGB_TOKEN_MISUSE
+# Paths: E_FAST_LAYOUT_MISMATCH repeats.rep2.members.DrugA.technical_repeats.single; E_RGB_TOKEN_MISUSE repeats.rep2.members.DrugA.technical_repeats.single.channels[0]; E_RGB_TOKEN_MISUSE repeats.rep2.members.DrugA.technical_repeats.single.channels[1]; E_RGB_TOKEN_MISUSE repeats.rep2.members.DrugA.technical_repeats.single.channels[2]
 # Source: ADR 0006 (owner decisions FC1-FC4, 16 November 2026)
 # v43 with the DrugA/rep2 unit marked `"experiment"` but without `image_type = "rgb"`: the image type is part of the materialised list (E_FAST_LAYOUT_MISMATCH), and a unit that is not rgb may not list R, G, B (E_RGB_TOKEN_MISUSE). Two rules, two codes (AQ13).
 schema = "morphobricks-experiment"

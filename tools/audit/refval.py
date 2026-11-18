@@ -725,8 +725,36 @@ def section_lines(doc: dict, sec: str) -> list[str]:
     return out
 
 
+class WriteRefused(ValueError):
+    """The writer refused a model that breaks a rule of section 6; nothing was written."""
+
+    def __init__(self, errors: list[tuple[str, str, object]]) -> None:
+        super().__init__("; ".join(f"{c} at {p}" for c, p, _ in errors))
+        self.errors = errors
+
+
 def write(doc: dict) -> bytes:
-    """Canonical bytes of a valid document (experiment-v1 section 9.1)."""
+    """Canonical bytes of a valid document (experiment-v1 section 9.1).
+
+    The writer validates the whole candidate model (every phase of section 6) before it returns
+    any byte and raises :class:`WriteRefused` with every error otherwise (ADR 0006, `i142`).
+    """
+    data = canonical_bytes(doc)
+    r, _ = validate(data)
+    if r.errors:
+        raise WriteRefused(r.errors)
+    return data
+
+
+def write_file(doc: dict, path: Path) -> None:
+    """Write ``doc`` to ``path`` only after :func:`write` accepted it: a refusal writes nothing."""
+    data = write(doc)
+    path.write_bytes(data)
+
+
+def canonical_bytes(doc: dict) -> bytes:
+    """The section 9.1 serialisation of a model, unchecked (the audit matrix serialises invalid
+    models on purpose, to read their codes back with :func:`validate`)."""
     out = [f"schema = {_str(doc['schema'])}", f"schema_version = {doc['schema_version']}", ""]
     for sec in ("conditions", "channels", "repeats", "masks"):
         out += section_lines(doc, sec)
@@ -911,6 +939,18 @@ def transition(old: dict, new: dict) -> set[str]:
 CODE = re.compile(r"\b([EWR]_[A-Z_]+)\b")
 
 
+PATHS = re.compile(rb"^# Paths: (.+)$", re.M)
+
+
+def expected_paths(data: bytes) -> set[tuple[str, str]] | None:
+    """The exact error paths an invalid fixture states in its ``# Paths:`` header line, as
+    ``CODE path`` pairs separated by ``; ``; None when the fixture states none."""
+    m = PATHS.search(data)  # bytes: some invalid fixtures are not UTF-8
+    if m is None:
+        return None
+    return {tuple(item.split(" ", 1)) for item in m.group(1).decode("utf-8").split("; ")}
+
+
 def run_fixtures(root: Path) -> int:
     fx = root / "fixtures"
     readme = (fx / "README.md").read_text(encoding="utf-8")
@@ -937,6 +977,12 @@ def run_fixtures(root: Path) -> int:
                 ok = r.codes == exp and not r.warnings and str(r.phase) == row[2]
                 got = f"phase={r.phase} {sorted(r.codes)}"
                 want = f"phase={row[2]} {sorted(exp)}"
+                paths = expected_paths(data)  # exact (code, path) pairs, when the file states them
+                if paths is not None:
+                    found = {(c, p) for c, p, _ in r.errors}
+                    ok = ok and found == paths
+                    got += f" paths={sorted(found)}"
+                    want += f" paths={sorted(paths)}"
             else:
                 cell = row[1] if sub == "valid" else row[2]
                 expw = {c for c in CODE.findall(cell) if c.startswith("W_")}

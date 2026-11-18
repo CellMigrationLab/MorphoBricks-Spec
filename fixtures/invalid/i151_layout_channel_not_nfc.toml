@@ -1,5 +1,6 @@
 # Fixture i151_layout_channel_not_nfc
 # Expected: E_ID_NOT_NFC
+# Paths: E_ID_NOT_NFC channel_layout.channels[1]
 # Source: ADR 0006 (owner decisions FC1-FC4, 16 November 2026)
 # v41 whose `channel_layout.channels` lists "ACTIN\u0301" (decomposed): an entry of the experiment list is a channel reference, checked for NFC in phase 4 and not reported as E_UNKNOWN_CHANNEL or E_FAST_LAYOUT_MISMATCH (phase 5); never normalized.
 schema = "morphobricks-experiment"

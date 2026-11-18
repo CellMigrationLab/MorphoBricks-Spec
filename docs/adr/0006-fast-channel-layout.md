@@ -101,7 +101,8 @@ things in two files.
 Preprocessing compares every included image of every unit with `channels_from = "experiment"` with
 `channel_layout`, from **header metadata only** (the channel count and the channel names the format
 states, its colour interpretation and samples per pixel), before any pixel of any image is read and
-before anything is processed or published. Per image, the first that applies:
+before anything is processed or published. Each image is checked for **every** kind below that can
+be checked on it, and all that apply are reported for that image (not only the first):
 
 | Kind | When |
 |---|---|
@@ -110,14 +111,39 @@ before anything is processed or published. Per image, the first that applies:
 | `header_order` | Some non-empty header name at C*i* is not in `header_names` of the list's channel at *i* (the §4.3 rule: NFC of both sides, code points, no trimming), and every such name is in `header_names` of another channel of the list |
 | `header_names` | Some non-empty header name at C*i* is in `header_names` of no channel of the list |
 
+`image_type` and `channel_count` are checked on every image. The two header-name kinds exclude each
+other (an image has `header_names` when any failing name is evidence for no channel of the list,
+else `header_order`) and are checked at every index C*i* that both the image and the list have, so a
+channel count that differs does not hide them. One image can thus carry up to three kinds, for
+example an RGB header, three channels against a list of two, and a name that is evidence for no
+channel. The order of the kinds in an image's entry is the order of the table.
+
 An image without header names, or with an empty name at C*i*, needs no evidence there (§4.3): it is
 accepted under the statement (FC3, "the one tagged unit's order"), and its count and type are still
-checked. The run manifest records, per image of a fast unit, whether its channels were
-header-verified or accepted under the statement only (as RGB records "not header-verified").
+checked.
+
+**Verification status, recorded per image.** The run manifest's record of each unit with
+`channels_from = "experiment"` holds `fast_layout_images`, one entry per included image of the unit,
+sorted by path:
+
+```json
+{"path": "CTRL/rep1/acquisition_1/FOV001.ome.tif", "fov_key": "<FOV key>", "header_verified": false,
+ "channels": [{"c": 0, "channel": "DNA", "header_name": "DAPI", "evidence": "header"},
+              {"c": 1, "channel": "ACTIN", "header_name": null, "evidence": "statement"}]}
+```
+
+`channels` has one entry per index of the list, in order: `header_name` is the name as read (no
+normalisation; `""` when the stated name is empty, `null` when the format states none) and `evidence` is `header`
+(the name is in the channel's `header_names` under the §4.3 rule) or `statement` (no name: accepted
+under FC2/FC3). `header_verified` is `true` exactly when every entry is `header`. A partly named
+image (C0 named, C1 blank) is therefore recorded as not header-verified, with C0's evidence kept
+(P37 (h)). A unit with `channels_from = "unit"` has no `fast_layout_images` (strict records apply).
+The image-type check is recorded as for any unit (`image_type_header_verified`, §4.4b).
 
 All contradictions over all fast units are reported together as **one** `R_FAST_LAYOUT_CONTRADICTION`
-whose detail lists **every** contradicting image: the FOV key, the path, the kind, the C index or
-indices, and the expected and found values (for example `C0: expected DNA (DAPI, Hoechst 33342),
+whose detail lists **every** contradicting image, and for each image **every** contradiction found in
+it: the FOV key and the path once, then per contradiction the kind, the C index or indices, and the
+expected and found values (for example `C0: expected DNA (DAPI, Hoechst 33342),
 found "Phalloidin-488"`; `3 channels, the list has 2`). The message names the fix: *tag the units of
 these images on their own (`channels_from = "unit"`, confirmed per unit), then re-run.* Nothing is
 reordered, dropped, split per FOV or guessed, and no per-FOV exception is created (§10).
@@ -243,7 +269,11 @@ four digests of `v01` (checked by `refval.py fixtures`).
 | `t20` | `R_CONFIRMED_ID_CHANGED` (vs `v41`) | Restating the list in another order moves positions |
 
 `tools/audit/refval.py` implements the table and the key (phases 3-5), the writer order, the digest
-omission, the two-file `confirmed_on` check of the table, and the `t16` digest check. The image
+omission, the two-file `confirmed_on` check of the table, and the `t16` digest check. **A writer
+validates the whole candidate model before it writes** (experiment-v1 §9.1): the reference
+`write()` refuses the model of `i142` with `E_FAST_LAYOUT_MISMATCH` and writes nothing
+(`tools/test_spec_consistency.py`). The fixture oracle checks the exact error paths of
+`i142`-`i151` (their `# Paths:` header line), not only the set of codes. The image
 checks need images: scenarios P37-P40 of the conformance plan.
 
 ## Modelling choices for the owner's review
@@ -268,7 +298,9 @@ Not owner decisions; each may be amended.
    `E_DUPLICATE_CHANNEL_IN_UNIT`, `E_ID_NOT_NFC`, `E_RGB_UNIT_CHANNELS`, `E_RGB_TOKEN_MISUSE`),
    extended in meaning, instead of new codes per rule.
 7. **One fast-mode code** that replaces the per-unit count, header and type codes in fast units
-   (above), with the kind as message detail, not as separate codes.
+   (above), with the kind as message detail, not as separate codes. An image's entry lists every
+   kind found in it (revised after the external review of 18 November 2026; the first draft kept
+   only the first kind per image).
 
 ## Open questions
 

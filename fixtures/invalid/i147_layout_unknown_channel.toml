@@ -1,5 +1,6 @@
 # Fixture i147_layout_unknown_channel
 # Expected: E_UNKNOWN_CHANNEL
+# Paths: E_UNKNOWN_CHANNEL channel_layout.channels[2]; E_UNKNOWN_CHANNEL repeats.rep1.members.CTRL.technical_repeats.acquisition_1.channels[2]; E_UNKNOWN_CHANNEL repeats.rep1.members.CTRL.technical_repeats.acquisition_2.channels[2]; E_UNKNOWN_CHANNEL repeats.rep1.members.DrugA.technical_repeats.single.channels[2]; E_UNKNOWN_CHANNEL repeats.rep2.members.CTRL.technical_repeats.single.channels[2]; E_UNKNOWN_CHANNEL repeats.rep2.members.DrugA.technical_repeats.single.channels[2]
 # Source: ADR 0006 (owner decisions FC1-FC4, 16 November 2026)
 # v41 whose `channel_layout` and every unit name `PHASE`, which is not a declared channel: the experiment list follows the rules of a unit list (every entry declared).
 schema = "morphobricks-experiment"
