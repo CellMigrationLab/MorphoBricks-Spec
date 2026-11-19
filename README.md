@@ -222,6 +222,11 @@ writer or a brick that consumes the description.
   experiment (`channel_layout`), materialised in every unit with `channels_from`; matching headers are
   trusted, and every contradicting image is listed before any pixel read
   (`R_FAST_LAYOUT_CONTRADICTION`). Amends experiment-v1 §4.3a, §4.4, §6-§10.
+- [ADR 0007](docs/adr/0007-run-folder-entry.md) (**proposed**, owner request of 16 November 2026):
+  one entry per brick on a validated run folder (`<brick>.run_folder`, `<brick> run <run_folder>`, a
+  notebook card), the `RUN_FOLDER_*` and `ENTRY_*` refusals, defaults only where the Spec defines
+  one, fixed output names and reuse by identity; the per-brick inventory is
+  [`docs/design/run-folder-entry-inventory.md`](docs/design/run-folder-entry-inventory.md).
 - [ADR 0008](docs/adr/0008-plane-histograms-v6.md) (**accepted**, owner decision of 19 November 2026):
   plane histograms schema version 6 as a Parquet table, `plane_histograms.parquet`: exact bins
   kept, one row per plane, the per-bin columns replaced by two list columns per channel (non-zero
