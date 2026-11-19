@@ -195,6 +195,32 @@ def _every_row(name: str, value):
     return change
 
 
+def _both(*changes):
+    """Several changes to one value set that together make one rule's case (each is one field)."""
+    def change(ids, rows):
+        for one in changes:
+            one(ids, rows)
+    return change
+
+
+def _drop_channel(row: int, cid: str):
+    """Row ``row`` no longer lists ``cid`` (absent: all 13 values null), the rest unchanged."""
+    def change(ids, rows):
+        meta, by_channel = rows[row]
+        listed = [c for c in meta["channels"].split(";") if c != cid]
+        meta["channels"], meta["channel_count"] = ";".join(listed), len(listed)
+        del by_channel[cid]
+    return change
+
+
+def _not_token() -> pa.Table:
+    """pv04 with its one channel ID ``DNA-1`` (a hyphen: not a Token)."""
+    _, rows = pv04_rows()
+    meta, by_channel = rows[0]
+    meta["channels"] = "DNA-1"
+    return build(["DNA-1"], [(meta, {"DNA-1": by_channel["DNA"]})])
+
+
 def _absent_lists(row: int, cid: str):
     """An absent channel (not in ``channels``) given two empty lists, its other values null."""
     def change(ids, rows):
@@ -229,10 +255,29 @@ INVALID = {
     "pi19_bin_count_differs": lambda: _edit(pv01_rows, _meta(1, "bin_count", 128)),
     "pi20_null_in_counts": lambda: _edit(pv01_rows, _lists(0, "DNA", [0, 1, 2, 3], [4, 4, None, 3])),
     "pi21_channel_count_mismatch": lambda: _edit(pv01_rows, _meta(0, "channel_count", 3)),
-    "pi22_duplicate_plane": lambda: _edit(pv01_rows, _meta(1, "plane_id", "CTRL/rep1/img01.tif::z=0,t=0")),
+    # the second row moved to z 0 with its plane_id: a duplicate whose plane_id agrees with z
+    "pi22_duplicate_plane": lambda: _edit(pv01_rows, _both(_meta(1, "z", 0), _meta(1, "plane_id", "CTRL/rep1/img01.tif::z=0,t=0"))),
     "pi23_tail_mean_negative_zero": lambda: _edit(pv03_rows, _set(0, "DNA", "Histogram_UnderflowMean", -0.0)),
     "pi25_plane_column_null": lambda: _edit(pv01_rows, _meta(0, "condition", None)),
+    # version 5's checks, rebuilt (PQ4): each table breaks exactly one of them
+    "pi26_bin_count_above_dtype_range": lambda: _edit(pv01_rows, _every_row("bin_count", 512)),
+    "pi27_valid_above_total": lambda: _edit(pv01_rows, _meta(0, "total_pixel_count", 15)),
+    "pi28_no_valid_pixel_with_limit": lambda: _edit(pv03_rows, _set(0, "DNA", "Intensity_MinIntensity", "0.0")),
+    "pi29_limits_unordered": lambda: _edit(pv01_rows, _both(_set(0, "DNA", "Intensity_MinIntensity", "103"), _set(0, "DNA", "Histogram_BinningMin", "103"), _set(0, "DNA", "Histogram_BinningMax", "100"), _set(0, "DNA", "Intensity_MaxIntensity", "100"))),
+    "pi30_limit_text_not_canonical": lambda: _edit(pv01_rows, _set(0, "DNA", "Intensity_MinIntensity", "0100")),
+    "pi31_tail_mean_out_of_range": lambda: _edit(pv03_rows, _set(0, "PAX_488", "Histogram_UnderflowMean", -2000.0)),
+    "pi32_bit_depth_not_dtype": lambda: _edit(pv01_rows, _every_row("bit_depth", 16)),
+    "pi33_plane_id_not_path_z_t": lambda: _edit(pv01_rows, _meta(1, "plane_id", "CTRL/rep1/img01.tif::z=2,t=0")),
+    "pi34_negative_z": lambda: _edit(pv01_rows, _both(_meta(1, "z", -1), _meta(1, "plane_id", "CTRL/rep1/img01.tif::z=-1,t=0"))),
+    "pi35_image_channels_differ": lambda: _edit(pv01_rows, _drop_channel(1, "ACTIN")),
+    "pi36_channel_id_not_token": _not_token,
 }
+
+
+def write_invalid(names) -> None:
+    """Write only the named invalid tables (leaves every other committed file's bytes alone)."""
+    for name in names:
+        write(INVALID[name](), name, folder="invalid")
 
 
 def main() -> None:
