@@ -1,10 +1,10 @@
-# `plane_histograms.parquet` schema version 6: golden tables (proposed, ADR 0008)
+# `plane_histograms.parquet` schema version 6: golden tables (ADR 0008)
 
-Test data for [ADR 0008](../../docs/adr/0008-plane-histograms-v6.md) (**proposed; owner decision
-pending**). They are kept beside the reference checker [`plane_histograms_v6.py`](../plane_histograms_v6.py),
+Test data for [ADR 0008](../../docs/adr/0008-plane-histograms-v6.md) (**accepted**, owner decision
+of 19 November 2026). They are kept beside the reference checker [`plane_histograms_v6.py`](../plane_histograms_v6.py),
 like the EW11 golden cases, and **not** under `fixtures/`: that tree is the pinned test data of
-experiment-v1 (ADR 0003 kept this table out of it), and a proposal must not move every brick's pin.
-Where they live once the owner decides is open question 5 of ADR 0008.
+experiment-v1 (ADR 0003 kept this table out of it). The owner decided on 19 November 2026 that they
+stay here (ADR 0008, question 5); normalization reproduces them.
 
 **How they were made.** [`make_tables.py`](make_tables.py) writes every `.parquet` file here with
 `pyarrow` (`tools/requirements.txt`) and the writer profile of PQ5; the tests read the committed

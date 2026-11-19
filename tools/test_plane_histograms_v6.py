@@ -1,6 +1,6 @@
-"""Golden cases of ``plane_histograms.parquet``, schema version 6 (ADR 0008, **proposed**).
+"""Golden cases of ``plane_histograms.parquet``, schema version 6 (ADR 0008, accepted 19 November 2026).
 
-ADR 0008 is proposed (owner decision pending); these cases fix what it proposes. Run with
+ADR 0008 was accepted on 19 November 2026; these cases fix its format. Run with
 ``python -I -m pytest tools`` after ``pip install -r tools/requirements.txt`` (``pyarrow``; without
 it this module fails to import, it is never skipped). A brick implementing version 6
 (normalization's reader) accepts every file of ``tools/plane_histograms_v6/valid`` with the dense

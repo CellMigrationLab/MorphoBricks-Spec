@@ -1,28 +1,29 @@
-# ADR 0008: plane histograms schema version 6 (`plane_histograms.parquet`), proposed
+# ADR 0008: plane histograms schema version 6 (`plane_histograms.parquet`)
 
-- **Status:** **Proposed**, revised after the external review of 18 November 2026 (ACCEPT AFTER
-  CHANGES). The owner decided on 17 November 2026 (open questions below): **keep exact bins**;
-  version 6 **as Parquet** (not the sparse-count CSV cell of the first draft), **one row per plane
-  with two list columns per channel** (Q4); **the content digest is the identity and the file
-  SHA-256 is for integrity** (Q2); **`pyarrow>=18`, no upper bound, imported lazily** (Q3; the
-  review challenges it, so it goes back to the owner); **limits as version 5's text** (Q7); EW11's
-  grammar unchanged. The recommendations of Q5, Q6 and Q8 stand. The owner also stated that
-  **full-range 16-bit data (JUMP-like) is common**, so the format is designed for it. Nothing here
-  is in force until the owner accepts this text: version 5 ([ADR 0003](0003-plane-histograms-v5.md))
-  stays the format, and no brick may write or read version 6 before then.
+- **Status:** **Accepted** by the owner on **19 November 2026**, after the external review of
+  18 November 2026 (ACCEPT AFTER CHANGES) and its revision. The owner decided on 17 November 2026:
+  **keep exact bins**; version 6 **as Parquet** (not the sparse-count CSV cell of the first draft),
+  **one row per plane with two list columns per channel** (Q4); **the content digest is the
+  identity and the file SHA-256 is for integrity** (Q2); **limits as version 5's text** (Q7); EW11's
+  grammar unchanged. On 19 November 2026: the ADR accepted (Q1); **`pyarrow>=18`, no upper bound,
+  imported lazily, plus a release gate across `pyarrow` versions** ([release gate](#release-gate-across-pyarrow-versions),
+  Q3); Q5, Q6 and Q8 as recommended. The owner also stated that **full-range 16-bit data
+  (JUMP-like) is common**, so the format is designed for it. Version 5
+  ([ADR 0003](0003-plane-histograms-v5.md)) stays what the bricks write and read until the
+  normalization release that implements version 6; no brick reads both (PQ7).
 - **Evidence:** morphobricks-normalization draft PR #107 (not for merge), head
   `6aac296e24f07432084cc588dc0fc204de0fbd5e`, `experiments/histogram_storage_study/README.md` and
   `results.md` (study D9, 16 November 2026), measured on normalization `9616e12` (v0.7.0 + #104)
   with preprocessing `ce650e3`, this repository at `1167108`, CellPatcher `e0e56bc`, MorphoFeature
   `7ac7487`; and, for the Parquet choices below, this PR's probe and golden tables (§Evidence).
   The current v5 writer and reader were read at normalization `main` `fcfaeac` (v0.7.1).
-- **Amends, if accepted:** ADR 0003 HV2 (the bin-index-from-header rule, the per-bin columns) and
+- **Amends:** ADR 0003 HV2 (the bin-index-from-header rule, the per-bin columns) and
   HV4 (the version number and the file); HV1 and HV3 are kept with a Parquet representation (PQ3).
   ADR 0004 EW11: its sparse `counts` grammar and window-table schema are **unchanged** (they stay
   where they were merged, #44). Two things change: its pointer to the plane table (the version 6
   table), and **the meaning of `reference_sha256`**, which becomes the plane table's content digest
   ([normative clause](#ew11s-reference-digest-normative-supersedes-adr-0004-ew11-on-this-point)).
-  ADR 0004's own text is amended in a later PR, at these places, stale once this ADR is accepted:
+  ADR 0004's own text is amended in a later PR, at these places, stale since this ADR's acceptance:
   L171 and L186 (`plane_histograms.csv`, schema version 5), L174 (the reference identity as "the
   table's SHA-256 (`csv_sha256` of the preprocessing `run_manifest.json`)"), L625 (`reference_sha256`
   as "the SHA-256 of `plane_histograms.csv`") and L742 (a "SHA-256 mismatch").
@@ -52,9 +53,9 @@ HPMEC uint16, JUMP full-range uint16):
   (about 170 MB, 0.15 s import), a new file name, and bytes that are not deterministic across
   `pyarrow` versions (untested by the study; tested here, PQ6).
 
-## Proposed decisions (owner decision pending)
+## Decisions (accepted 19 November 2026)
 
-| # | Proposed decision | Rejected alternative | Spec | Golden tables |
+| # | Decision | Rejected alternative | Spec | Golden tables |
 |---|---|---|---|---|
 | PQ1 | **Version 6 is one Parquet file, `plane_histograms.parquet`**, written by the normalization brick in place of `plane_histograms.csv`. The bins stay **exact**: `bin_count`, the meaning of a bin (`Histogram_BinningMin + i` for an exact integer histogram) and the default bin counts (`dtypes.default_bin_count`: one bin per value for 8- and 16-bit) are those of version 5. Only the storage changes | Coarse bins (rejected by the owner; they change decisions); the sparse `index:count` CSV cell of the first draft (1.4× on full-range 16-bit data, a Python string per pair); trimmed `.npz` or zarr (NumPy-specific, a directory of files for zarr, slowest per-image writes); `.csv.gz` (2.1-2.8× only) | normalization contract §6.1, §6.2 | `pv01`-`pv06` |
 | PQ2 | **Layout: one row per XYC plane (HV1, N41 kept), the version 5 columns, and two list columns per channel ID instead of the per-bin columns.** Columns, in this order: the 15 plane columns of version 5 and `channels`; then, for every channel ID of the description, **sorted**, its 11 feature columns and `Histogram_Bins_<ID>` (the indices of the non-zero bins) and `Histogram_Counts_<ID>` (their counts): **16 + 13 × (number of IDs)** columns, independent of `bin_count`. The types are fixed (table below); the IDs still come from `Histogram_ValidPixelCount_<ID>` (an ID may contain `_`, HV2); no column carries a bin index | **Long/tidy** (one row per plane × channel × non-zero bin, the study's layout): a row is no longer a plane (N41 reversed, as ADR 0003 HV1 (B) rejected); the plane and feature values need a second table or key-value metadata (the study put CSV text there); a measured channel with no pixel has no row at all, so absent and empty differ only through `channels`; and it is larger on JUMP-like data (5,161 KiB against 3,324 KiB in the probe). A `list<struct<index, count>>` column (nulls at two levels to rule out); a dense fixed-size list (65,536 values per channel again) | ADR 0003 HV1, HV2; normalization contract §6.1 | `pv01`, `pv03` (ID `PAX_488`); `pi05`, `pi06` |
@@ -63,8 +64,8 @@ HPMEC uint16, JUMP full-range uint16):
 | PQ5 | **Writer.** The normalization writer is **vectorised** (D8): per channel `index = np.flatnonzero(counts)` on the dense counts it already holds (themselves from `np.bincount`-style counting) and `counts[index]`; the list columns are built from the concatenated arrays and their offsets (`pyarrow.ListArray.from_arrays`); **no per-bin or per-pair Python loop** in the writer or the reader (the reader fills `dense[bins] = counts`, checks order with `np.diff`). It keeps version 5's rules: rows in the order given, `-0.0` written as `0.0` (#105), refuses mixed bin counts, writes atomically (temporary file, `os.replace`), and a failed measurement writes nothing (HV3). **Fixed writer profile**, so one environment writes the same bytes: `compression="zstd"` (level 3), dictionary encoding on, statistics off, page checksums on, no stored Arrow schema, **row groups of at most 32,767 rows**, one row group for a table of up to 32,767 rows, the split fixed by that rule so one environment still writes the same bytes. A list column holds at most 65,536 elements per row, so one row group's column is at most 32,767 × 65,536 = 2^31 − 65,536 elements and always fits `list`'s int32 offsets (never `large_list`; types table). Several row groups are required beyond that size, because `pyarrow`'s Parquet reader does not split a nested column of one row group into chunks on read; the content digest ignores row groups (PQ6). **No meaning in key-value metadata**: nothing is written there and a reader ignores it | A per-pair formatter in Python (the first draft's cost on JUMP: 470 ms for 90 planes); writer options left to `pyarrow` defaults (they change between releases) | normalization contract §6.2 | `make_tables.py` (`PROFILE`) |
 | PQ6 | **Identity is a content digest, not the file's bytes.** `content_sha256` = SHA-256 of the **canonical serialisation of the decoded, checked table** (below). The **run manifest records two digests**: the file's byte SHA-256 (**integrity**: this file is the one the run wrote; publication, `RunInputs` and reuse keep comparing it, as today) and `content_sha256` (**identity**: what serial, parallel, resumed and re-run tables, other platforms and other `pyarrow` versions must share; what consumers record as provenance; what EW11's `reference_sha256` holds, PQ9). Serial, parallel and resumed runs in **one environment** write identical bytes (PQ5) and conformance tests check both; across environments only `content_sha256` is compared. A table that fails PQ4 has no content digest | **Pinned bytes** (pin `pyarrow` to one exact release and every writer option, then rely on file bytes): the bytes change with every `pyarrow` release (`created_by` and the data pages: every golden table here has other bytes under `pyarrow` 18.1.0 and 26.0.1 with the same profile, `pv05` 40,184 against 40,576 bytes); byte equality across platforms would still need proof per release; one exact pin in four bricks plus the optional extras of MorphoFeature and MorphoRelate; and every upgrade would change every byte golden and manifest digest | normalization contract §6.2; preprocessing contract §9 (manifest) | `pv06` (= `pv01`'s content, other bytes); every valid table's digest in the catalogue |
 | PQ7 | **HV4 for version 6: `schema_version` = 6 (int64) in every row. A version 6 reader refuses version 5 (and 1-4) by that value**: given a `plane_histograms.csv`, it reads the CSV header and first row only to find `schema_version`, and refuses it naming version 6 and the fix (recompute the table with the preprocessing brick); a Parquet file with `schema_version` 5 is refused the same way; any other non-Parquet file is refused. **No converter** and no reader of both versions (ADR 0002 AR10) | A v5→v6 converter (lossless here, but AR10 forbids converters); keeping the `.csv` name for a Parquet file | ADR 0003 HV4; ADR 0002 AR10 | `pi01`, `pi02`, `pi03`, `pi04`, `pi24` |
-| PQ8 | **`pyarrow` becomes required** for every brick that reads or writes plane histograms: **normalization** (a core dependency, `pyarrow>=18`), and through it **preprocessing, CellPatcher and MorphoFeature**, which declare the same minimum explicitly (MorphoFeature's `cli` extra rises from `pyarrow>=14`). **No upper bound** (owner, 17 November 2026; challenged by the review, back with the owner: open question 3): PQ6 makes the version irrelevant to identity. **Import stays inert**: `pyarrow` is imported inside the histogram read and write functions, never at package import, so `import morphobricks_normalization` and MorphoFeature's discovery do not load it. A missing `pyarrow` is an installation error naming the requirement; there is no CSV fallback | An optional extra (every route reads the table: the run would fail late); a lower floor than the oldest version tested (18 is the first release with wheels for Python 3.13, the study's interpreter; 18.1.0 is tested) | each brick's dependency list; `tools/requirements.txt` for the Spec's own tools only | the tests run under `pyarrow` 18.1.0 and 26.0.1 |
-| PQ9 | **Unchanged:** one row per XYC plane (N41); the presence column and HV3; the in-memory `PlaneHistogram` with dense counts; pooling, `fit`, summaries and checks (bit-identical, study); the exact bins (PQ1); the text of the intensity and binning limits (version 5's, kept as `string`, PQ2 types). **ADR 0004 EW11 keeps its CSV `window_histograms.csv` and its sparse `counts` grammar exactly as merged**; if this ADR is accepted, EW11's references to "`plane_histograms.csv` (schema version 5)" read as the version 6 table, and its `reference_sha256` holds the table's `content_sha256` (still 64 hex characters), so a window table stays valid across environments that write other bytes ([normative clause](#ew11s-reference-digest-normative-supersedes-adr-0004-ew11-on-this-point)) | Moving EW11 to Parquet too (EW11 is accepted, unimplemented and small; nothing measured asks for it); keeping `reference_sha256` on file bytes (a re-run under another `pyarrow` would report `plane_histogram_mismatch` for the same histograms) | ADR 0003; ADR 0004 EW11 | the bit-identity table of the study |
+| PQ8 | **`pyarrow` becomes required** for every brick that reads or writes plane histograms: **normalization** (a core dependency, `pyarrow>=18`), and through it **preprocessing, CellPatcher and MorphoFeature**, which declare the same minimum explicitly (MorphoFeature's `cli` extra rises from `pyarrow>=14`). **No upper bound** (owner, 17 and 19 November 2026, Q3): PQ6 makes the version irrelevant to identity, and **the [release gate](#release-gate-across-pyarrow-versions) is required** before each release of these bricks. **Import stays inert**: `pyarrow` is imported inside the histogram read and write functions, never at package import, so `import morphobricks_normalization` and MorphoFeature's discovery do not load it. A missing `pyarrow` is an installation error naming the requirement; there is no CSV fallback | An optional extra (every route reads the table: the run would fail late); a lower floor than the oldest version tested (18 is the first release with wheels for Python 3.13, the study's interpreter; 18.1.0 is tested) | each brick's dependency list; `tools/requirements.txt` for the Spec's own tools only | the tests run under `pyarrow` 18.1.0 and 26.0.1 |
+| PQ9 | **Unchanged:** one row per XYC plane (N41); the presence column and HV3; the in-memory `PlaneHistogram` with dense counts; pooling, `fit`, summaries and checks (bit-identical, study); the exact bins (PQ1); the text of the intensity and binning limits (version 5's, kept as `string`, PQ2 types). **ADR 0004 EW11 keeps its CSV `window_histograms.csv` and its sparse `counts` grammar exactly as merged**; since this ADR's acceptance, EW11's references to "`plane_histograms.csv` (schema version 5)" read as the version 6 table, and its `reference_sha256` holds the table's `content_sha256` (still 64 hex characters), so a window table stays valid across environments that write other bytes ([normative clause](#ew11s-reference-digest-normative-supersedes-adr-0004-ew11-on-this-point)) | Moving EW11 to Parquet too (EW11 is accepted, unimplemented and small; nothing measured asks for it); keeping `reference_sha256` on file bytes (a re-run under another `pyarrow` would report `plane_histogram_mismatch` for the same histograms) | ADR 0003; ADR 0004 EW11 | the bit-identity table of the study |
 
 ### Column types (PQ2)
 
@@ -111,7 +112,7 @@ the file passes every PQ4 check, and its `content_sha256` equals the recorded co
 
 ### EW11's reference digest (normative; supersedes ADR 0004 EW11 on this point)
 
-From the acceptance of this ADR, ADR 0004 EW11's `reference_sha256` (in a window table whose
+From the acceptance of this ADR (19 November 2026), ADR 0004 EW11's `reference_sha256` (in a window table whose
 `reference_kind` is `plane_histogram`) is the plane table's **`content_sha256`** (PQ6), not the
 SHA-256 of the file's bytes, and EW11's "a table whose SHA-256 differs from the one recorded when the
 run was planned" (`plane_histogram_mismatch`) compares content digests. A plane table rewritten with
@@ -120,6 +121,24 @@ mismatch; a table with other content is. The column keeps its name and its 64 he
 the window table's grammar and schema are unchanged. The reference check is `reference_matches` in
 `tools/plane_histograms_v6.py`, tested with `pv01` against `pv06` (same content, other bytes: no
 mismatch). ADR 0004's own text is amended to say so in a later PR.
+
+### Release gate across `pyarrow` versions (normative; owner decision of 19 November 2026)
+
+`pyarrow>=18` has no upper bound, so compatibility with each new `pyarrow` is shown before each
+release, never assumed. **Before every release** of a brick that reads or writes plane histograms
+(normalization, preprocessing, CellPatcher, MorphoFeature), the release candidate runs, under **at
+least two `pyarrow` versions: the floor (the latest 18.x) and the latest released `pyarrow`**:
+
+1. the version 6 checks: every table of `tools/plane_histograms_v6/valid` accepted with its dense
+   counts and its catalogue `content_sha256`, every table of `tools/plane_histograms_v6/invalid`
+   refused, and no content digest for a refused table;
+2. the content digests across versions: a table written by the brick under each version is read
+   under the other, and both give the same `content_sha256`; null and empty lists keep their
+   meaning (PQ3); the limits of a 64-bit integer plane read back exactly (their text, PQ2 types).
+
+Any failure blocks the release; the fix is a code change or a raised floor, never an unrecorded
+upper bound. The release record names the `pyarrow` versions the gate ran under. The Spec's own
+reference tools run their suite under 18.1.0 and 26.0.1 (this ADR's revision of 19 November 2026).
 
 ## Evidence
 
@@ -159,7 +178,7 @@ numbers. Per image, 4 threads, Parquet writes JUMP in 82 ms (sparse CSV 511 ms).
   (its sparse CSV draft was 1.3 KiB). Real tables have hundreds to thousands of planes; staging
   writes one small table per source file (migration, preprocessing).
 
-## Migration, per brick (if accepted)
+## Migration, per brick
 
 Checked against `main` of each brick: normalization `fcfaeac` (v0.7.1), preprocessing `93f15fe`,
 CellPatcher `de5b5ae`, MorphoFeature `b9a6734`.
@@ -213,12 +232,12 @@ CellPatcher `de5b5ae`, MorphoFeature `b9a6734`.
 - **Window histograms (EW11)**: not implemented yet; its grammar is unchanged (PQ9). When it is
   implemented, `reference_sha256` is the plane table's `content_sha256`.
 
-## Open questions for the owner (recommendation first)
+## Questions decided by the owner (recommendation first)
 
 1. **Accept version 6 as `plane_histograms.parquet` (PQ1-PQ9)?** Recommended: **yes**, as the
    next normalization change; it changes no number. The study's long Parquet layout was 3.8× (JUMP)
    to 91× (HPMEC) smaller than version 5; PQ2 was measured on the synthetic probe only (§Evidence).
-   **Owner, 17 November 2026: yes, Parquet.**
+   **Owner, 17 November 2026: yes, Parquet; ADR accepted on 19 November 2026.**
 2. **Identity on the content digest, with the file SHA-256 kept for integrity (PQ6)?** **Owner,
    17 November 2026: yes.**
    Recommended: **yes**. Pinning bytes needs one exact `pyarrow` everywhere and still changes every
@@ -226,13 +245,12 @@ CellPatcher `de5b5ae`, MorphoFeature `b9a6734`.
 3. **`pyarrow>=18`, no upper bound, required in normalization and declared by preprocessing,
    CellPatcher and MorphoFeature (PQ8)?** Recommended: **yes** (18.1.0 and 26.0.1 tested). A lower
    floor (MorphoFeature's and MorphoRelate's current `>=14`) only for Python 3.11/3.12 users, after
-   testing it. **Owner, 17 November 2026: yes, no upper bound.** **Challenged by the external review
-   of 18 November 2026; for the owner to decide again.** The review holds that compatibility with
-   releases not yet tested is not established, and asks for one of: (a) a tested range (for example
-   `>=18,<27`, raised in a reviewed change); or (b) no upper bound plus a **release-gate matrix**:
-   each brick release runs, under the oldest and newest `pyarrow` it allows, a cross-version write
-   and read of the golden tables, their content digests, null against empty lists and the `int64`
-   limits of 64-bit planes. The text keeps the owner's choice until then.
+   testing it. **Owner, 17 November 2026: yes, no upper bound.** The external review of
+   18 November 2026 challenged it (compatibility with untested releases is not established) and
+   offered a tested range or a release gate. **Owner, 19 November 2026 (closed): `pyarrow>=18`, no
+   upper bound, plus a release gate** that runs the version 6 checks and content digests across
+   `pyarrow` versions (at least the floor 18.x and the latest) before each release
+   ([release gate](#release-gate-across-pyarrow-versions)).
 4. **One row per plane with two list columns per channel (PQ2), not the long layout?**
    Recommended: **yes**: it keeps HV1/N41, absent ≠ empty without a second table, and was smaller
    on the JUMP-like probe (3,324 against 5,161 KiB). **The trade-off is read time:** on the same
@@ -241,16 +259,19 @@ CellPatcher `de5b5ae`, MorphoFeature `b9a6734`.
    Reading PQ2 is 2-4× slower there, tens of milliseconds for 90 full-range planes; writes were
    similar (100-121 against 101-109 ms). **Owner, 17 November 2026: yes.**
 5. **Golden tables under `tools/plane_histograms_v6/`** rather than the pinned `fixtures/`?
-   Recommended: **yes**, as for EW11's golden cases; normalization reproduces them.
+   Recommended: **yes**, as for EW11's golden cases; normalization reproduces them. **Owner,
+   19 November 2026: yes.**
 6. **EW11's `reference_sha256` = the plane table's `content_sha256` (PQ9)?** Recommended: **yes**,
-   decided with this ADR since EW11 is not implemented.
+   decided with this ADR since EW11 is not implemented. **Owner, 19 November 2026: yes**
+   ([normative clause](#ew11s-reference-digest-normative-supersedes-adr-0004-ew11-on-this-point)).
 7. **Intensity and binning limits as version 5's text (`string`)?** Recommended: **yes**: exact for
    64-bit integer planes, one type for every dtype. **Owner, 17 November 2026: yes**; the text is the
    v5 writer's canonical text only (types table). Alternative: `double` columns plus a rule that
    64-bit integer planes are refused or stored elsewhere.
 8. **The two EW11 grammar clarifications of the first draft** (ASCII digits only; a count at most
    2^63 − 1): no longer part of this ADR. Recommended: a separate one-paragraph EW11 clarification
-   if wanted; they refuse nothing a conforming writer writes.
+   if wanted; they refuse nothing a conforming writer writes. **Owner, 19 November 2026: yes, in a
+   separate PR.**
 
 ## Not decided here
 

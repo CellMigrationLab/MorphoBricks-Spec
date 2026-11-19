@@ -1,4 +1,4 @@
-"""Reference checker of the ``plane_histograms.parquet`` table, schema version 6 (ADR 0008, **proposed**).
+"""Reference checker of the ``plane_histograms.parquet`` table, schema version 6 (ADR 0008, accepted 19 November 2026).
 
 Checks what ADR 0008 changes against version 5 (ADR 0003): the Parquet file, its column names,
 order and types, the schema version (a version 5 CSV is refused by its ``schema_version`` value),

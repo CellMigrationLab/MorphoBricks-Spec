@@ -1,4 +1,4 @@
-"""Write the golden ``plane_histograms.parquet`` tables of ADR 0008 (proposed) into this folder.
+"""Write the golden ``plane_histograms.parquet`` tables of ADR 0008 into this folder.
 
 Run ``python -I tools/plane_histograms_v6/make_tables.py`` from the repository root, with the
 tools' requirements installed (``tools/requirements.txt``). The files are committed; the tests
