@@ -5,7 +5,8 @@ on, written down once so that every tool reads an experiment the same way. Its m
 the **experiment description**, a small file called `morphobricks.toml` that says what your
 imaging experiment is: which conditions you compared, which biological repeats belong together,
 what each channel is, and what each mask means. This repository holds the text, the test files
-and the audit tools. There is no package to install.
+and the audit tools. There is no package to install; the tools' own tests need `pyarrow` (one
+module, `pip install -r tools/requirements.txt`).
 
 ## The problem it solves
 

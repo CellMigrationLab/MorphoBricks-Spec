@@ -4,7 +4,7 @@ ADR 0008's evidence for the choice of layout (PQ2) and the cost of the content d
 JUMP-like data, the case the owner named. Synthetic and seeded: 90 channel planes of
 1080 x 1080 uint16 pixels over the whole 0..65535 range (a background mode, a long bright tail
 and saturated pixels), close to the study's JUMP planes (median 22,326 distinct values, 34 % of
-the bins). It times the vectorised writer of PQ8 (``np.bincount`` + ``np.flatnonzero``, no
+the bins). It times the vectorised writer of PQ5 (``np.bincount`` + ``np.flatnonzero``, no
 per-bin Python loop), the size of the list layout of version 6 and of the long layout of the
 study, and a vectorised content digest checked against the reference one.
 
@@ -51,7 +51,7 @@ def planes(seed: int = 20261117):
 
 
 def histogram(pixels: np.ndarray):
-    """The PQ8 writer step: exact bins by np.bincount, the non-zero ones by np.flatnonzero."""
+    """The PQ5 writer step: exact bins by np.bincount, the non-zero ones by np.flatnonzero."""
     lo, hi = int(pixels.min()), int(pixels.max())
     dense = np.bincount(pixels.ravel() - lo if lo else pixels.ravel(), minlength=hi - lo + 1)
     index = np.flatnonzero(dense)

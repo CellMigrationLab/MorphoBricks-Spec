@@ -31,7 +31,8 @@ ARROW = {"string": pa.string(), "int64": pa.int64(), "double": pa.float64(),
 
 #: The writer profile ADR 0008 PQ5 recommends (it fixes the bytes for one pyarrow version only).
 PROFILE = {"compression": "zstd", "compression_level": 3, "use_dictionary": True,
-           "write_statistics": False, "write_page_checksum": True, "store_schema": False}
+           "write_statistics": False, "write_page_checksum": True, "store_schema": False,
+           "row_group_size": 32767}  # at most 32,767 rows per row group (PQ5)
 #: Another profile, for pv06: other bytes, the same content digest.
 OTHER_PROFILE = {"compression": "none", "use_dictionary": False, "write_statistics": True,
                  "store_schema": True, "data_page_version": "1.0", "row_group_size": 1}
