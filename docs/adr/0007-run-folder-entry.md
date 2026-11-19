@@ -36,8 +36,8 @@
 A **validated run folder** is a published morphobricks-preprocessing output folder: the experiment
 description is published and confirmed (`morphobricks.toml`), the run wrote `run_manifest.json` and
 `plane_histograms.csv` (schema 5, ADR 0003), the mask step checked the masks, and nothing recorded
-has changed since. Bricks read it through `RunInputs.open` and the shared resolver (resolver contract
-version 3, ADR 0002 and ADR 0005).
+has changed since. Bricks read it through `RunInputs.open` and the shared resolver (ADR 0002; at
+the resolver contract version in ADR 0005 BM10's supported set).
 
 The inventory finds seven gaps (its [gap summary](../design/run-folder-entry-inventory.md#gap-summary)):
 four bricks reach a run folder with four different signatures, two (MorphoObjects, MorphoEmbed) only
@@ -232,7 +232,7 @@ reads a run folder pins it. Proposed messages:
 | `ENTRY_OUTPUT_PLACE` | the output is inside the run, experiment or masks folder, inside another entry output, or is a file | `ENTRY_OUTPUT_PLACE: {output} is inside {what} ({path}); an output is written next to the run folder. Give another --output.` |
 | `ENTRY_OUTPUT_EXISTS` | the output holds a complete entry output whose identity differs | `ENTRY_OUTPUT_EXISTS: {output} already holds a {brick} output computed with other inputs: {differences}. Give another --output, or remove that folder yourself; an output is never overwritten.` |
 | `ENTRY_OUTPUT_INCOMPLETE` | the output exists but has no readable record, or a listed file's SHA-256 differs, or it holds files and no record | `ENTRY_OUTPUT_INCOMPLETE: {output} is not a complete {brick} output ({reason}). Remove it yourself or give another --output; it is never overwritten or reused.` |
-| `ENTRY_IDENTITY_UNCERTAIN` | an output exists and its identity, or the installed code's, cannot be established (an editable install, a record of an unknown entry version, a brick without a RECORD) | `ENTRY_IDENTITY_UNCERTAIN: the output {output} cannot be compared with this run ({reason}), so it is neither reused nor overwritten. Install a released {brick}, or give another --output.` |
+| `ENTRY_IDENTITY_UNCERTAIN` | an output exists and its identity, or the installed code's, cannot be established: (a) an editable install of the brick or of a library in its identity; (b) a brick or library without a `RECORD`; (c) an installed file whose hash differs from its `RECORD` entry; (d) a record of an unknown entry version, or one whose own identity is `uncertain`; (e) the experiment or masks folder at another location than the output records, and an image or mask the request reads not content-verified ([a moved source](#reuse-or-refuse-re10)) | `ENTRY_IDENTITY_UNCERTAIN: the output {output} cannot be compared with this run ({reason}), so it is neither reused nor overwritten. {fix}` where `{fix}` is, for (a)-(c): `Install a released {brick} (not editable, its files as its RECORD lists them), or give another --output.`; for (d): `Give another --output.`; for (e): `Open the run folder with the experiment and masks folders at the location the output records, or give another --output.` |
 | `ENTRY_UPSTREAM_MISSING` | MorphoCoverage (or another consumer of an entry output) finds no complete upstream output by the naming rule | `ENTRY_UPSTREAM_MISSING: no {upstream} output was found for {run_folder} ({expected path}). Run {upstream} on the run folder first, or give its output with --features-from.` |
 | `ENTRY_UPSTREAM_STALE` | the upstream output's recorded folder identity is not the run folder's now | `ENTRY_UPSTREAM_STALE: {upstream output} was computed from another state of {run_folder} ({difference}). Run {upstream} again into a new output.` |
 
@@ -409,8 +409,12 @@ the controls. Its saved `guide()` answers become its recorded choices.
 - The execution route is the one choice with a Spec default (`whole_plane`). A windowed scope is
   allowed only for a provider that declares `windowed_execution` (EW10); otherwise it is
   `ENTRY_CHOICE_INVALID` at step 3, before any read.
-- The execution record (EW9: device, precision, thread counts) is the record's `execution` part,
-  not its identity. Window margins are the provider's (EW6), not choices.
+- The execution record (EW9: device, precision, thread counts) is the record's `execution` part.
+  The device and the thread settings are **also part of the identity**: the device as a choice
+  (AR9), the thread setting in the code identity (RE7), and so is a precision setting that is a
+  declared choice (MorphoEmbed `tf32`). Only the other execution settings (RE7: worker counts, a
+  batch size proven byte-neutral) are outside the identity. Window margins are the provider's
+  (EW6), not choices.
 - The patch catalogue (EW3) and window histograms (EW11) are outputs listed in the record; a
   catalogue of another format version stays refused (EW3), whatever RE10 says.
 
@@ -443,11 +447,16 @@ unchecked, a manifest of another version, a path that is not a run folder, a rep
 version and an unreadable report. The stopped run is preprocessing's own run of `v29`
 (`R_HETEROGENEOUS_LAYOUT_NOT_ENABLED`), as preprocessing's tests build it today.
 
-Every brick's suite, each test with a spy on **every pixel-decoding route** of preprocessing,
-counting the calls of `RunInputs.read_plane`, `read_image` (and its lazy image's reads),
-`read_window`, `read_mask`, `read_mask_window`, `read_objects` and `RunWindowReader.read_window`
-(preprocessing `v0.7.0`; a decoding route added later joins the spy in the same PR). "0 reads" means
-0 calls of any of them:
+Every brick's suite, each test with a spy at the **decoder layer**: it counts every call that turns
+stored bytes into pixels, whichever `RunInputs` method, window reader or mask conversion makes it.
+At preprocessing `v0.7.0` these are tifffile's `TiffPage.asarray`, `TiffPage.decode` (one strip or
+tile), `TiffPageSeries.asarray`, `TiffFile.asarray`, `FileHandle.read_array` (uncompressed pieces)
+and `tifffile.imread`, and the indexing of a zarr array. They are reached from `read_plane`,
+`read_image`, both `read_window`s (`RunWindowReader` included), `read_mask`, `read_mask_window`,
+`read_objects`, and from `RunInputs.binary_to_instances` and `classes_to_binary`, which decode
+through `read_mask_plane` without `read_mask` (`mask_conversion.py:250, 299`). Preprocessing ships
+the spy as a test helper (J2-0), with its own test that each of those routes is counted; a format
+reader added later joins the helper in the same PR. "0 reads" means 0 counted calls:
 
 | Row | Assertion |
 |---|---|
