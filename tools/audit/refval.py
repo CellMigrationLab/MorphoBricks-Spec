@@ -645,13 +645,31 @@ def validate(data: bytes) -> tuple[Report, dict | None]:
     if r.errors:
         r.phase = 1
         return r, None
+    return validate_model(doc, r), doc
+
+
+def validate_model(doc: object, r: Report | None = None) -> Report:
+    """Phases 2-5 and the warnings on a parsed document or a writer's candidate model.
+
+    A model that is not a table is ``E_TYPE`` at the root. A rule check that fails on a value of
+    an unexpected shape (``KeyError``, ``TypeError``, ``AttributeError``) is ``E_TYPE`` at
+    ``<model>``: the model is refused, never written.
+    """
+    r = Report() if r is None else r
+    if not is_table(doc):
+        r.e("E_TYPE", "<model>", type(doc).__name__)
+        r.phase = 2
+        return r
     for n, fn in ((2, phase2), (3, phase3), (4, phase4), (5, phase5)):
-        fn(doc, r)
+        try:
+            fn(doc, r)
+        except (KeyError, TypeError, AttributeError) as exc:
+            r.e("E_TYPE", "<model>", f"{type(exc).__name__}: {exc}")
         if r.errors:
             r.phase = n
-            return r, doc
+            return r
     warnings(doc, r)
-    return r, doc
+    return r
 
 
 # ------------------------------------------------------------------ canonical writer (section 9.1)
@@ -736,13 +754,24 @@ class WriteRefused(ValueError):
 def write(doc: dict) -> bytes:
     """Canonical bytes of a valid document (experiment-v1 section 9.1).
 
-    The writer validates the whole candidate model (every phase of section 6) before it returns
-    any byte and raises :class:`WriteRefused` with every error otherwise (ADR 0006, `i142`).
+    The writer validates the candidate model itself (phases 2-5 of section 6, as the reader
+    validates a parsed document) before serialising, and raises :class:`WriteRefused` with every
+    error otherwise (experiment-v1 9.1; ADR 0006, `i142`). Validating only the serialised bytes
+    is not enough: serialisation drops unknown fields and writes what it can of a wrong type.
+    As a second check, the bytes must read back, valid, as the same model.
     """
-    data = canonical_bytes(doc)
-    r, _ = validate(data)
+    r = validate_model(doc)
     if r.errors:
         raise WriteRefused(r.errors)
+    try:
+        data = canonical_bytes(doc)
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise WriteRefused([("E_TYPE", "<model>", f"{type(exc).__name__}: {exc}")]) from exc
+    back, parsed = validate(data)
+    if back.errors:
+        raise WriteRefused(back.errors)
+    if model(parsed) != model(doc):
+        raise WriteRefused([("E_TYPE", "<model>", "the written bytes read back as another model")])
     return data
 
 

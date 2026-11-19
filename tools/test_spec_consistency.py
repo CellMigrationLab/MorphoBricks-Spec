@@ -127,6 +127,59 @@ class FastLayout(unittest.TestCase):
             refval.write_file(doc, target)
             self.assertEqual(target.read_bytes(), refval.canonical_bytes(doc))
 
+    def test_writer_refuses_every_invalid_fixture_model(self) -> None:
+        """experiment-v1 9.1: every invalid fixture that parses is refused by the writer, with
+        the reader's own errors, never written and never a crash (KeyError, TypeError)."""
+        import tomllib
+
+        refval = _refval()
+        checked = 0
+        for path in sorted((ROOT / "fixtures" / "invalid").glob("*.toml")):
+            data = path.read_bytes()
+            try:
+                doc = tomllib.loads(data.decode("utf-8"))
+            except (UnicodeDecodeError, tomllib.TOMLDecodeError):
+                continue  # phase 1 fixtures: no model to write
+            with self.subTest(fixture=path.stem):
+                with self.assertRaises(refval.WriteRefused) as refused:
+                    refval.write(doc)
+                reader, _ = refval.validate(data)
+                self.assertEqual({(c, p) for c, p, _ in refused.exception.errors},
+                                 {(c, p) for c, p, _ in reader.errors})
+            checked += 1
+        self.assertEqual(checked, 141)
+
+    def test_writer_validates_the_model_not_only_its_bytes(self) -> None:
+        """i96 (used_ids as a mapping) and i148 (an unknown field the serialiser drops) are
+        caught by the direct model validation, before any byte is produced."""
+        import tomllib
+
+        refval = _refval()
+        for stem, expected in (
+            ("i96", {("E_TYPE", "used_ids.repeats")}),
+            ("i148", {("E_UNKNOWN_FIELD", "channel_layout.rgb_header_override")}),
+            ("i12", {("E_TYPE", "schema_version")}),
+        ):
+            (path,) = (ROOT / "fixtures" / "invalid").glob(f"{stem}_*.toml")
+            report = refval.validate_model(tomllib.loads(path.read_text(encoding="utf-8")))
+            self.assertEqual({(c, p) for c, p, _ in report.errors}, expected, stem)
+
+    def test_writer_writes_every_valid_and_transition_fixture_unchanged(self) -> None:
+        """The validating writer gives the canonical bytes of every valid and transition
+        fixture, and writing what it wrote reads back to the same bytes."""
+        import tomllib
+
+        refval = _refval()
+        paths = sorted((ROOT / "fixtures" / "valid").glob("*.toml"))
+        paths += sorted((ROOT / "fixtures" / "transitions").glob("*.toml"))
+        for path in paths:
+            with self.subTest(fixture=path.stem):
+                doc = tomllib.loads(path.read_text(encoding="utf-8"))
+                once = refval.write(doc)
+                self.assertEqual(once, refval.canonical_bytes(doc))
+                self.assertEqual(refval.write(tomllib.loads(once.decode("utf-8"))), once)
+        self.assertEqual(len(paths), 63)
+
     def test_fast_invalid_fixtures_state_exact_paths(self) -> None:
         """The fixture oracle checks the exact (code, path) pairs of i142-i151, not only codes."""
         refval = _refval()
