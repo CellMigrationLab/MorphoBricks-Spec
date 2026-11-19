@@ -18,6 +18,11 @@
   [ADR 0005](adr/0005-binary-masks.md)): a `binary` mask file holds values in {0, v} for one
   positive v over all its planes, stored as integers or booleans; all-zero and all-foreground files
   are accepted, two or more distinct positive values and float files are refused (§4.5, §4.5b, §8). It replaces "more than two distinct values".
+- **Amended** on 16 November 2026 to state the current rule (owner decision of 11 November 2026,
+  roadmap S3.3, Stage 3): units with **different ordered channel lists of one image type** are
+  processed and checked per unit; `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` now refuses only units of
+  **different image types** (RGB beside ordinary channel units, fixture `v29`) (§4.4b, §8). It
+  replaces "Stage 1-2 only: the units do not all have the same ordered list".
 - **Decisions:** [ADR 0001](adr/0001-experiment-description-v1.md).
 - **Fixtures:** [fixtures/README.md](../fixtures/README.md). **Conformance:**
   [conformance-plan.md](conformance-plan.md).
@@ -334,9 +339,10 @@ accepted, **declared** image type, per imaging unit:
   no other run: a run without a published description is refused with `A_DESCRIPTION_REQUIRED`
   before any capability is checked (ADR 0002 AR10, which supersedes owner decision RC1's clause
   that such runs keep working with a warning).
-- A file MAY hold RGB and non-RGB units; their lists differ, so that layout is heterogeneous
-  (`R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` in Stage 1-2). A unit's `image_type` is part of the
-  `repeats` section digest (§9.3).
+- A file MAY hold RGB and non-RGB units (valid, `v29`). A described run with units of different
+  image types is refused with `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` (§8): Stage 3 enabled different
+  channel lists of one image type, not mixed image types, which stay refused until the owner
+  decides otherwise. A unit's `image_type` is part of the `repeats` section digest (§9.3).
 
 **§4.4a `confirmed_on` is a user fact.** It is the calendar date of the user's confirmation
 action. A writer MUST NOT default, infer or refresh it (not from the write time, the read time,
@@ -815,7 +821,7 @@ Required preprocessing refusals (`R_*`):
 | `R_HEADER_CONTRADICTION` | A header name at C*i* is not, after NFC of both sides and with no trimming (§4.3), in the confirmed `header_names` of the unit's channel at *i* |
 | `R_IMAGE_TYPE_CONTRADICTS_HEADER` | A unit's declared image type (`rgb` or absent, §4.4b) contradicts the image header metadata, in either direction, and is not an accepted `rgb_header_override` (RH1); pixels are never examined; for a unit declared `rgb` the message names `rgb_header_override` when its images have three interleaved samples |
 | `R_RGB_OVERRIDE_NOT_THREE_SAMPLES` | A unit declares `rgb_header_override = true` and one of its images does not have exactly three interleaved samples per pixel (§4.4b, RH1); pixels are never examined |
-| `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` | Stage 1–2 only: the units do not all have the same ordered list; names the units; lifted at Stage 3 |
+| `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` | The units declare **different image types**: some `image_type = "rgb"`, some without it (`v29`); decided from the description alone, after preflight has read and bound the image headers and before any header check or pixel read; it is then the only issue reported (no header check follows); the issue's details and action name every unit with its layout; nothing processed. Units of one image type with different ordered channel lists (`v04`, `v05`, `v06`, `v17`) are **not** refused: since Stage 3 they are processed and each image is checked against its own unit (`R_UNIT_NOT_HOMOGENEOUS`, `R_CHANNEL_COUNT_MISMATCH`, `R_HEADER_CONTRADICTION`) (owner decision of 11 November 2026, roadmap S3.3; recorded in preprocessing `docs/plan.md` item 79 and `src/morphobricks_preprocessing/description_layouts.py` L1-12 at `ce650e3`). In Stages 1-2 this code refused any two different ordered lists. Lifting it for mixed image types needs a further owner decision |
 | `R_MASK_TYPE_NOT_DECLARED` | A discovered mask type has no `masks` entry |
 | `R_MASK_TYPE_NAME_INVALID` | A discovered mask type name breaks the Label rules (for example `NA`, ` cells`), so it cannot be a `source_type`; refused at discovery (AQ11) |
 | `R_MASK_CONTRADICTS_REPRESENTATION` | A file of a mask declared `binary` is stored as floats, or holds, over all its planes, two or more distinct positive values or a negative value (a `binary` file is integer or boolean and holds values in {0, v} for one v > 0; all-zero and all-foreground files are accepted, §4.5); raised by the mask step on each new batch, not at publication (§4.5a) |
@@ -832,7 +838,8 @@ Representative previews and explicit confirmation are the guard; image-based che
 Required analysis-layer refusals (`A_*`): `A_SCOPE_INCOMPLETE` (a requested canonical channel or
 mask is absent from part of the requested scope, **or from all of it**: one rule, one code, no
 separate code for "no image has it" (owner decision SI1); the refusal names the channel or mask and
-the images that lack it, as "present in k of n acquisitions" (`k` may be 0); refuse unless the user
+the images that lack it, as "present in k of n images" (`n` = the images in the requested scope,
+`k` may be 0); refuse unless the user
 selects and records an eligible subset; never drop FOVs, impute, re-weight technical repeats or
 change biological N);
 `A_MASK_NOT_INSTANCES` (a `binary` mask requested as an object set without the explicit recorded per-request conversion of §4.5c, or a `parent_labels` mask requested as an object set, with or without `parent_labels_support`, §4.5b); `A_MASK_UNCHECKED` (a run uses a mask file whose representation check is `not yet checked`, §4.5a); `A_RGB_NOT_SUPPORTED` (a request on a described run includes the channels of an RGB unit, §4.4b, for a brick whose manifest does not declare `rgb_support = true`, or that does not declare it at all); `A_DRAFT_REFUSED` (§10: `RunInputs` given a draft or an unconfirmed file). Each biological repeat is
