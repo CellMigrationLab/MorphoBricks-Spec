@@ -25,7 +25,16 @@ RESOLVER_VERSION = 4
 ALL = "all"
 EXPLICIT = "explicit"
 CODE = "A_FOV_NOT_IN_RUN"
-RECORD_KEYS = ("fov_subset", "selected", "run_images", "repeats", "fovs", "excluded", "scope_digest")
+RECORD_KEYS = (
+    "fov_subset",
+    "selected",
+    "run_images",
+    "repeats",
+    "selected_biological_repeats",
+    "fovs",
+    "excluded",
+    "scope_digest",
+)
 LISTED = 10
 """Unknown FOVs named one per line in the refusal before ``... and {m} more``."""
 
@@ -129,6 +138,8 @@ def fov_scope(run: Sequence[tuple[FovKey, str]], subset: tuple[FovKey, ...] | No
             {"repeat_group": g, "selected": s, "run_images": n}
             for g, (s, n) in sorted(repeats.items())
         ],
+        # how many biological repeats have a chosen image; not the inferential N of a comparison
+        "selected_biological_repeats": sum(1 for s, _ in repeats.values() if s > 0),
         "fovs": [list(k) for k in fovs],
         "excluded": [list(k) for k in sorted(keys - chosen)],
         "scope_digest": scope_digest(mode, fovs),

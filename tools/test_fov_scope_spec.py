@@ -51,6 +51,7 @@ class Record(unittest.TestCase):
                 {"repeat_group": "R002", "selected": 4, "run_images": 4},
             ],
         )
+        self.assertEqual(record["selected_biological_repeats"], 2)
         self.assertEqual(record["scope_digest"], DIGEST_ALL)
 
     def test_explicit_subset_records_included_excluded_and_biological_n(self) -> None:
@@ -66,7 +67,18 @@ class Record(unittest.TestCase):
                 {"repeat_group": "R002", "selected": 0, "run_images": 4},
             ],
         )
+        self.assertEqual(record["selected_biological_repeats"], 1)
         self.assertEqual(record["scope_digest"], DIGEST_R001)
+
+    def test_selected_repeats_is_not_a_comparison_n(self) -> None:
+        """One image of each condition in R001 and only CTRL in R002: both repeats have a chosen
+        image (2), but a CTRL-DrugA comparison has one repeat with both conditions (ADR 0002 AR12,
+        "Biological N"); the record never states that N."""
+        subset = (("CTRL", "rep1", "single", "img01"), ("DrugA", "rep1", "single", "img01"),
+                  ("CTRL", "rep2", "single", "img01"))
+        record = f.fov_scope(RUN, subset)
+        self.assertEqual(record["selected_biological_repeats"], 2)
+        self.assertNotIn("biological_n", record)
 
     def test_digest_is_the_canonical_json_hash_and_ignores_request_order(self) -> None:
         text = (
@@ -127,9 +139,15 @@ class NotInRun(unittest.TestCase):
     def test_more_than_ten_unknown_are_counted(self) -> None:
         unknown = tuple(("CTRL", "rep9", "single", f"img{i:02d}") for i in range(12))
         message = f.refusal_message(unknown, 8)
-        self.assertIn("names 12 FOV(s)", message)
-        self.assertIn("('CTRL', 'rep9', 'single', 'img09')\n  ... and 2 more\n", message)
-        self.assertNotIn("img10", message)
+        self.assertEqual(
+            message,
+            "The requested FOV subset names 12 FOV(s) that this run does not have:\n"
+            + "".join(f"  - ('CTRL', 'rep9', 'single', 'img{i:02d}')\n" for i in range(10))
+            + "  ... and 2 more\n"
+            "Nothing was selected or read. Name each FOV by its key (condition, "
+            "biological_repeat, technical_repeat, position_id) exactly as RunInputs.fovs() lists "
+            "it, or leave fov_subset unset to use all 8 images of the run (A_FOV_NOT_IN_RUN).",
+        )
 
 
 class AdrText(unittest.TestCase):

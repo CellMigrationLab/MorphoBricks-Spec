@@ -228,6 +228,12 @@ Nothing was selected or read. Name each FOV by its key (condition, biological_re
 (the `... and {m} more` line only when more than ten are unknown; `{n}` is the run's image count).
 Like every resolver refusal it reaches the consumer before any pixel read, output or cache lookup,
 and is propagated unchanged ([ADR 0005, construction and propagation](0005-binary-masks.md#construction-and-propagation)).
+`FovNotInRunError` carries the code `A_FOV_NOT_IN_RUN` and its `str()` is that message; no second
+message is built for it. A consumer validates the subset **once per analysis, before resolving any
+provider's request**, and passes this refusal on verbatim: the same code and the same text, not
+prefixed with a provider's name, not joined with other refusals and not followed by hints (at
+MorphoFeature `main` `d277314`, `channel_selection._refusal` prefixes and joins every provider's
+refusals: it must not handle this one).
 
 **Classification over the subset.** When every key is known, the resolver resolves the request
 exactly as it would on a run that had only the chosen images: `A_SCOPE_INCOMPLETE` counts the
@@ -244,9 +250,14 @@ apply, as before. Images outside the subset are neither classified nor read.
   that has at least one chosen image, over its chosen images (full, partial or unavailable, as
   before). A repeat with no chosen image has no coverage row (it is not "full" over zero images);
   it is in `fov_scope.repeats` with `selected = 0`.
-- **Biological N is what the record says.** The subset may leave out whole repeats or part of
-  one; that is the user's recorded choice, never the resolver's. The analysis's biological N is the
-  number of repeats with `selected > 0`; technical repeats are never re-weighted, and a repeat with
+- **Biological N follows the record, per comparison.** The subset may leave out whole repeats or
+  part of one; that is the user's recorded choice, never the resolver's. The record gives
+  `selected_biological_repeats`, the number of repeats with a chosen image: it is **not** the
+  inferential N of a comparison. For a comparison (a condition against its reference, a paired
+  test) N is the number of biological repeats in which every compared condition has a chosen
+  image, the reference's included; it is computed per comparison by the analysis that makes it
+  (MorphoCoverage counts the repeats the conditions share) and is never read from
+  `selected_biological_repeats`. Technical repeats are never re-weighted, and a repeat with
   `0 < selected < run_images` is reported with both counts by every consumer that reports N
   (MorphoCoverage included). experiment-v1 §8's "never drop FOVs ... or change biological N" binds
   the bricks: none of them drops an image the request chose or changes N beyond what the record
@@ -267,12 +278,13 @@ order, all always present:
 | `selected` | integer | the number of chosen images |
 | `run_images` | integer | the number of images of the run (`len(RunInputs.fovs())`) |
 | `repeats` | list | one object `{repeat_group, selected, run_images}` per biological repeat **of the run**, sorted by `repeat_group`; a repeat the subset leaves out has `selected = 0` |
+| `selected_biological_repeats` | integer | the number of biological repeats with `selected > 0`; not the inferential N of a comparison (below) |
 | `fovs` | list | every chosen key as a list of four strings, sorted (code point order of the tuple); for `all`, every key of the run |
 | `excluded` | list | every key of the run not chosen, sorted the same way; empty for `all` |
 | `scope_digest` | text | lowercase hex SHA-256 of the canonical JSON ([ADR 0004 EW11](0004-execution-windows.md#canonical-json-hashes-and-parameter-cells)) of `{"fov_subset": <mode>, "fovs": <the sorted list>}` |
 
 ```json
-{"fov_subset": "explicit", "selected": 4, "run_images": 8, "repeats": [{"repeat_group": "R001", "selected": 4, "run_images": 4}, {"repeat_group": "R002", "selected": 0, "run_images": 4}], "fovs": [["CTRL", "rep1", "single", "img01"], ["CTRL", "rep1", "single", "img02"], ["DrugA", "rep1", "single", "img01"], ["DrugA", "rep1", "single", "img02"]], "excluded": [["CTRL", "rep2", "single", "img01"], ["CTRL", "rep2", "single", "img02"], ["DrugA", "rep2", "single", "img01"], ["DrugA", "rep2", "single", "img02"]], "scope_digest": "8613a82fbef03a41d3edf35212fb90faf92d5d653c4363b1aaf48687617ee4b4"}
+{"fov_subset": "explicit", "selected": 4, "run_images": 8, "repeats": [{"repeat_group": "R001", "selected": 4, "run_images": 4}, {"repeat_group": "R002", "selected": 0, "run_images": 4}], "selected_biological_repeats": 1, "fovs": [["CTRL", "rep1", "single", "img01"], ["CTRL", "rep1", "single", "img02"], ["DrugA", "rep1", "single", "img01"], ["DrugA", "rep1", "single", "img02"]], "excluded": [["CTRL", "rep2", "single", "img01"], ["CTRL", "rep2", "single", "img02"], ["DrugA", "rep2", "single", "img01"], ["DrugA", "rep2", "single", "img02"]], "scope_digest": "8613a82fbef03a41d3edf35212fb90faf92d5d653c4363b1aaf48687617ee4b4"}
 ```
 
 The record lists keys, not paths; a key names exactly one image of a run, and `FovSelection` keeps
@@ -285,6 +297,13 @@ CellPatcher, fiberfeatures' run record): the resolver's record, with no key adde
 or converted, for `all` as for `explicit`. A rerun is the same scope exactly when it sends the same
 `fov_subset`; a reviewer reads the included and excluded images from the record without opening
 the request.
+
+**One scope per analysis.** An analysis has one `fov_subset`. A consumer that calls
+`resolve_request` more than once for one analysis (MorphoFeature: once per provider's channels, for
+the patch catalogue and for the masks) passes the same `fov_subset`, unchanged, to every call, and
+checks that every returned `fov_scope.scope_digest` is equal before any pixel read, output or cache
+lookup. A difference is a consumer defect, refused there (never a user choice): the analysis stops,
+naming both digests, and nothing is read or written. The run record holds the one `fov_scope`.
 
 **Identity.** `scope_digest` is part of the identity of every output and cache entry built from a
 resolved request:
@@ -316,7 +335,34 @@ pipeline release) means the bump costs one constant per consumer and no compatib
 **Tests** (conformance §4 "FOV subset"): the preprocessing suite reproduces the golden record,
 digests and messages of `tools/test_fov_scope_spec.py`; each consumer shows the record copied as
 is, the refusal with zero reads (a spy `RunInputs`, as in ADR 0005), and no cache reuse across two
-`scope_digest`s.
+`scope_digest`s. Besides:
+
+- **On the generated `s07` tree.** The reference run of `tools/test_fov_scope_spec.py` is MorphoFeature's
+  G4 tree `s07_missing_optional` reduced to its keys. A conformance test builds that tree, reads
+  `RunInputs.fovs()` and asserts that the actual keys and repeat groups equal the reference `RUN`,
+  so the golden cannot drift from the tree. The consumer's reported N (`selected_biological_repeats`
+  and, where it reports one, a comparison's N) is checked separately from the record; the test is
+  run once with a deliberately wrong N and must fail.
+- **One scope per analysis.** MorphoFeature's run with several providers, a patch catalogue and
+  masks shows the same `scope_digest` at every `resolve_request` boundary, and a forced difference
+  stops it before any read.
+- **Verbatim refusal.** `A_FOV_NOT_IN_RUN` reaches the user with the constructor's exact text, with
+  no provider prefix, hint or other refusal.
+- **One wave.** Every consumer moves to `{4}` in the same wave (BM10's exact set); a mixed install
+  is refused by the version check, never run.
+
+**Migration checklist.** Every path that enumerates the run's FOVs takes the chosen images only,
+and the identity of every product pooled over images carries `scope_digest`. At the commits read:
+
+| Repository (commit) | Path | What changes |
+| --- | --- | --- |
+| morphobricks-preprocessing (`377e5c3`) | `run_inputs_resolve.py:108-117` (`self.fovs()`, per-channel present/missing) | classification over the subset; `fov_scope` built here |
+| CellPatcher (`f078ec3`) | `file_runs.py`: `FileRun.fovs` (L122-124), `layout`/`image_layout`/`mask_layout` (L127-140), `open_file_run` (L243), the normalization statistics preflight (L354-378), `leaves` (L408), `validate_image_and_mask_folders` (L579), the fitted rows | the chosen images only; fitted rows keyed with `scope_digest` |
+| CellPatcher (`f078ec3`) | `run_open.py:471-519` (the image-type check over `inputs.fovs()`) | over the chosen images |
+| MorphoRelate (`4048925`) | `io/run_source.py:307-322` (`inputs.fovs()`, spacing and layouts) | over the chosen images |
+| fiberfeatures (`20a749a`) | `run_reading.py:276-285` (rows per FOV, shared sample IDs); `run_request.py:112-121` (`run_channel_ids`) | over the chosen images |
+| MorphoFeature (`d277314`) | `run_config.py:412-426` (declared channels, RGB units) and `498-505` (images and FOV inputs); `channel_selection.py:115-125` (common IDs, RGB units, the catalogue) | over the chosen images; one subset for every resolver call |
+| MorphoFeature (`d277314`) | `fits.py:236-242`, the pooled-fit memo key | gains `scope_digest`, so a fit over another subset is never reused |
 
 ### Consequences
 
