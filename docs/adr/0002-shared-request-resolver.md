@@ -220,7 +220,7 @@ keys sorted, each as its Python `repr`, at most ten listed):
 
 ```text
 The requested FOV subset names {k} FOV(s) that this run does not have:
-  - ('ctrl', 'rep1', 'single', 'img01')
+  - ('ctrl', 'rep1', 'single', 'img0')
   ... and {m} more
 Nothing was selected or read. Name each FOV by its key (condition, biological_repeat, technical_repeat, position_id) exactly as RunInputs.fovs() lists it, or leave fov_subset unset to use all {n} images of the run (A_FOV_NOT_IN_RUN).
 ```
@@ -240,7 +240,11 @@ exactly as it would on a run that had only the chosen images: `A_SCOPE_INCOMPLET
 chosen images ("present in k of n images", `n` = the subset's size), `A_MASK_UNCHECKED` the chosen
 images' mask files, `A_RGB_NOT_SUPPORTED` and `A_VOLUME_NOT_SUPPORTED` the chosen positions; the
 selections are one per chosen position, in `RunInputs.fovs()` order; the refusals are all that
-apply, as before. Images outside the subset are neither classified nor read.
+apply, as before. Images outside the subset are neither classified nor decoded. The folder is
+still validated whole: `RunInputs.open` checks the recorded fingerprint (and content hash, when the
+run recorded one) of every image and mask of the run, chosen or not, so a changed, missing or added
+excluded image still refuses the run (its stale-folder refusal) before any resolution; the subset
+narrows what is classified and read, never what is validated.
 
 - **A04 answered: a subset that leaves out every image lacking a requested channel (or mask) makes
   the scope complete, and the request is accepted.** That is what experiment-v1 §8 calls selecting
@@ -284,7 +288,7 @@ order, all always present:
 | `scope_digest` | text | lowercase hex SHA-256 of the canonical JSON ([ADR 0004 EW11](0004-execution-windows.md#canonical-json-hashes-and-parameter-cells)) of `{"fov_subset": <mode>, "fovs": <the sorted list>}` |
 
 ```json
-{"fov_subset": "explicit", "selected": 4, "run_images": 8, "repeats": [{"repeat_group": "R001", "selected": 4, "run_images": 4}, {"repeat_group": "R002", "selected": 0, "run_images": 4}], "selected_biological_repeats": 1, "fovs": [["CTRL", "rep1", "single", "img01"], ["CTRL", "rep1", "single", "img02"], ["DrugA", "rep1", "single", "img01"], ["DrugA", "rep1", "single", "img02"]], "excluded": [["CTRL", "rep2", "single", "img01"], ["CTRL", "rep2", "single", "img02"], ["DrugA", "rep2", "single", "img01"], ["DrugA", "rep2", "single", "img02"]], "scope_digest": "8613a82fbef03a41d3edf35212fb90faf92d5d653c4363b1aaf48687617ee4b4"}
+{"fov_subset": "explicit", "selected": 4, "run_images": 8, "repeats": [{"repeat_group": "R001", "selected": 4, "run_images": 4}, {"repeat_group": "R002", "selected": 0, "run_images": 4}], "selected_biological_repeats": 1, "fovs": [["CTRL", "rep1", "single", "img0"], ["CTRL", "rep1", "single", "img1"], ["DrugA", "rep1", "single", "img0"], ["DrugA", "rep1", "single", "img1"]], "excluded": [["CTRL", "rep2", "single", "img0"], ["CTRL", "rep2", "single", "img1"], ["DrugA", "rep2", "single", "img0"], ["DrugA", "rep2", "single", "img1"]], "scope_digest": "df6472408c96f35ba7fc4ebe0aff8925a5901716099470376a5cc3100635c69d"}
 ```
 
 The record lists keys, not paths; a key names exactly one image of a run, and `FovSelection` keeps
@@ -338,7 +342,12 @@ is, the refusal with zero reads (a spy `RunInputs`, as in ADR 0005), and no cach
 `scope_digest`s. Besides:
 
 - **On the generated `s07` tree.** The reference run of `tools/test_fov_scope_spec.py` is MorphoFeature's
-  G4 tree `s07_missing_optional` reduced to its keys. A conformance test builds that tree, reads
+  G4 tree `s07_missing_optional` reduced to its keys, as MorphoFeature's `adversarial/generate.py`
+  writes it at commit `952c4be` (draft PR #240): position IDs `img0` and `img1`, technical repeat
+  `single`. That tree was built and read with preprocessing v0.7.0 on 19 November 2026 and gives
+  exactly the reference keys and repeat groups. If #240 changes the tree's keys before or after it
+  merges, the reference run, its three digests and the example record above change with it in one
+  Spec PR. A conformance test builds that tree, reads
   `RunInputs.fovs()` and asserts that the actual keys and repeat groups equal the reference `RUN`,
   so the golden cannot drift from the tree. The consumer's reported N (`selected_biological_repeats`
   and, where it reports one, a comparison's N) is checked separately from the record; the test is
@@ -351,18 +360,30 @@ is, the refusal with zero reads (a spy `RunInputs`, as in ADR 0005), and no cach
 - **One wave.** Every consumer moves to `{4}` in the same wave (BM10's exact set); a mixed install
   is refused by the version check, never run.
 
-**Migration checklist.** Every path that enumerates the run's FOVs takes the chosen images only,
-and the identity of every product pooled over images carries `scope_digest`. At the commits read:
+**Migration checklist.** Every path that counts, decides or pools over the analysis's images takes
+the chosen images only, and the identity of every product pooled over images carries
+`scope_digest`. At the commits read, these paths at least (each brick's J2/AR12 PR searches again for
+`fovs()` and adds any other it finds):
 
 | Repository (commit) | Path | What changes |
 | --- | --- | --- |
-| morphobricks-preprocessing (`377e5c3`) | `run_inputs_resolve.py:108-117` (`self.fovs()`, per-channel present/missing) | classification over the subset; `fov_scope` built here |
+| morphobricks-preprocessing (`377e5c3`) | `run_inputs_resolve.py:108-117` (`self.fovs()`, per-channel present/missing) and `122-139` (the full list passed to the mask, RGB and volume checks and to `_selections`) | classification and selections over the subset; `fov_scope` built here |
 | CellPatcher (`f078ec3`) | `file_runs.py`: `FileRun.fovs` (L122-124), `layout`/`image_layout`/`mask_layout` (L127-140), `open_file_run` (L243), the normalization statistics preflight (L354-378), `leaves` (L408), `validate_image_and_mask_folders` (L579), the fitted rows | the chosen images only; fitted rows keyed with `scope_digest` |
 | CellPatcher (`f078ec3`) | `run_open.py:471-519` (the image-type check over `inputs.fovs()`) | over the chosen images |
+| CellPatcher (`f078ec3`) | `normalization.py:147` (the repeat groups of the normalization pooling) | pooled over the chosen images, keyed with `scope_digest` |
 | MorphoRelate (`4048925`) | `io/run_source.py:307-322` (`inputs.fovs()`, spacing and layouts) | over the chosen images |
+| MorphoRelate (`4048925`) | `project.py:166` (`init`: the configuration's values decided from the run's images) | decided from the chosen images when a subset is given |
 | fiberfeatures (`20a749a`) | `run_reading.py:276-285` (rows per FOV, shared sample IDs); `run_request.py:112-121` (`run_channel_ids`) | over the chosen images |
-| MorphoFeature (`d277314`) | `run_config.py:412-426` (declared channels, RGB units) and `498-505` (images and FOV inputs); `channel_selection.py:115-125` (common IDs, RGB units, the catalogue) | over the chosen images; one subset for every resolver call |
+| MorphoFeature (`d277314`) | `run_config.py:412-426` (declared channels, RGB units) and `498-505` (images and FOV inputs); `channel_selection.py:115-125` (common IDs, RGB units, the catalogue) and `183` (the refusal's channel and coverage hints) | over the chosen images; one subset for every resolver call |
+| MorphoFeature (`d277314`) | `missing_masks.py:124` (the images checked for a missing mask); `provider_options.py:539` (whether the run has an RGB unit, which decides `stain_preset`) | over the chosen images |
 | MorphoFeature (`d277314`) | `fits.py:236-242`, the pooled-fit memo key | gains `scope_digest`, so a fit over another subset is never reused |
+
+Not listed, because they describe the whole run before any subset is chosen or only look up keys
+already given, and decide nothing about the analysis: MorphoFeature `notebook_steps.py:152, 187`
+(the form's run summary and per-image table, where the user picks the subset) and `fov_ids.py:238`
+(finds the given keys across runs); CellPatcher `notebook_session.py:148` (refuses a run with no
+image); MorphoRelate `project.py:304` (`init`'s report of the run's image count); fiberfeatures
+`run_request.py:172` (recognises a header name given in place of a channel ID, to refuse it).
 
 ### Consequences
 

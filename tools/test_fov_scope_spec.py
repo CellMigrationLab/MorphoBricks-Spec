@@ -4,7 +4,11 @@ Run with ``python -I -m pytest tools``. morphobricks-preprocessing's ``Request.f
 its ``A_FOV_NOT_IN_RUN`` refusal and ``Provenance.fov_scope`` reproduce these values exactly (the
 record key for key, the message and the digests character for character). The run is the
 MorphoFeature G4 tree ``s07_missing_optional`` reduced to its keys: PAXILLIN in every image of
-R001 and in no image of R002.
+R001 and in no image of R002. The keys are those of the tree that MorphoFeature's
+``adversarial/generate.py`` writes at commit ``952c4be`` (draft PR #240; ``img{index}.tif``, two
+images per unit, units without a technical-repeat folder), read with ``RunInputs.fovs()`` of
+preprocessing v0.7.0 on 19 November 2026. If #240 changes the tree's keys, this run, its digests
+and ADR 0002's example record change with it in one Spec PR.
 """
 
 from __future__ import annotations
@@ -23,17 +27,17 @@ f = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(f)
 
 RUN = tuple(
-    ((condition, source, "single", f"img0{i}"), group)
+    ((condition, source, "single", f"img{i}"), group)
     for group, source in (("R001", "rep1"), ("R002", "rep2"))
     for condition in ("CTRL", "DrugA")
-    for i in (1, 2)
+    for i in (0, 1)
 )
 R001 = tuple(key for key, group in RUN if group == "R001")
 R002 = tuple(key for key, group in RUN if group == "R002")
 
-DIGEST_ALL = "65aea227255ea1b6834404e7192ee5aba7894b28e91db98ed3be81219599ebdb"
-DIGEST_R001 = "8613a82fbef03a41d3edf35212fb90faf92d5d653c4363b1aaf48687617ee4b4"
-DIGEST_EVERY_KEY_EXPLICIT = "be4861c1fa11333f9ca83d938c4501f7b3f6d161cd82016876a3f53ab477cb4c"
+DIGEST_ALL = "f02bffc83abcc361b71256099ca8836211e4254f86d643839a4c00de52d3d011"
+DIGEST_R001 = "df6472408c96f35ba7fc4ebe0aff8925a5901716099470376a5cc3100635c69d"
+DIGEST_EVERY_KEY_EXPLICIT = "f0ddfd701846c4526aae4341b759d840a0aa78ca383f80c4b6689fc6231b6815"
 
 
 class Record(unittest.TestCase):
@@ -74,17 +78,17 @@ class Record(unittest.TestCase):
         """One image of each condition in R001 and only CTRL in R002: both repeats have a chosen
         image (2), but a CTRL-DrugA comparison has one repeat with both conditions (ADR 0002 AR12,
         "Biological N"); the record never states that N."""
-        subset = (("CTRL", "rep1", "single", "img01"), ("DrugA", "rep1", "single", "img01"),
-                  ("CTRL", "rep2", "single", "img01"))
+        subset = (("CTRL", "rep1", "single", "img0"), ("DrugA", "rep1", "single", "img0"),
+                  ("CTRL", "rep2", "single", "img0"))
         record = f.fov_scope(RUN, subset)
         self.assertEqual(record["selected_biological_repeats"], 2)
         self.assertNotIn("biological_n", record)
 
     def test_digest_is_the_canonical_json_hash_and_ignores_request_order(self) -> None:
         text = (
-            '{"fov_subset":"explicit","fovs":[["CTRL","rep1","single","img01"],'
-            '["CTRL","rep1","single","img02"],["DrugA","rep1","single","img01"],'
-            '["DrugA","rep1","single","img02"]]}'
+            '{"fov_subset":"explicit","fovs":[["CTRL","rep1","single","img0"],'
+            '["CTRL","rep1","single","img1"],["DrugA","rep1","single","img0"],'
+            '["DrugA","rep1","single","img1"]]}'
         )
         self.assertEqual(hashlib.sha256(text.encode()).hexdigest(), DIGEST_R001)
         self.assertEqual(f.fov_scope(RUN, tuple(reversed(R001)))["scope_digest"], DIGEST_R001)
@@ -101,10 +105,10 @@ class Malformed(unittest.TestCase):
         for subset in (
             (),  # empty
             (0, 1),  # positions
-            ("CTRL/rep1/single/img01.tif",),  # a path
+            ("CTRL/rep1/single/img0.tif",),  # a path
             [R001[0]],  # a list
             (R001[0][:3],),  # a key of three parts
-            ((1, "rep1", "single", "img01"),),  # a part that is not str
+            ((1, "rep1", "single", "img0"),),  # a part that is not str
             (R001[0], R001[0]),  # twice
         ):
             with self.subTest(subset=subset), self.assertRaises(ValueError):
@@ -122,7 +126,7 @@ class Malformed(unittest.TestCase):
 
 class NotInRun(unittest.TestCase):
     def test_unknown_key_refused_with_code_and_fix(self) -> None:
-        wrong_case = ("ctrl", "rep1", "single", "img01")  # never case-folded
+        wrong_case = ("ctrl", "rep1", "single", "img0")  # never case-folded
         with self.assertRaises(f.FovNotInRun) as raised:
             f.fov_scope(RUN, (R001[0], wrong_case))
         self.assertEqual(raised.exception.code, "A_FOV_NOT_IN_RUN")
@@ -130,7 +134,7 @@ class NotInRun(unittest.TestCase):
         self.assertEqual(
             str(raised.exception),
             "The requested FOV subset names 1 FOV(s) that this run does not have:\n"
-            "  - ('ctrl', 'rep1', 'single', 'img01')\n"
+            "  - ('ctrl', 'rep1', 'single', 'img0')\n"
             "Nothing was selected or read. Name each FOV by its key (condition, "
             "biological_repeat, technical_repeat, position_id) exactly as RunInputs.fovs() lists "
             "it, or leave fov_subset unset to use all 8 images of the run (A_FOV_NOT_IN_RUN).",
