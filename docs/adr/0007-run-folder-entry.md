@@ -37,7 +37,9 @@
 
 A **validated run folder** is a published morphobricks-preprocessing output folder: the experiment
 description is published and confirmed (`morphobricks.toml`), the run wrote `run_manifest.json` and
-`plane_histograms.csv` (schema 5, ADR 0003), the mask step checked the masks, and nothing recorded
+the plane histogram table (`plane_histograms.parquet`, schema 6, [ADR 0008](0008-plane-histograms-v6.md);
+`plane_histograms.csv`, schema 5, ADR 0003, until the normalization release that implements
+version 6), the mask step checked the masks, and nothing recorded
 has changed since. Bricks read it through `RunInputs.open` and the shared resolver (ADR 0002; at
 the resolver contract version in ADR 0005 BM10's supported set).
 
@@ -253,7 +255,7 @@ so a choice has one name on both routes (fiberfeatures' direct `RGBInputConfig.p
 | Field | Meaning |
 |---|---|
 | `name` | the choice's name (snake_case), the Python keyword and the CLI flag |
-| `type` | `string`, `integer`, `number`, `boolean`, `list[...]`, or `table` (choices file only) |
+| `type` | `string`, `integer`, `number`, `boolean`, `list[...]`, `table` (choices file only), or `fov_subset`: either the string `"all"` or a non-empty `list[fov_key]` (choices file only), where a `fov_key` is a list of exactly four strings, `[condition, biological_repeat, technical_repeat, position_id]`, as `RunInputs.fovs()` gives the FOV key (experiment-v1 §3.4; ADR 0002 AR12). No other union type exists |
 | `allowed` | a static list, or `{"from_folder": <source>}` with a source the shared reader computes from `RunInputs` without a pixel: `channel_ids`, `mask_ids` (with a `representation` filter), `time_points`, `rgb_units`, `fov_keys` (the run's FOV keys as `RunInputs.fovs()` gives them, for `fov_subset`) |
 | `required` | `always`, or `{"when": <condition>}` on the folder or other choices (for example `rgb_unit`, as in the provider options of MorphoFeature PR #236) |
 | `default` | allowed only with `spec`, a citation from the [closed list](#spec-defaults-closed-list); any other default is a declaration error, found by the brick's own test |
@@ -290,7 +292,7 @@ Only these may fill a choice the user did not give. Anything else is asked.
 | execution route of a request (`whole_plane` or a windowed scope) | `execution_route`, `string` | `"whole_plane"` | ADR 0004 EW7, EW10 (windowed execution is opt-in per request; the default route is unchanged) |
 | inferential unit of a score or a statistical comparison | `scoring_unit`, `string` | `"repeat_group"` | ADR 0002 AR6 |
 | device, in the notebook card only | `device`, `string` | the notebook's default (`"cpu"` or `"cuda"`) | ADR 0002 AR9 |
-| the images a request uses | `fov_subset`, `list[fov_key]` (choices file only; allowed from `fov_keys`) or `"all"` | `"all"` (the resolver's `fov_subset = None`, recorded as `all`) | ADR 0002 AR12 |
+| the images a request uses | `fov_subset`, `fov_subset` (its keys allowed from `fov_keys`) | `"all"` (the resolver's `fov_subset = None`, recorded as `all`) | ADR 0002 AR12 |
 
 A `default` in a declaration is valid only on a field with that `name` and `type` and that value;
 any other default is a declaration error (row E5).
@@ -325,12 +327,19 @@ presence marks a complete output. Fields:
   file the run uses, verified against the brick's published checksum. **Verification on each run**
   (owner decision of 19 November 2026): **every installed file of the brick itself** is hashed and
   compared with its hash in the brick's `RECORD`; the computing libraries are checked by name,
-  version and `RECORD` digest only, with **no per-file hashing of libraries** on each run. A brick
-  file that differs from its `RECORD`, a library whose `RECORD` digest or version differs, or an
-  editable install of the brick or of such a library makes the identity `uncertain`. One implementation computes and checks it: preprocessing's record writer
+  version and `RECORD` digest only, with **no per-file hashing of libraries** on each run. Only a
+  brick file that differs from its `RECORD`, an editable install of the brick or of such a library,
+  or a brick or library without a `RECORD` makes the identity `uncertain`
+  (`ENTRY_IDENTITY_UNCERTAIN`). A library's name, version and `RECORD` digest are identity fields:
+  one that differs from the existing output's record is **another identity**
+  (`ENTRY_OUTPUT_EXISTS`, naming it), never `uncertain`. One implementation computes and checks it: preprocessing's record writer
   and checker (J2-0), which MorphoFeature's `brick_cache` key then also uses;
 - `run_folder`: its path (information only), the SHA-256 of `run_manifest.json`, the description's
-  SHA-256 and section digests, the histogram table's SHA-256; `source`: for every image and mask the
+  SHA-256 and section digests, the histogram table's **`content_sha256`** (ADR 0008 PQ6; for a
+  version 5 table, before the normalization release that implements version 6, its file SHA-256)
+  in the identity, and the table's file SHA-256 as information only (`RunInputs.open` checks it for
+  integrity at step 2), so a table rewritten with the same content under another `pyarrow` keeps the
+  identity; `source`: for every image and mask the
   request reads, its content SHA-256 as `RunInputs.open` verified it, or `fingerprint_only` when the
   run recorded no content hash;
 - `resolver`: `Provenance` as the resolver returned it, `mask_conversions` included, copied as is
@@ -474,8 +483,10 @@ before. MorphoCoverage validates the table structure and goes with it."), supers
 
 ### ADR 0001 and ADR 0003
 
-No description field, identity rule or histogram rule changes. The histogram table (schema 5) is
-one of the files `RunInputs.open` checks at step 2.
+No description field, identity rule or histogram rule changes. The histogram table (schema 6,
+`plane_histograms.parquet`, ADR 0008, from the normalization release that implements it; schema 5
+before) is one of the files `RunInputs.open` checks at step 2, and its `content_sha256` is the
+entry identity's histogram digest ([the run record](#the-run-record)).
 
 ## Conformance tests
 
@@ -530,10 +541,11 @@ above for its brick.
 v0.8.0, MorphoObjects, MorphoEmbed and MorphoRelate v0.6.0, fiberfeatures v0.8.0, MorphoFeature v0.5.0
 (PR #236 merged), on normalization v0.7.1 and preprocessing v0.7.0. J2-0 comes first, after the
 preprocessing v0.7.1 release passes its own gate: a preprocessing release and a normalization
-release with the shared pieces, and no brick change. Then each brick pins the J2-0 tags:
-CellPatcher, fiberfeatures, MorphoRelate, MorphoObjects and MorphoEmbed in any order; MorphoFeature
-once every provider it runs has declared its choices; MorphoCoverage last, since it reads
-MorphoFeature's entry output.
+release with the shared pieces, and no brick change. Then each brick that reads a run folder pins
+the J2-0 tags: CellPatcher, fiberfeatures, MorphoRelate, MorphoObjects and MorphoEmbed in any
+order; MorphoFeature once every provider it runs has declared its choices. MorphoCoverage comes last,
+since it reads MorphoFeature's entry output; it pins no MorphoBricks library (owner decision of
+19 November 2026) and uses the J2-0 checker in its tests only.
 
 ## Modelling choices for the owner's review
 
@@ -547,7 +559,8 @@ MorphoFeature's entry output.
 4. **`check` as part of the contract,** because MorphoFeature (`check`) and MorphoRelate (`inspect`)
    have it and it is the notebook card's step 3.
 5. **The record as a new file** beside each brick's own record, so one checker serves every brick
-   and MorphoCoverage.
+   that depends on preprocessing; MorphoCoverage writes the same record schema with its own code and
+   meets the checker in its tests only.
 6. **`"all"` as an explicit channel value,** not a default.
 
 ## Owner decisions of 17 November 2026
