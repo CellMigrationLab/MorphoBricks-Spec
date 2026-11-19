@@ -1,0 +1,4 @@
+# Requirements of the Spec's reference tools and their tests only (no brick reads this file).
+# Everything else under tools/ is standard library only.
+pyarrow>=18  # plane_histograms_v6.py and its tests (ADR 0008, accepted 19 November 2026)
+numpy  # tools/plane_histograms_v6/probe_full_range.py only (a probe, not a check)

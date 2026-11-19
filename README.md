@@ -5,7 +5,8 @@ on, written down once so that every tool reads an experiment the same way. Its m
 the **experiment description**, a small file called `morphobricks.toml` that says what your
 imaging experiment is: which conditions you compared, which biological repeats belong together,
 what each channel is, and what each mask means. This repository holds the text, the test files
-and the audit tools. There is no package to install.
+and the audit tools. There is no package to install; the tools' own tests need `pyarrow` (one
+module, `pip install -r tools/requirements.txt`).
 
 ## The problem it solves
 
@@ -221,6 +222,12 @@ writer or a brick that consumes the description.
   experiment (`channel_layout`), materialised in every unit with `channels_from`; matching headers are
   trusted, and every contradicting image is listed before any pixel read
   (`R_FAST_LAYOUT_CONTRADICTION`). Amends experiment-v1 §4.3a, §4.4, §6-§10.
+- [ADR 0008](docs/adr/0008-plane-histograms-v6.md) (**accepted**, owner decision of 19 November 2026):
+  plane histograms schema version 6 as a Parquet table, `plane_histograms.parquet`: exact bins
+  kept, one row per plane, the per-bin columns replaced by two list columns per channel (non-zero
+  bin indices and their counts), absent = null and measured-empty = `[]`, identity by a content
+  digest of the decoded table; `pyarrow>=18` required, with a release gate across `pyarrow` versions; golden tables in
+  [`tools/plane_histograms_v6/`](tools/plane_histograms_v6/README.md).
 
 ### Fixtures and goldens
 

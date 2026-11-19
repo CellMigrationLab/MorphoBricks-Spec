@@ -5,6 +5,10 @@
   open). Specification only: it changes no fixture, golden or validator
   (`python -I tools/audit/refval.py fixtures .` unchanged) and implements nothing. The format text
   itself is brick-owned (below); the bricks change in Stage 3 (roadmap S3.2, S3.3).
+- **Amended by** [ADR 0008](0008-plane-histograms-v6.md) (**accepted**, owner decision of
+  19 November 2026; schema version 6: `plane_histograms.parquet`, two list columns per channel
+  instead of the per-bin columns; amends HV2 and HV4). Version 5 stays what the bricks write and
+  read until the normalization release that implements version 6.
 - **Tracking:** [roadmap §5 Stage 3, S3.1](../roadmap.md#stage-3--coordinated-heterogeneous-channel-enablement);
   [conformance plan §4](../conformance-plan.md#4-later-stages-obligations-recorded-not-planned-in-detail)
   (Stage 3); [ADR 0001](0001-experiment-description-v1.md) (owner decision 12 and the section
