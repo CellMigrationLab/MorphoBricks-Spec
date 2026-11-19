@@ -661,7 +661,10 @@ process after the helper has imported every module it uses from both distributio
    every `.py` file and every extension module (`.so`, `.pyd`) on disk under each of the
    distribution's import packages (the directories its `RECORD` places them in), files under
    `__pycache__` excepted; one that is missing from `RECORD`, or listed without a hash, refuses
-   verified status;
+   verified status. `RECORD` must place **at least one** import package: a `RECORD` that lists
+   no import package (for example an editable install recorded only as a `.pth` file, with no
+   PEP 610 `direct_url.json`) refuses verified status (`"no import package in RECORD"`), since
+   checks 4 and 5 would otherwise hold with nothing to check;
 5. every imported module of the distribution's import packages (each `sys.modules` entry named
    as the package or below it) has a `__file__` whose resolved real path is the resolved path of
    a `RECORD` entry with a hash: the code that runs is that installation's, not a source tree
@@ -669,7 +672,7 @@ process after the helper has imported every module it uses from both distributio
 
 Otherwise `verified` is `false`, `reason` names the first failed check (for example
 `"editable install"`, `"RECORD missing"`, `"hash differs: <file>"`, `"not in RECORD: <file>"`,
-`"no hash in RECORD: <file>"`, `"module not from this installation: <module>"`), and
+`"no hash in RECORD: <file>"`, `"no import package in RECORD"`, `"module not from this installation: <module>"`), and
 `record_sha256` and `vcs_commit` are recorded as found. A version string or a commit alone is
 never a code identity: two builds of one commit with different `RECORD` bytes are two
 identities.

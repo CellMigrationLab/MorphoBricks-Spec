@@ -250,6 +250,7 @@ shared 2-D capabilities ([conformance plan §4](conformance-plan.md#4-later-stag
 
 **S3.3 Preprocessing and CellPatcher migration**
 - Replace experiment-global channel-count/name refusals with per-imaging-unit validation only when all downstream consumers are ready.
+- Status (owner decision of 11 November 2026, recorded in preprocessing `docs/plan.md` item 79): preprocessing `main` processes units with different channel lists of one image type, checked per unit; `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` refuses only units of different image types (`v29`), pending a further owner decision (experiment-v1 §8, conformance P04). CellPatcher followed in its roadmap item G1 (v0.7.0; CellPatcher's own numbering, not this roadmap's gate G1).
 - Name CellPatcher's patch columns and the summary columns by canonical channel ID (ADR 0003 HV2).
 - Ensure patch extraction/export never selects the wrong semantic channel after a source order swap.
 - Record per-unit and per-repeat channel coverage; scope partial repeats explicitly.
@@ -258,7 +259,8 @@ shared 2-D capabilities ([conformance plan §4](conformance-plan.md#4-later-stag
 - Mixed source order, mixed counts, missing optional channels, partial technical-repeat coverage, serial/parallel/resume, corrupted headers, single discrepant FOV, cache reuse, direct/provider parity.
 - Verify biological N remains biological N and technical-repeat weights are never silently changed.
 
-**Gate G3:** the histogram table v5 row of [conformance plan §4](conformance-plan.md#4-later-stages-obligations-recorded-not-planned-in-detail) passes; no wrong-channel measurements, no silent data loss/imputation, no pseudoreplication, full provenance (no legacy parity gate, ADR 0002 AR10); only then enable heterogeneous processing.
+**Gate G3:** a verification and release gate, not a code switch: the capability (different channel lists of one image type, checked per unit) was enabled in S3.3 (owner decision of 11 November 2026); units of different image types stay refused (`R_HETEROGENEOUS_LAYOUT_NOT_ENABLED`, experiment-v1 §8). G3 holds when the histogram table v5 row of [conformance plan §4](conformance-plan.md#4-later-stages-obligations-recorded-not-planned-in-detail) passes; no wrong-channel measurements, no silent data loss/imputation, no pseudoreplication, full provenance (no legacy parity gate, ADR 0002 AR10).
+- Status: **declared by the owner on 17 November 2026** on the release set normalization v0.7.1, preprocessing v0.7.0, CellPatcher v0.8.0, MorphoObjects, MorphoEmbed and MorphoRelate v0.6.0, fiberfeatures v0.8.0 and MorphoFeature v0.5.0, with the MorphoFeature G4 suite passing on that set (17 of 17, 0 skipped; MorphoFeature PR #240 at `952c4be`).
 
 ### Stage 4 — progressive masks and final scientific regression
 

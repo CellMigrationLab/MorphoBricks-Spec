@@ -180,10 +180,10 @@ The work is staged; each stage has a gate that is declared only after the tests 
 
 | Stage | What | Where it stands |
 |---|---|---|
-| 0: Specification | Decisions ([ADR 0001](docs/adr/0001-experiment-description-v1.md)), the normative text, 195 fixtures, a reference validator, a conformance plan | **Done** (6 to 9 November 2026). Validator: 0 mismatches |
+| 0: Specification | Decisions ([ADR 0001](docs/adr/0001-experiment-description-v1.md)), the normative text, 213 fixtures, a reference validator, a conformance plan | **Done** (6 to 9 November 2026). Validator: 0 mismatches |
 | 1: Preprocessing writes and reads the file | Notebook questions, `describe` command, strict reader, reconciliation when folders change, `RunInputs` with canonical IDs, the derived `experiment_design.csv` | Implemented on the preprocessing `main` branch; ships as **v0.5.0**. Gate G1 is declared once every fixture and scenario of the [conformance plan](docs/conformance-plan.md) runs on the release candidate |
 | 2: The bricks | MorphoFeature, MorphoRelate, fiberfeatures, MorphoObjects, MorphoEmbed, MorphoCoverage and CellPatcher take channel, mask and repeat identities from `RunInputs` instead of raw labels | Design decisions recorded (ADR 0001, 8 November 2026); the architecture decided on 10 November 2026 ([ADR 0002](docs/adr/0002-shared-request-resolver.md): one shared request resolver in preprocessing, both routes kept); a draft resolver in preprocessing; not implemented in the bricks |
-| 3: Mixed layouts | Acquisitions with different channel sets or orders processed in one experiment | Not started. Until then a described run with mixed layouts is refused (`R_HETEROGENEOUS_LAYOUT_NOT_ENABLED`) |
+| 3: Mixed layouts | Acquisitions with different channel sets or orders processed in one experiment | Started (owner decision of 11 November 2026, roadmap S3.3): preprocessing processes different channel lists of one image type, checked per unit. A described run whose acquisitions have different image types (RGB beside channel images) is still refused (`R_HETEROGENEOUS_LAYOUT_NOT_ENABLED`). Gate G3, a verification gate on the released set, was declared by the owner on 17 November 2026 ([roadmap](docs/roadmap.md)) |
 | 4: Masks and regression | Progressive segmentation, end-to-end tests across all bricks, migration guide | Not started |
 
 The detailed plan, with gates and acceptance tests, is [docs/roadmap.md](docs/roadmap.md);
@@ -216,11 +216,16 @@ writer or a brick that consumes the description.
   one policy for binary masks: 8-connected and fixed, one labeller in preprocessing with one
   recorded conversion, one region checker, `empty_region` for an empty region, and the PR order per brick;
   amends experiment-v1 §4.5, §4.5b and §8 (a `binary` file holds values in {0, v} for one positive v).
+- [ADR 0006](docs/adr/0006-fast-channel-layout.md) (**proposed**, owner decisions of 16 November 2026):
+  fast mode, the default for a new description: one ordered channel list stated once for the
+  experiment (`channel_layout`), materialised in every unit with `channels_from`; matching headers are
+  trusted, and every contradicting image is listed before any pixel read
+  (`R_FAST_LAYOUT_CONTRADICTION`). Amends experiment-v1 §4.3a, §4.4, §6-§10.
 
 ### Fixtures and goldens
 
-[`fixtures/`](fixtures/README.md) holds 40 valid files, 140 invalid ones (each with the exact
-set of error codes a reader must report), 15 transitions (a valid file checked against the
+[`fixtures/`](fixtures/README.md) holds 43 valid files, 150 invalid ones (each with the exact
+set of error codes a reader must report), 20 transitions (a valid file checked against the
 published file it replaces), golden `experiment_design.csv` outputs and 37 goldens for the
 records file. A reader pins this repository by commit SHA and must accept or refuse every file
 exactly as listed. Fixtures change first: a normative change lands here as text plus fixtures

@@ -213,7 +213,7 @@ def physical(case: Case, doc: dict) -> dict:
 
 def expected(case: Case) -> dict:
     doc = model(case)
-    data = refval.write(doc) if _writable(doc) else None
+    data = refval.canonical_bytes(doc) if _writable(doc) else None
     if data is None:
         return {"toml": None, "E": ["(model not writable)"], "W": [], "phase": None}
     r, _ = refval.validate(data)
@@ -232,7 +232,7 @@ def expected(case: Case) -> dict:
 
 def _writable(doc):
     try:
-        refval.write(doc)
+        refval.canonical_bytes(doc)
         return True
     except Exception:  # noqa: BLE001 - audit tool
         return False
