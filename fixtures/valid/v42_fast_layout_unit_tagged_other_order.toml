@@ -1,7 +1,7 @@
 # Fixture v42_fast_layout_unit_tagged_other_order
 # Expected: PASS
 # Source: ADR 0006 (owner decisions FC1-FC4, 16 November 2026)
-# v41 where DrugA/rep2 contradicted the fast-mode list (its header names were in the other order, R_FAST_LAYOUT_CONTRADICTION) and the user tagged that unit on its own: `channels_from = "unit"` with ACTIN at C0. Valid schema; its list differs, so the layout is heterogeneous and is refused while R_HETEROGENEOUS_LAYOUT_NOT_ENABLED applies to different lists (experiment-v1 8). Nothing was reordered by the software.
+# v41 where DrugA/rep2 contradicted the fast-mode list (its header names were in the other order, R_FAST_LAYOUT_CONTRADICTION) and the user tagged that unit on its own: `channels_from = "unit"` with ACTIN at C0. Valid schema; its list differs, so the layout is heterogeneous: one image type, so processed since Stage 3 with each unit checked against its own list (no R_HETEROGENEOUS_LAYOUT_NOT_ENABLED, which refuses only different image types; experiment-v1 8). Nothing was reordered by the software.
 schema = "morphobricks-experiment"
 schema_version = 1
 

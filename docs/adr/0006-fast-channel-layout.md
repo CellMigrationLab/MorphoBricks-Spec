@@ -136,9 +136,9 @@ sorted by path:
 normalisation; `""` when the stated name is empty, `null` when the format states none) and `evidence` is `header`
 (the name is in the channel's `header_names` under the §4.3 rule) or `statement` (no name: accepted
 under FC2/FC3). `header_verified` is `true` exactly when every entry is `header`. A partly named
-image (C0 named, C1 blank) is therefore recorded as not header-verified, with C0's evidence kept
+image (a name at C0, and at C1 a stated name that is empty, recorded as `""`) is therefore recorded as not header-verified, with C0's evidence kept
 (P37 (h)). A unit with `channels_from = "unit"` has no `fast_layout_images` (strict records apply).
-The image-type check is recorded as for any unit (`image_type_header_verified`, §4.4b).
+The image-type check is recorded as for any unit (header-verified or not, §4.4b).
 
 All contradictions over all fast units are reported together as **one** `R_FAST_LAYOUT_CONTRADICTION`
 whose detail lists **every** contradicting image, and for each image **every** contradiction found in
@@ -182,9 +182,11 @@ user action.
 
 **Heterogeneous layouts (Stage 3).** The units that follow the experiment list share one layout.
 A unit tagged on its own with another list or image type makes the description heterogeneous
-(`v42`), and is then processed or refused exactly as a strict file with the same lists:
-`R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` where it applies. Fast mode lifts nothing and adds nothing to
-Stage 3. Different channel sets across units, partial channel presence and the normalization opt-in
+(`v42`), and is then processed or refused exactly as a strict file with the same lists
+(experiment-v1 §8): units of one image type with different lists are processed since Stage 3, each
+image checked against its own unit's list, so `v42` is processed; a unit tagged on its own with
+another image type (RGB beside channel units) is refused with `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED`.
+Fast mode lifts nothing and adds nothing to Stage 3. Different channel sets across units, partial channel presence and the normalization opt-in
 `partial_channels = "planes_with_channel"` (CellPatcher and preprocessing; `A_SCOPE_INCOMPLETE`
 otherwise, SI1) are untouched: an extra channel in some acquisitions is a unit tagged on its own,
 which fast mode never pads, drops or reorders.
@@ -311,9 +313,8 @@ Not owner decisions; each may be amended.
 - **O2. The `rgb_header_override` hint.** Recommendation: the fast-mode message names the RH1 key for
   an image with three interleaved samples whose header contradicts `rgb`, beside the per-unit fix,
   as `R_IMAGE_TYPE_CONTRADICTS_HEADER` does today. Alternative: name only FC4's fix.
-- **O3. Spec §8 is behind preprocessing on heterogeneity.** At preprocessing `9115f39`,
+- **O3. Spec §8 was behind preprocessing on heterogeneity (resolved).** At preprocessing `9115f39`,
   `src/morphobricks_preprocessing/description_layouts.py:1-12` refuses only units of different image
-  types (owner decision of 11 November 2026, S3.3); different channel lists of one image type are
-  processed. experiment-v1 §8 still says "Stage 1-2 only: the units do not all have the same ordered
-  list". This ADR does not change that row; recommendation: record the 11 November decision in its
-  own Spec PR.
+  types (owner decision of 11 November 2026, S3.3). Spec #49 (merged as `d59d62f`) recorded that
+  decision in experiment-v1 §8: `R_HETEROGENEOUS_LAYOUT_NOT_ENABLED` refuses only units of different
+  image types. This ADR follows that rule ("Heterogeneous layouts" above, `v42`, P37 (f)).
