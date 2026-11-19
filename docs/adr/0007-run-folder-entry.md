@@ -3,7 +3,9 @@
 - **Status:** **Proposed**, revised after the external review of 18 November 2026 (MERGE AFTER
   FIXES, ten points; [revision](#revision-after-the-external-review-of-18-november-2026)). The owner
   accepted the recommendations of open questions 1-7 on 17 November 2026
-  ([owner decisions](#owner-decisions-of-17-november-2026)). Not implemented. Owner
+  ([owner decisions](#owner-decisions-of-17-november-2026)), and on 19 November 2026 decided that
+  MorphoCoverage takes feature tables, not a run folder ([MorphoCoverage](#morphocoverage)).
+  Aligned with ADR 0002 AR12 (resolver contract version 4, Spec #52). Not implemented. Owner
   request of 16 November 2026: "an easy entry for all the bricks, so that we can make it as easy as
   possible to run on a validated folder" (milestone one, after the binary-masks release wave;
   roadmap track J, steps J0 and J1). What this ADR adds is the encoding of that request: one entry
@@ -56,7 +58,7 @@ only MorphoRelate (`init` placeholders) and MorphoCoverage (saved answers) ask a
 |---|---|---|---|
 | RE1 | **One entry contract, the same in every brick.** Python `<brick>.run_folder(run_folder, output=None, *, experiment_root=None, masks_root=None, check=False, choices_from=None, **choices) -> EntryResult`; CLI `<brick> run <run_folder> [--output DIR] [--choices FILE] [--<choice> VALUE ...]` and `<brick> check <run_folder> [same options]`; a notebook card "Run on a validated folder" built from the same declaration ([the contract](#the-entry-contract)) | One wrapper package that runs every brick (a new package and pin, against ADR 0002 AR2 "no brick depends on MorphoFeature"); keeping each brick's own signature and documenting it (the gap stays) | inventory, gap 1 |
 | RE2 | **Same folder in.** The run folder is the only required path. Everything the run records is taken from it: experiment and masks folders, axes, channel indices, mask pairing and representation, image type, calibration, conditions, repeats, references. Only the location of a moved experiment or masks folder may be given (`experiment_root`, `masks_root`), as `RunInputs.open` already allows; it is never part of the identity | Accepting the experiment root as an argument (CellPatcher today); letting a choice override a recorded fact (a calibration, a channel index) | inventory, gaps 2-3; preprocessing `run_inputs.py:201-244` |
-| RE3 | **Reading only through `RunInputs` and the resolver.** The entry opens the folder with `RunInputs.open`, builds one resolver `Request` from the choices, checks the resolver version (ADR 0005 BM10) and reads pixels and objects only through `RunInputs` (`read_plane`, `read_mask`, `read_objects`, the window readers). MorphoCoverage, which reads feature tables and not images, opens the run folder with `RunInputs.open` too (no pixel decoded), then reads the entry output of a feature brick ([MorphoCoverage](#morphocoverage)) | A brick reading files itself (removed by ADR 0002 and the AR10 sweeps) | ADR 0002 AR1; ADR 0005 BM10 |
+| RE3 | **Reading only through `RunInputs` and the resolver.** The entry opens the folder with `RunInputs.open`, builds one resolver `Request` from the choices, checks the resolver version (ADR 0005 BM10) and reads pixels and objects only through `RunInputs` (`read_plane`, `read_mask`, `read_objects`, the window readers). MorphoCoverage reads neither images nor run folders: it takes a feature brick's output, validates its tables' structure and proceeds (owner decision of 19 November 2026, [MorphoCoverage](#morphocoverage)) | A brick reading files itself (removed by ADR 0002 and the AR10 sweeps) | ADR 0002 AR1; ADR 0005 BM10 |
 | RE4 | **A folder that is not validated, or is stale, is refused before any read, with the fix named, by one code family** (`RUN_FOLDER_*`, plus the existing `A_DESCRIPTION_REQUIRED` and `A_DRAFT_REFUSED`), each built by one constructor in preprocessing and raised by `RunInputs.open` ([refusals](#refusals)) | One code per brick (CellPatcher's `preprocessing_run_refused` today); a code-less `RunInputsError` (a user cannot tell "not a run" from "stale") | inventory, gap 5; preprocessing `run_inputs_error.py:17-37` (at `ce650e3`); `RUN_FOLDER_STOPPED` and `RUN_FOLDER_REPORT_UNREADABLE` already shipped (preprocessing `1b2adc3`, `run_inputs_error.py:89-135`, `run_inputs_stopped.py:37-182`) |
 | RE5 | **Defaults only where the Spec defines one.** A closed list ([Spec defaults](#spec-defaults-closed-list)); every other choice that can change a value has no default in the entry. Brick defaults stay in the bricks' in-memory APIs and are not used by the entry | Using each brick's documented defaults (hidden choices that change results: CellPatcher's 128-pixel tiles, MorphoEmbed's normalization) | inventory, gap 4 |
 | RE6 | **Every remaining choice is asked once.** Each brick declares its choices in a static file ([declaration](#the-choice-declaration)); a call missing any is refused with one `ENTRY_CHOICE_MISSING` listing **all** of them with their allowed values from the folder; the given values are written to the output's record and can be given again from it (`--choices` with a record or a choices file) | Asking one at a time (several failed runs); notebook-only prompts (the CLI and Python ask again) | MorphoRelate `placeholders.py:1-30`; MorphoCoverage saved answers |
@@ -151,8 +153,9 @@ finds:
    step 5 with its own `provider_option_missing`, unchanged; the notebook card shows it among the
    missing choices before *Run* ([missing provider options](#spec-defaults-closed-list)).
 4. `resolve_request(request)`, then the resolver version (`RESOLVER_VERSION_UNSUPPORTED`, ADR 0005
-   BM10), then the resolver's refusals as is (`A_SCOPE_INCOMPLETE`, `A_MASK_UNCHECKED`,
-   `A_MASK_NOT_INSTANCES`, `A_RGB_NOT_SUPPORTED`, `A_VOLUME_NOT_SUPPORTED`).
+   BM10), then the resolver's refusals as is (`A_FOV_NOT_IN_RUN` alone, ADR 0002 AR12; else
+   `A_SCOPE_INCOMPLETE`, `A_MASK_UNCHECKED`, `A_MASK_NOT_INSTANCES`, `A_RGB_NOT_SUPPORTED`,
+   `A_VOLUME_NOT_SUPPORTED`).
 5. The brick's own request checks and every provider artifact and identity check, **before any
    reuse decision**: the provider request-check hook (`provider_option_missing` included),
    fiberfeatures' lengths in micrometres, MorphoEmbed's weights verified against their checksum, the
@@ -233,8 +236,6 @@ reads a run folder pins it. Proposed messages:
 | `ENTRY_OUTPUT_EXISTS` | the output holds a complete entry output whose identity differs | `ENTRY_OUTPUT_EXISTS: {output} already holds a {brick} output computed with other inputs: {differences}. Give another --output, or remove that folder yourself; an output is never overwritten.` |
 | `ENTRY_OUTPUT_INCOMPLETE` | the output exists but has no readable record, or a listed file's SHA-256 differs, or it holds files and no record | `ENTRY_OUTPUT_INCOMPLETE: {output} is not a complete {brick} output ({reason}). Remove it yourself or give another --output; it is never overwritten or reused.` |
 | `ENTRY_IDENTITY_UNCERTAIN` | an output exists and its identity, or the installed code's, cannot be established: (a) an editable install of the brick or of a library in its identity; (b) a brick or library without a `RECORD`; (c) an installed file whose hash differs from its `RECORD` entry; (d) a record of an unknown entry version, or one whose own identity is `uncertain`; (e) the experiment or masks folder at another location than the output records, and an image or mask the request reads not content-verified ([a moved source](#reuse-or-refuse-re10)) | `ENTRY_IDENTITY_UNCERTAIN: the output {output} cannot be compared with this run ({reason}), so it is neither reused nor overwritten. {fix}` where `{fix}` is, for (a)-(c): `Install a released {brick} (not editable, its files as its RECORD lists them), or give another --output.`; for (d): `Give another --output.`; for (e): `Open the run folder with the experiment and masks folders at the location the output records, or give another --output.` |
-| `ENTRY_UPSTREAM_MISSING` | MorphoCoverage (or another consumer of an entry output) finds no complete upstream output by the naming rule | `ENTRY_UPSTREAM_MISSING: no {upstream} output was found for {run_folder} ({expected path}). Run {upstream} on the run folder first, or give its output with --features-from.` |
-| `ENTRY_UPSTREAM_STALE` | the upstream output's recorded folder identity is not the run folder's now | `ENTRY_UPSTREAM_STALE: {upstream output} was computed from another state of {run_folder} ({difference}). Run {upstream} again into a new output.` |
 
 `RESOLVER_VERSION_UNSUPPORTED` (ADR 0005) and the resolver's `A_*` refusals are passed on as they
 are; the entry adds no prefix and no second code.
@@ -251,7 +252,7 @@ so a choice has one name on both routes (fiberfeatures' direct `RGBInputConfig.p
 |---|---|
 | `name` | the choice's name (snake_case), the Python keyword and the CLI flag |
 | `type` | `string`, `integer`, `number`, `boolean`, `list[...]`, or `table` (choices file only) |
-| `allowed` | a static list, or `{"from_folder": <source>}` with a source the shared reader computes from `RunInputs` without a pixel: `channel_ids`, `mask_ids` (with a `representation` filter), `time_points`, `rgb_units` |
+| `allowed` | a static list, or `{"from_folder": <source>}` with a source the shared reader computes from `RunInputs` without a pixel: `channel_ids`, `mask_ids` (with a `representation` filter), `time_points`, `rgb_units`, `fov_keys` (the run's FOV keys as `RunInputs.fovs()` gives them, for `fov_subset`) |
 | `required` | `always`, or `{"when": <condition>}` on the folder or other choices (for example `rgb_unit`, as in the provider options of MorphoFeature PR #236) |
 | `default` | allowed only with `spec`, a citation from the [closed list](#spec-defaults-closed-list); any other default is a declaration error, found by the brick's own test |
 | `affects_values` | `true` for a choice (identity, RE10); `false` only for an execution setting with a test proving byte-identical outputs across its values (RE7) |
@@ -287,6 +288,7 @@ Only these may fill a choice the user did not give. Anything else is asked.
 | execution route of a request (`whole_plane` or a windowed scope) | `execution_route`, `string` | `"whole_plane"` | ADR 0004 EW7, EW10 (windowed execution is opt-in per request; the default route is unchanged) |
 | inferential unit of a score or a statistical comparison | `scoring_unit`, `string` | `"repeat_group"` | ADR 0002 AR6 |
 | device, in the notebook card only | `device`, `string` | the notebook's default (`"cpu"` or `"cuda"`) | ADR 0002 AR9 |
+| the images a request uses | `fov_subset`, `list[fov_key]` (choices file only; allowed from `fov_keys`) or `"all"` | `"all"` (the resolver's `fov_subset = None`, recorded as `all`) | ADR 0002 AR12 |
 
 A `default` in a declaration is valid only on a field with that `name` and `type` and that value;
 any other default is a declaration error (row E5).
@@ -294,7 +296,7 @@ any other default is a declaration error (row E5).
 Not defaults, because nothing is chosen: the resolver capabilities (the brick's declaration, ADR
 0002 AR3, AR8 and contract version 2); connectivity 8 (fixed, ADR 0005 BM1; a choice naming it is
 `ENTRY_CHOICE_INVALID`); `parent_labels_as_area` (the resolver's record, contract version 2); the
-controls of MorphoCoverage (the description's `reference`, read from the folder). A missing
+controls of MorphoCoverage (the description's `reference`, read from the description block the feature brick exported in `coverage.json`). A missing
 `binary_mask_policy` is not a default either: the binary mask used as objects is refused
 (experiment-v1 §4.5c).
 
@@ -334,7 +336,8 @@ presence marks a complete output. Fields:
 - `outputs`: every file the entry wrote, with its SHA-256; the brick's own record
   (`run_config.json`, `run_manifest.json`) is one of them;
 - `identity`: the SHA-256 of the canonical JSON of `entry_version`, `brick`, `run_folder` without
-  its path, `resolver`, and the choices with `affects_values: true`;
+  its path, `resolver` (its `fov_scope` included, so the `scope_digest` of ADR 0002 AR12 is part of
+  the identity), and the choices with `affects_values: true`;
 - `written_at`, the one volatile field.
 
 ### Reuse or refuse (RE10)
@@ -368,7 +371,9 @@ caches provider outputs inside a run and keeps its own, stricter key.
 - Each brick's part (its parameters and options, MorphoFeature PR #236's `provider_options`) is
   checked against that brick's declaration: the same names, allowed values and Spec defaults as
   its direct entry. MorphoFeature's own choices (`fit_from_histograms`, which changes the fitted
-  values, `observation_units`, `keep_border_objects`) follow RE5: asked, or `fixed`.
+  values, `observation_units`, `keep_border_objects`) follow RE5: asked, or `fixed`. One
+  `fov_subset` for the whole run, passed unchanged to every brick's part and every resolver call
+  (ADR 0002 AR12, "One scope per analysis").
 - `--brick <id>` restricts the run to one provider; its output name is `<run folder>__<id>`, with
   the orchestrator named in the record. This is the entry of MorphoObjects and MorphoEmbed (RE11).
 - Its output is one run folder (schema 4 at PR #236) plus `morphobricks_entry.json`; the
@@ -376,17 +381,39 @@ caches provider outputs inside a run and keeps its own, stricter key.
 
 ## MorphoCoverage
 
-MorphoCoverage reads no image and depends on neither preprocessing nor normalization today
-(`pyproject.toml:13-20`). **With the entry it depends on both, normatively, pinned like every other
-brick** (owner decision of 17 November 2026, Q4, extended by the external review): preprocessing for
-`RunInputs.open`, normalization for the `ENTRY_*` constructors. Its entry takes the same run folder
-argument and runs steps 1-2 first: `RunInputs.open` validates the folder (the `RUN_FOLDER_*`
-refusals, `A_DESCRIPTION_REQUIRED`, `A_DRAFT_REFUSED`; no pixel decoded) **before any upstream table
-is read**. It then reads the feature brick's entry output found by RE9: the choice `features_from`
-(allowed: the `brick_id`s whose output next to the run folder holds a MorphoCoverage export,
-`coverage.json` schema 3) selects it. It checks that output's record (complete, files verified) and
-compares its recorded `run_folder` identity with the folder's now (`ENTRY_UPSTREAM_STALE`). The description block it already reads from `coverage.json` (`described.py:1-40`) gives
-the controls. Its saved `guide()` answers become its recorded choices.
+**Owner decision of 19 November 2026** ("Feature tables are feature tables. Checks should happen
+before. MorphoCoverage validates the table structure and goes with it."), superseding the
+17 November wording "MorphoCoverage takes the run folder" (Q5) and the review's refinement of Q4:
+
+- **MorphoCoverage takes feature tables, not a run folder.** Its entry's one required path is a
+  feature brick's output (MorphoFeature's entry output holding its export, `coverage.json` schema 3,
+  with the `objects` and `fovs` tables): `morphocoverage run <feature_output>` and
+  `morphocoverage.run_folder(feature_output, ...)` (the name kept for one contract). It opens no run
+  folder, calls no `RunInputs.open` and **does not depend on preprocessing**. This is a stated
+  exception to RE1-RE2's "the run folder is the only required path", as Q1 is for MorphoObjects and
+  MorphoEmbed.
+- **Upstream validation is the feature brick's, done before.** A stale, stopped or unvalidated run
+  folder is refused by the feature brick's own entry (steps 1-2), so its output exists only for a
+  validated folder. MorphoCoverage does not re-check the run folder.
+- **It validates the tables' structure, then proceeds.** Its existing in-table checks stay and are
+  its refusals, passed on as they are: the export's description block (`DescriptionRefused`, with
+  its codes, `_described_shape.py` at MorphoCoverage `209b9be`), the pairing of conditions
+  (`PairingRefused`), and one acquisition per report (the acquisition identity of MorphoCoverage
+  #637, `_acquisition.py`: results of different acquisitions are never assembled). No
+  `ENTRY_UPSTREAM_*` code exists: a path that is not a feature output fails these structure checks.
+- **Its dependencies.** Normalization stays pinned for the `ENTRY_*` constructors (owner decision of
+  17 November 2026, Q4); preprocessing is not a dependency. At MorphoCoverage `main` `209b9be` it
+  declares neither (`pyproject.toml`: matplotlib, numpy, pandas, scikit-learn, scipy, umap-learn) and
+  imports neither, so the normalization pin is added with its J2 PR.
+- **Output and record.** Its output is named `<feature output name>__morphocoverage` next to the
+  feature output (RE9 applied to its input), never inside it. The choice `features_from` is gone (the
+  path names the output). Its record lists the SHA-256 of each input table it read and the feature
+  output's own entry identity (information), and its identity is those table digests, its code and
+  its choices (RE10). The controls come from the export's description block (`described.py`). Its
+  saved `guide()` answers become its recorded choices. It writes `morphobricks_entry.json` with its
+  own code (preprocessing's writer is not available to it), and its conformance test checks the
+  record with preprocessing's checker in the test environment only. Its notebook card is its own, rendered from
+  the same declaration format, since it does not depend on preprocessing's renderer (Q6).
 
 ## Interactions
 
@@ -396,6 +423,11 @@ the controls. Its saved `guide()` answers become its recorded choices.
   AR4's cross-route test is unchanged. RE12 adds that each entry's output equals its own route's.
 - The resolver is the only interpreter of the description (AR1); the entry builds one `Request`
   from the choices and never classifies scope itself (AR7).
+- AR12 (resolver contract version 4): the entry's `fov_subset` choice becomes `Request.fov_subset`
+  unchanged (`"all"` as None); the resolver's `fov_scope` is copied as is into the record's
+  `resolver` part, and its `scope_digest` is part of the entry identity (below), so an output of
+  another subset is `ENTRY_OUTPUT_EXISTS`, never reused. The entry accepts the resolver versions of
+  BM10's supported set (`{4}` after the AR12 wave) and checks them as BM10 and F13 state.
 - The device is a choice (AR9): asked in Python and on the command line when the brick declares
   more than one device, the notebook default in the card, `cuda` without a GPU refused, recorded.
 - BM10 applies at step 4 and to every reuse. The conversion record is copied as is. Connectivity is
@@ -461,13 +493,13 @@ reader added later joins the helper in the same PR. "0 reads" means 0 counted ca
 | Row | Assertion |
 |---|---|
 | E1 Same folder in | The entry runs with the run folder as its only path; every recorded fact in the record equals the run's (`RunInputs`), and a recorded fact given as a choice is `ENTRY_CHOICE_INVALID` |
-| E2 Refusals | Each folder state gives its code (table above), with `str()` equal to the constructor's output for the same arguments, 0 reads and no output folder created; the stopped run gives `RUN_FOLDER_STOPPED` as the brick's first report (no brick notice before it), with its issues equal, in order, to the report's error issues (code, message, paths, action, compared byte for byte); the two bad reports give `RUN_FOLDER_REPORT_UNREADABLE` naming the report file; on `v08` without the policy `A_MASK_NOT_INSTANCES`; on `v28` without `stain_preset` the provider's `provider_option_missing`, unchanged and not also an `ENTRY_CHOICE_MISSING` item; the unsupported resolver versions of ADR 0005 F13 (a) and (b) give `RESOLVER_VERSION_UNSUPPORTED` and a cached output is not read |
+| E2 Refusals | Each folder state gives its code (table above), with `str()` equal to the constructor's output for the same arguments, 0 reads and no output folder created; the stopped run gives `RUN_FOLDER_STOPPED` as the brick's first report (no brick notice before it), with its issues equal, in order, to the report's error issues (code, message, paths, action, compared byte for byte); the two bad reports give `RUN_FOLDER_REPORT_UNREADABLE` naming the report file; on `v08` without the policy `A_MASK_NOT_INSTANCES`; on `v28` without `stain_preset` the provider's `provider_option_missing`, unchanged and not also an `ENTRY_CHOICE_MISSING` item; the unsupported resolver versions of ADR 0005 F13 (a) and (b) give `RESOLVER_VERSION_UNSUPPORTED` and a cached output is not read; a `fov_subset` naming a key the run does not have gives `A_FOV_NOT_IN_RUN` alone, with 0 reads |
 | E3 Same outputs | With the same choices, the entry's output files are byte-identical to the brick's existing route on the same folder (CellPatcher `run_patching_condition_repeat_tree`, MorphoRelate `run` and `write_run`, MorphoFeature `run_from_config`), the volatile field excepted. fiberfeatures, whose direct route writes no file, is compared with an **independent serialised baseline**: files committed in fiberfeatures, written once from `analyze_run`'s data frames by a test-only writer that shares no code with the entry's writer. AR4's cross-route comparison of shared columns stays as it is, beside this row |
 | E4 Asked once | A call without choices gives one `ENTRY_CHOICE_MISSING` naming every choice with no Spec default (provider options excepted, E2); `--write-choices` then `--choices` reproduces E3; `choices_from=<output>` reproduces it again |
 | E5 No hidden default | Every `default` of the declaration is on a field whose `name`, `type` and value are a row of the closed list, with its citation; the field-by-field inventory test passes (every configuration field, CLI flag and manifest entry declared or refused); a run given only the required choices records every other one as `spec_default`, `notebook_default` or `fixed` |
-| E6 Rerun | A second identical call reuses (0 reads, no write, `reused = true`); one changed choice is `ENTRY_OUTPUT_EXISTS` naming it; so is each of: a changed version of a library in the identity, a changed model weight file, another device, another thread setting; a changed output file, an extra file or a link in the output is `ENTRY_OUTPUT_INCOMPLETE`; an editable install, an installed file that differs from its `RECORD` hash, and a moved experiment folder whose content was not verified are `ENTRY_IDENTITY_UNCERTAIN`; a moved, content-verified folder with equal content is reused; changed image content is refused at step 2 (`RUN_FOLDER_STALE`); provider checks run before reuse (a missing weight file refuses even when an equal output exists); two concurrent calls for one output publish exactly one output, the other reuses or refuses, and no staging folder is left |
+| E6 Rerun | A second identical call reuses (0 reads, no write, `reused = true`); one changed choice is `ENTRY_OUTPUT_EXISTS` naming it (another `fov_subset` included: its `scope_digest` differs); so is each of: a changed version of a library in the identity, a changed model weight file, another device, another thread setting; a changed output file, an extra file or a link in the output is `ENTRY_OUTPUT_INCOMPLETE`; an editable install, an installed file that differs from its `RECORD` hash, and a moved experiment folder whose content was not verified are `ENTRY_IDENTITY_UNCERTAIN`; a moved, content-verified folder with equal content is reused; changed image content is refused at step 2 (`RUN_FOLDER_STALE`); provider checks run before reuse (a missing weight file refuses even when an equal output exists); two concurrent calls for one output publish exactly one output, the other reuses or refuses, and no staging folder is left |
 | E7 Orchestrator | MorphoFeature checks each brick's choices against that brick's declaration (one wrong name or value refused per brick, before any read); `--brick morphoobjects` and `--brick morphoembed` meet E1-E6 |
-| E8 Coverage | MorphoCoverage on a stale, stopped or non-run folder gives that `RUN_FOLDER_*` code before any upstream table is read (a spy on its table reader); on a folder without the upstream output, `ENTRY_UPSTREAM_MISSING`; after the run folder is republished, `ENTRY_UPSTREAM_STALE` |
+| E8 Coverage | MorphoCoverage given a feature output computes from its tables alone: it imports no preprocessing module (an import scan) and opens no run folder; a malformed export, a description block that does not fit the tables, or results of two acquisitions are refused with its own codes before anything is computed; a run folder given in place of a feature output is refused by the same structure checks; E4-E6 apply to its own output |
 
 ## Migration per brick (J2)
 
@@ -476,7 +508,7 @@ above for its brick.
 
 | Step | Repository | What it adds or removes |
 |---|---|---|
-| J2-0 | morphobricks-preprocessing | the `RUN_FOLDER_*` constructors, raised by `RunInputs.open` with `code` set (today's code-less refusals; `RUN_FOLDER_STOPPED` and `RUN_FOLDER_REPORT_UNREADABLE` are already shipped, PR #324, and keep their text); the shared choice reader (`from_folder` sources); the record writer and checker, with the code identity of [the run record](#the-run-record) (one implementation for every brick, MorphoFeature's `brick_cache` included); the notebook card renderer, which reads only the static declarations; the folder-state test helper |
+| J2-0 | morphobricks-preprocessing | the `RUN_FOLDER_*` constructors, raised by `RunInputs.open` with `code` set (today's code-less refusals; `RUN_FOLDER_STOPPED` and `RUN_FOLDER_REPORT_UNREADABLE` are already shipped, PR #324, and keep their text); the shared choice reader (`from_folder` sources); the record writer and checker, with the code identity of [the run record](#the-run-record) (one implementation for every brick that depends on preprocessing, MorphoFeature's `brick_cache` included; MorphoCoverage writes the same record schema with its own code, tested against this checker); the notebook card renderer, which reads only the static declarations; the folder-state test helper |
 | J2-0 | morphobricks-normalization | the `ENTRY_*` constructors in `contracts` |
 | J2 | CellPatcher | `cellpatcher.run_folder`, a `cellpatcher` console script, the card in its notebook; the experiment root taken from the run (no positional path); one call for every tree depth; `entry_choices.json` (mode, patch and tile sizes, number of patches, overlap, `seed`, `seed_scope`, `min_mask_fraction`, object set, `binary_mask_policy`, `t_policy`, normalization, export format), with no brick default used by the entry; RunInputs refusals passed on, not reworded (`run_open.py:211-260`); RE9 and RE10 instead of writing into an existing folder |
 | J2 | MorphoObjects | its choices declared in the provider manifest (object sets, intensity pairs, features, observation unit), no default; its entry is `morphofeature run --brick morphoobjects` |
@@ -484,7 +516,7 @@ above for its brick.
 | J2 | MorphoRelate | `morphorelate run <run_folder>` and `morphorelate.run_folder`; the configuration becomes the choices file, `init` becomes `--write-choices`, `inspect` becomes `check`; the restated channel indices and the Z placeholder go (the resolver gives the indices; Z-stacks are refused upstream); `analysis.backend` and `random_seed` are choices; RE9 and RE10 instead of replacing an earlier output |
 | J2 | fiberfeatures | `fiberfeatures.run_folder`, a `fiberfeatures` console script, file outputs (features, patches, status) with the record; one `analysis_mode` with no default; `sample_id_from` a choice with no default; `preset` renamed `stain_preset`; the length unit read from the run, the lengths asked on a calibrated run; the device asked; channels explicit (`"all"` allowed) |
 | J2 | MorphoFeature | `morphofeature run <run_folder> --choices FILE`, `--brick`, `morphofeature.run_folder`; the run-file keys that the folder gives leave the choices; `fit_from_histograms` asked; checks of every brick's declaration |
-| J2 | MorphoCoverage | a `morphocoverage` console script with `run <run_folder>`, `features_from`, the upstream checks, the saved answers as recorded choices |
+| J2 | MorphoCoverage | a `morphocoverage` console script with `run <feature_output>` (no run folder, no preprocessing dependency; owner decision of 19 November 2026); its structure checks as they are; the normalization pin for the `ENTRY_*` constructors; the saved answers as recorded choices |
 
 **Order** (refreshed on 19 November 2026). Every brick's ADR 0005 release is tagged: CellPatcher
 v0.8.0, MorphoObjects, MorphoEmbed and MorphoRelate v0.6.0, fiberfeatures v0.8.0, MorphoFeature v0.5.0
@@ -512,7 +544,8 @@ MorphoFeature's entry output.
 
 ## Owner decisions of 17 November 2026
 
-The owner accepted the recommendation of each of open questions 1-7 below. The external review of
+The owner accepted the recommendation of each of open questions 1-7 below; Q5 and the review's
+refinement of Q4 were superseded on 19 November 2026 ([MorphoCoverage](#morphocoverage)). The external review of
 18 November 2026 agreed with all of them, and refined three, as recorded here:
 
 | # | Decision | Refinement by the review, applied in this text |
@@ -520,9 +553,9 @@ The owner accepted the recommendation of each of open questions 1-7 below. The e
 | Q1 | MorphoObjects and MorphoEmbed are run through `morphofeature run --brick` | An explicit exception to J0's one entry per brick (RE11) |
 | Q2 | No brick default in the entry; optional, versioned named recipes | none |
 | Q3 | One output per brick and run folder, under the fixed name | Exclusive publication ([publication](#publication)) |
-| Q4 | MorphoCoverage pins normalization | It pins preprocessing too, for `RunInputs.open`; both normative ([MorphoCoverage](#morphocoverage)) |
-| Q5 | MorphoCoverage takes the run folder, with `features_from` | none |
-| Q6 | One notebook-card renderer, in preprocessing | It reads only the static declaration |
+| Q4 | MorphoCoverage pins normalization | The review's refinement (pin preprocessing too, for `RunInputs.open`) is **superseded by the owner on 19 November 2026**: no preprocessing dependency ([MorphoCoverage](#morphocoverage)) |
+| Q5 | ~~MorphoCoverage takes the run folder, with `features_from`~~ **Superseded on 19 November 2026:** it takes a feature brick's output and validates the tables' structure | n/a |
+| Q6 | One notebook-card renderer, in preprocessing | It reads only the static declaration; MorphoCoverage, which does not depend on preprocessing, renders its own card from the same declaration format |
 | Q7 | Brick defaults in the in-memory APIs are left to each brick's AR10 sweep | The entry never inherits them (RE5) |
 
 Question 8 stays open; the review agrees with its recommendation.
@@ -537,7 +570,7 @@ ten blockers, and where each is fixed:
 | 1 | Provider artifact and identity checks came after the reuse decision | [Order of the checks](#order-of-the-checks), steps 5-6 |
 | 2 | The reuse identity was weaker than MorphoFeature's `brick_cache` | [The run record](#the-run-record), `brick`; RE7 (threads) |
 | 3 | A moved source was reused on fingerprints | [Reuse or refuse](#reuse-or-refuse-re10), "A moved source"; `source` in the record; RE10 |
-| 4 | MorphoCoverage read tables without validating the folder | [MorphoCoverage](#morphocoverage); RE3; E8 |
+| 4 | MorphoCoverage read tables without validating the folder | Answered differently by the owner on 19 November 2026: the feature brick validates the folder before; MorphoCoverage validates the tables' structure ([MorphoCoverage](#morphocoverage); RE3; E8) |
 | 5 | The choice inventory was incomplete | [The choice declaration](#the-choice-declaration), "complete, field by field"; J2 rows; inventory |
 | 6 | The shared layout was taken from `channels_from` markers | [ADR 0006](#adr-0006-fast-mode-channel-layout) |
 | 7 | A missing `stain_preset` had two refusals | "Missing provider options: one precedence"; step 3; E2, E4 |
@@ -564,12 +597,16 @@ Each with the recommendation first. Questions 1-7 are decided
    (several outputs side by side automatically, names that are harder to read).
 4. **MorphoCoverage's dependencies.** *Recommended:* MorphoCoverage pins normalization for the
    `ENTRY_*` constructors (a small dependency, one shared text). Alternative: it copies the messages
-   verbatim with a source-scan test.
-5. **MorphoCoverage's argument.** *Recommended:* the run folder, with the feature output found by
-   RE9 (`features_from`). Alternative: the feature output folder itself.
+   verbatim with a source-scan test. **Decided (17 November 2026): normalization pinned; and
+   (19 November 2026) no preprocessing dependency.**
+5. **MorphoCoverage's argument.** *Recommended at first:* the run folder, with the feature output
+   found by RE9 (`features_from`). Alternative: the feature output folder itself. **Decided
+   (19 November 2026): the feature output itself;** MorphoCoverage validates the tables' structure
+   and opens no run folder.
 6. **The notebook card's code.** *Recommended:* one renderer in preprocessing (every brick but
    MorphoCoverage depends on it, and its notebook guidelines exist). Alternative: each brick renders
-   the card from the declaration.
+   the card from the declaration. **Decided (17 November 2026): one renderer in preprocessing;**
+   MorphoCoverage renders its own card from the same declaration format.
 7. **Brick defaults in the in-memory APIs** (`CellPatcherConfig`, `analyze_run`). *Recommended:* left
    as they are now, outside this ADR, and decided in each brick's AR10 sweep. Alternative: removed
    with the entry.
