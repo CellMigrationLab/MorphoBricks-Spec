@@ -27,7 +27,7 @@ RETIRED_CODES = {
 }
 
 #: Resolver-contract codes (ADR 0002), not experiment-v1 section 8 codes.
-RESOLVER_CODES = ("A_VOLUME_NOT_SUPPORTED", "A_DESCRIPTION_REQUIRED")
+RESOLVER_CODES = ("A_VOLUME_NOT_SUPPORTED", "A_DESCRIPTION_REQUIRED", "A_FOV_NOT_IN_RUN")
 
 A_CODE = re.compile(r"\bA_[A-Z_]*[A-Z]\b")
 

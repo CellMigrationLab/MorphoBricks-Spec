@@ -924,7 +924,15 @@ separate code for "no image has it" (owner decision SI1); the refusal names the 
 the images that lack it, as "present in k of n images" (`n` = the images in the requested scope,
 `k` may be 0); refuse unless the user
 selects and records an eligible subset; never drop FOVs, impute, re-weight technical repeats or
-change biological N);
+change biological N. *Amended 17 November 2026 ([ADR 0002](adr/0002-shared-request-resolver.md)
+AR12, resolver contract version 4):* the subset is the request's explicit `fov_subset`, a list of
+FOV keys (§3.4) the user chose, never positions and never inferred from channel or mask presence;
+the scope, the counts `k` and `n` and the per-repeat classification are those of the chosen images,
+so a subset without the images that lack a requested channel or mask is complete; a key the run does
+not have is `A_FOV_NOT_IN_RUN` (a resolver-contract code); every consumer records the chosen and
+excluded images and the per-repeat counts (`fov_scope`), also when no subset was given (`all`). A
+subset may leave out images or whole repeats only as that record shows: the bricks drop nothing
+else);
 `A_MASK_NOT_INSTANCES` (a `binary` mask requested as an object set without the explicit recorded per-request conversion of §4.5c, or a `parent_labels` mask requested as an object set, with or without `parent_labels_support`, §4.5b); `A_MASK_UNCHECKED` (a run uses a mask file whose representation check is `not yet checked`, §4.5a); `A_RGB_NOT_SUPPORTED` (a request on a described run includes the channels of an RGB unit, §4.4b, for a brick whose manifest does not declare `rgb_support = true`, or that does not declare it at all); `A_DRAFT_REFUSED` (§10: `RunInputs` given a draft or an unconfirmed file). Each biological repeat is
 classified **fully represented**, **partially represented** or **unavailable** per request and
 recorded in the run manifest. Consumers resolve channels by canonical ID per unit, never by C
