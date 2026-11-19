@@ -4,7 +4,7 @@
   FIXES, ten points; [revision](#revision-after-the-external-review-of-18-november-2026)). The owner
   accepted the recommendations of open questions 1-7 on 17 November 2026
   ([owner decisions](#owner-decisions-of-17-november-2026)), and on 19 November 2026 decided that
-  MorphoCoverage takes feature tables, not a run folder ([MorphoCoverage](#morphocoverage)).
+  MorphoCoverage takes feature tables, not a run folder, and gets no new MorphoBricks dependency ([MorphoCoverage](#morphocoverage)).
   Aligned with ADR 0002 AR12 (resolver contract version 4, Spec #52). Not implemented. Owner
   request of 16 November 2026: "an easy entry for all the bricks, so that we can make it as easy as
   possible to run on a validated folder" (milestone one, after the binary-masks release wave;
@@ -226,7 +226,9 @@ problem, not a folder state.
 
 Each code has one constructor in `morphobricks_normalization.contracts`, beside
 `refuse_resolver_version` (ADR 0005 BM10): normalization is the lowest brick and every brick that
-reads a run folder pins it. Proposed messages:
+reads a run folder pins it. MorphoCoverage, which reads no run folder and pins no MorphoBricks
+library (owner decision of 19 November 2026), copies the texts of the codes it raises
+([MorphoCoverage](#morphocoverage)). Proposed messages:
 
 | Code | When | Message (proposed) |
 |---|---|---|
@@ -401,10 +403,13 @@ before. MorphoCoverage validates the table structure and goes with it."), supers
   (`PairingRefused`), and one acquisition per report (the acquisition identity of MorphoCoverage
   #637, `_acquisition.py`: results of different acquisitions are never assembled). No
   `ENTRY_UPSTREAM_*` code exists: a path that is not a feature output fails these structure checks.
-- **Its dependencies.** Normalization stays pinned for the `ENTRY_*` constructors (owner decision of
-  17 November 2026, Q4); preprocessing is not a dependency. At MorphoCoverage `main` `209b9be` it
-  declares neither (`pyproject.toml`: matplotlib, numpy, pandas, scikit-learn, scipy, umap-learn) and
-  imports neither, so the normalization pin is added with its J2 PR.
+- **Its dependencies: no new MorphoBricks dependency** (owner decision of 19 November 2026,
+  superseding the 17 November "MorphoCoverage pins normalization", Q4). It imports neither
+  normalization nor preprocessing and keeps its current dependencies (at `main` `209b9be`,
+  `pyproject.toml`: matplotlib, numpy, pandas, scikit-learn, scipy, umap-learn). The `ENTRY_*`
+  refusals it raises for its own choices and output carry the code and the exact text of
+  normalization's constructors, copied into MorphoCoverage; its conformance test compares them with
+  normalization's constructors in the test environment only, never at run time.
 - **Output and record.** Its output is named `<feature output name>__morphocoverage` next to the
   feature output (RE9 applied to its input), never inside it. The choice `features_from` is gone (the
   path names the output). Its record lists the SHA-256 of each input table it read and the feature
@@ -499,7 +504,7 @@ reader added later joins the helper in the same PR. "0 reads" means 0 counted ca
 | E5 No hidden default | Every `default` of the declaration is on a field whose `name`, `type` and value are a row of the closed list, with its citation; the field-by-field inventory test passes (every configuration field, CLI flag and manifest entry declared or refused); a run given only the required choices records every other one as `spec_default`, `notebook_default` or `fixed` |
 | E6 Rerun | A second identical call reuses (0 reads, no write, `reused = true`); one changed choice is `ENTRY_OUTPUT_EXISTS` naming it (another `fov_subset` included: its `scope_digest` differs); so is each of: a changed version of a library in the identity, a changed model weight file, another device, another thread setting; a changed output file, an extra file or a link in the output is `ENTRY_OUTPUT_INCOMPLETE`; an editable install, an installed file that differs from its `RECORD` hash, and a moved experiment folder whose content was not verified are `ENTRY_IDENTITY_UNCERTAIN`; a moved, content-verified folder with equal content is reused; changed image content is refused at step 2 (`RUN_FOLDER_STALE`); provider checks run before reuse (a missing weight file refuses even when an equal output exists); two concurrent calls for one output publish exactly one output, the other reuses or refuses, and no staging folder is left |
 | E7 Orchestrator | MorphoFeature checks each brick's choices against that brick's declaration (one wrong name or value refused per brick, before any read); `--brick morphoobjects` and `--brick morphoembed` meet E1-E6 |
-| E8 Coverage | MorphoCoverage given a feature output computes from its tables alone: it imports no preprocessing module (an import scan) and opens no run folder; a malformed export, a description block that does not fit the tables, or results of two acquisitions are refused with its own codes before anything is computed; a run folder given in place of a feature output is refused by the same structure checks; E4-E6 apply to its own output |
+| E8 Coverage | MorphoCoverage given a feature output computes from its tables alone: it imports no normalization or preprocessing module (an import scan of its package and its declared dependencies unchanged) and opens no run folder; the `ENTRY_*` texts it raises equal normalization's constructors' (in its test environment only); a malformed export, a description block that does not fit the tables, or results of two acquisitions are refused with its own codes before anything is computed; a run folder given in place of a feature output is refused by the same structure checks; E4-E6 apply to its own output |
 
 ## Migration per brick (J2)
 
@@ -516,7 +521,7 @@ above for its brick.
 | J2 | MorphoRelate | `morphorelate run <run_folder>` and `morphorelate.run_folder`; the configuration becomes the choices file, `init` becomes `--write-choices`, `inspect` becomes `check`; the restated channel indices and the Z placeholder go (the resolver gives the indices; Z-stacks are refused upstream); `analysis.backend` and `random_seed` are choices; RE9 and RE10 instead of replacing an earlier output |
 | J2 | fiberfeatures | `fiberfeatures.run_folder`, a `fiberfeatures` console script, file outputs (features, patches, status) with the record; one `analysis_mode` with no default; `sample_id_from` a choice with no default; `preset` renamed `stain_preset`; the length unit read from the run, the lengths asked on a calibrated run; the device asked; channels explicit (`"all"` allowed) |
 | J2 | MorphoFeature | `morphofeature run <run_folder> --choices FILE`, `--brick`, `morphofeature.run_folder`; the run-file keys that the folder gives leave the choices; `fit_from_histograms` asked; checks of every brick's declaration |
-| J2 | MorphoCoverage | a `morphocoverage` console script with `run <feature_output>` (no run folder, no preprocessing dependency; owner decision of 19 November 2026); its structure checks as they are; the normalization pin for the `ENTRY_*` constructors; the saved answers as recorded choices |
+| J2 | MorphoCoverage | a `morphocoverage` console script with `run <feature_output>` (no run folder, no preprocessing dependency; owner decision of 19 November 2026); its structure checks as they are; no new MorphoBricks dependency (owner decision of 19 November 2026), the `ENTRY_*` texts copied and tested against normalization's; the saved answers as recorded choices |
 
 **Order** (refreshed on 19 November 2026). Every brick's ADR 0005 release is tagged: CellPatcher
 v0.8.0, MorphoObjects, MorphoEmbed and MorphoRelate v0.6.0, fiberfeatures v0.8.0, MorphoFeature v0.5.0
@@ -545,7 +550,8 @@ MorphoFeature's entry output.
 ## Owner decisions of 17 November 2026
 
 The owner accepted the recommendation of each of open questions 1-7 below; Q5 and the review's
-refinement of Q4 were superseded on 19 November 2026 ([MorphoCoverage](#morphocoverage)). The external review of
+refinement of Q4 were superseded on 19 November 2026, and Q4 itself (the normalization pin) on the
+same day ([MorphoCoverage](#morphocoverage)). The external review of
 18 November 2026 agreed with all of them, and refined three, as recorded here:
 
 | # | Decision | Refinement by the review, applied in this text |
@@ -553,7 +559,7 @@ refinement of Q4 were superseded on 19 November 2026 ([MorphoCoverage](#morphoco
 | Q1 | MorphoObjects and MorphoEmbed are run through `morphofeature run --brick` | An explicit exception to J0's one entry per brick (RE11) |
 | Q2 | No brick default in the entry; optional, versioned named recipes | none |
 | Q3 | One output per brick and run folder, under the fixed name | Exclusive publication ([publication](#publication)) |
-| Q4 | MorphoCoverage pins normalization | The review's refinement (pin preprocessing too, for `RunInputs.open`) is **superseded by the owner on 19 November 2026**: no preprocessing dependency ([MorphoCoverage](#morphocoverage)) |
+| Q4 | ~~MorphoCoverage pins normalization~~ **Superseded on 19 November 2026:** MorphoCoverage gets no new MorphoBricks dependency (neither normalization nor preprocessing); it copies the `ENTRY_*` texts it raises, tested against normalization's constructors | The review's refinement (pin preprocessing too) is superseded with it ([MorphoCoverage](#morphocoverage)) |
 | Q5 | ~~MorphoCoverage takes the run folder, with `features_from`~~ **Superseded on 19 November 2026:** it takes a feature brick's output and validates the tables' structure | n/a |
 | Q6 | One notebook-card renderer, in preprocessing | It reads only the static declaration; MorphoCoverage, which does not depend on preprocessing, renders its own card from the same declaration format |
 | Q7 | Brick defaults in the in-memory APIs are left to each brick's AR10 sweep | The entry never inherits them (RE5) |
@@ -597,8 +603,9 @@ Each with the recommendation first. Questions 1-7 are decided
    (several outputs side by side automatically, names that are harder to read).
 4. **MorphoCoverage's dependencies.** *Recommended:* MorphoCoverage pins normalization for the
    `ENTRY_*` constructors (a small dependency, one shared text). Alternative: it copies the messages
-   verbatim with a source-scan test. **Decided (17 November 2026): normalization pinned; and
-   (19 November 2026) no preprocessing dependency.**
+   verbatim with a source-scan test. **Decided (19 November 2026, superseding the 17 November
+   choice of the pin): no new MorphoBricks dependency;** MorphoCoverage copies the messages, tested
+   against normalization's constructors in its test environment.
 5. **MorphoCoverage's argument.** *Recommended at first:* the run folder, with the feature output
    found by RE9 (`features_from`). Alternative: the feature output folder itself. **Decided
    (19 November 2026): the feature output itself;** MorphoCoverage validates the tables' structure
