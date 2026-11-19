@@ -107,7 +107,7 @@ Source repeat/technical-repeat labels are exact provenance and must not be parse
 
 For each requested canonical channel/object set and requested analysis scope, classify every imaging unit as **present**, **absent**, or **unresolved/conflicting**. At the biological-repeat level distinguish **fully represented**, **partially represented**, and **unavailable**. Record this in the run manifest and user-facing preflight.
 
-Default behavior: refuse incomplete requested scope. An explicit user-selected eligible subset may proceed only with recorded scope and coverage; do not silently exclude FOVs, change weights, impute missing channels, or turn technical-repeat count into biological N.
+Default behavior: refuse incomplete requested scope. An explicit user-selected eligible subset may proceed only with recorded scope and coverage (the request's `fov_subset` and the consumers' `fov_scope` record, ADR 0002 AR12); do not silently exclude FOVs, change weights, impute missing channels, or turn technical-repeat count into biological N.
 
 Pooling, fitted normalization, CellPatcher exports, MorphoFeature features, MorphoEmbed scaling and MorphoCoverage statistics must use **canonical channel identity** and correct biological/FOV grouping, never source C index alone.
 
@@ -189,6 +189,7 @@ shared 2-D capabilities ([conformance plan §4](conformance-plan.md#4-later-stag
 - Imports no brick, CellPatcher or provider module; runs no kernel; reads no pixel; writes nothing; never guesses. Its own conformance suite runs on the Spec fixtures through `RunInputs`.
 - Ships in preprocessing v0.5.1 with `Fov.image_type`, the partial-mask test helper and the lab-tool links input, and nothing else besides the AR10 removals, which are the first change of v0.5.1.
 - **Resolver contract version 2** (ADR 0001 PL1, 11 November 2026; ADR 0002): `parent_labels` masks are described (experiment-v1 §4.5b); `Capabilities` gains `parent_labels_support`; in the role `region` a consumer without it gets the mask as an area with the recorded marker `conversion = "parent_labels_as_area"`, and as objects the mask is `A_MASK_NOT_INSTANCES`. No code is added. Preprocessing ships it with its describe, mask-step and `RunInputs` support for the value, after its Spec re-pin.
+- **Resolver contract version 4** (ADR 0002 AR12, owner decision of 17 November 2026): `Request.fov_subset`, the user's explicit list of FOV keys (None = every image, recorded as `all`); every classification runs over the chosen images, so a subset without the images that lack a requested channel is complete; a key the run does not have is `A_FOV_NOT_IN_RUN`; every consumer records `fov_scope` (chosen and excluded keys, per-repeat counts, `scope_digest`), and the digest is part of every output and cache identity. Consumers accept exactly `{4}`.
 
 **S2.1 MorphoFeature**
 - Consume the resolver: the per-FOV `ChannelCatalogue` comes from the selection's channel indices; the global run-level channel mapping assumption is removed.
