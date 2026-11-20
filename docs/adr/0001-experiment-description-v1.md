@@ -10,7 +10,7 @@
   [ADR 0005](0005-binary-masks.md) (proposed, 15 November 2026): the connectivity of a binary
   mask's pieces and objects is 8, fixed (BM1); the stale "4-connected" evidence of PL1 is marked;
   D10's value rule becomes {0, v} for one positive v (BM11).
-  Amended by [ADR 0006](0006-fast-channel-layout.md) (proposed, 16 November 2026, FC1-FC4): fast
+  Amended by [ADR 0006](0006-fast-channel-layout.md) (accepted 20 November 2026; decisions of 16 November 2026, FC1-FC4): fast
   mode, one channel list stated once for the experiment (`channel_layout`), is the default for a new
   description; the per-unit tagging of the "Consequences" below stays available as the strict mode.
   D9 and AQ7 apply unchanged to fast mode's header check.

@@ -1,11 +1,11 @@
 # ADR 0006: fast-mode channel layout (one channel list for the experiment)
 
-- **Status:** **Proposed** (owner decisions of 16 November 2026, FC1-FC4 below, final and not to be
-  reopened by the review). What this ADR adds is their encoding: the description field, how the
+- **Status:** **Accepted** by the owner on **20 November 2026** (owner decisions of 16 November 2026,
+  FC1-FC4 below, final and not to be reopened by the review). What this ADR adds is their encoding: the description field, how the
   confirmation is represented, the refusal code, its place among the existing codes, and the
   interactions with RGB, heterogeneous layouts, reconciliation and aliases. Those choices are
-  listed under [modelling choices](#modelling-choices-for-the-owners-review). Nothing is
-  implemented; preprocessing implements it after this ADR is accepted and its Spec pin moves.
+  listed under [modelling choices](#modelling-choices-for-the-owners-review). Preprocessing
+  implements it (draft PR #362 at the time of acceptance) with its Spec pin at or after this acceptance.
 - **Amends** the normative [`experiment-v1.md`](../experiment-v1.md): §3.3 (NFC), §4.1 (a new
   optional top-level table), §4.3 and the new §4.3a, §4.4 (a new unit key), §6 (two `E_*` codes,
   four extended), §7 (an amendment of v1, no new version), §8 (`R_FAST_LAYOUT_CONTRADICTION` and its
