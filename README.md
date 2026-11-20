@@ -217,7 +217,7 @@ writer or a brick that consumes the description.
   one policy for binary masks: 8-connected and fixed, one labeller in preprocessing with one
   recorded conversion, one region checker, `empty_region` for an empty region, and the PR order per brick;
   amends experiment-v1 §4.5, §4.5b and §8 (a `binary` file holds values in {0, v} for one positive v).
-- [ADR 0006](docs/adr/0006-fast-channel-layout.md) (**proposed**, owner decisions of 16 November 2026):
+- [ADR 0006](docs/adr/0006-fast-channel-layout.md) (**accepted** 20 November 2026; owner decisions of 16 November 2026):
   fast mode, the default for a new description: one ordered channel list stated once for the
   experiment (`channel_layout`), materialised in every unit with `channels_from`; matching headers are
   trusted, and every contradicting image is listed before any pixel read
