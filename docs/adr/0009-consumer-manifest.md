@@ -16,7 +16,11 @@
   ([responses](#review-aw--responses)). **Revised a third time** after review *ax* (24 November
   2026, verdict "do not accept", three remaining blockers on encoding only and file items): each was
   checked against the ADR text and the cited code and holds; the encoding is repaired, no owner
-  decision is reopened ([responses](#review-ax--responses)).
+  decision is reopened ([responses](#review-ax--responses)). **Revised a fourth time** after review
+  *az* (24 November 2026, verdict "do not accept", three remaining blockers on encoding only and file
+  items): each was checked against the ADR text and the Python standard library and holds; the
+  metadata reader now accounts for every source Python's metadata search could use, and the
+  re-check names invalid sources; no owner decision is reopened ([responses](#review-az--responses)).
 - **Absorbs** morphobricks-preprocessing#438 ("Move the Z-stack gate from the description step to
   the hand-off"): its owner decisions of 23 November 2026 are CM5 here, and this ADR states how a
   chosen consumer's manifest interacts with #438's mixed-run warning. It does **not** write #438's
@@ -322,44 +326,116 @@ Review *ax* B1. `importlib.metadata.distributions()` consults `sys.meta_path` an
 optional `find_distributions(context)` (Python's documented "extending the search algorithm"), so it
 is not inert even when no module is imported. Consumer discovery, the snapshot verifier and the
 snapshot generator therefore share one filesystem-only **metadata reader**. It calls no finder, path
-hook, loader, `EntryPoint` or `Distribution` method; it reads files as data:
+hook, loader, `EntryPoint` or `Distribution` method, and no `__hash__`, `__eq__`, `__str__`,
+`__fspath__` or `__getattr__` of an object it did not create; it reads files as data.
 
-1. **Roots.** A copy of `sys.path` taken once when discovery starts (the interpreter has already run
-   site processing). Each `str` entry naming an existing directory is a root (the empty entry is the
-   current directory). `sys.path_hooks` and `sys.path_importer_cache` are not consulted.
-2. **Distributions.** In each root, the direct children named `*.dist-info` that are directories and
-   not symbolic links (`lstat`). Name and version are read from the regular file `METADATA` (its
-   `Name` and `Version` headers, by the reader's own header parser) and must agree with the directory
-   name after name normalization, else the distribution is ambiguous (step 3). Entry points are read
-   from the regular file `entry_points.txt` by the reader's own parser of the entry-points format
-   (sections, then `name = value`); the installed-file inventory is the regular file `RECORD`, parsed
-   as CSV, each listed path resolved against the root (what a path distribution's `locate_file`
-   computes; computed here, not called).
-3. **Stated limits: refused, never silently skipped.** Only `*.dist-info` directories in directory
-   roots are read. Metadata the reader does not read is still looked at as data where that is
-   inert, and reported when it declares `morphobricks.consumers` or a snapshot's
-   `entry_point_group`: a `*.egg-info` directory or file in a root, a `.egg` directory, and a root
-   that is a zip archive (its `*.dist-info/entry_points.txt` and `*.egg-info/entry_points.txt` read
-   with the standard library's `zipfile` as bytes) are each `E_CONSUMER_SOURCE_UNSAFE`, "unsupported
-   metadata source", naming the path. Two `*.dist-info` with the same normalized name under different
-   roots, one of them declaring a relevant group, are `E_CONSUMER_SOURCE_UNSAFE`, "ambiguous
-   distribution", naming both (Python's first-on-`sys.path` choice is not copied: nothing is chosen
-   by order). A consumer entry point so reported makes that consumer unavailable; a snapshot member
-   so reported makes the consumer whose snapshot names the group unavailable, and the generator
-   refuses to write.
-4. **Custom metadata finders.** The reader inspects, without calling anything, each `sys.meta_path`
-   entry's class (the entry itself when it is a class; `inspect.getattr_static`, which runs no
-   descriptor and no `__getattr__`). A finder other than the standard library's
-   `importlib.machinery.PathFinder` that defines `find_distributions` may make distributions visible
-   that the reader cannot see, and running it to find out is what this rule forbids. So it is
-   reported, not run and not ignored: every consumer with a `[snapshot]` is unavailable
-   (`E_CONSUMER_SOURCE_UNSAFE`, "a metadata finder that discovery does not run", naming the finder's
-   module and qualified class name), because the completeness of its member set (O4: **any**
-   installed provider) cannot be proved; and the generator refuses to write a snapshot. A consumer
-   without a `[snapshot]` whose file the reader found and bound stays available; the discovery
-   details name the finder. A provider visible only through such a finder is therefore never silently
-   left out of an O4 value. Finders that define only `find_spec` (setuptools' editable finders, the
-   P55 (d) trap) are irrelevant to the reader and are never called.
+**Completeness (review *az* B1, B2).** Every place Python's own metadata search could find a
+distribution is **accounted for**: it is read, or it is found irrelevant by reading it as data, or it
+is recorded as an **unknown source** with its path (or finder) and a named reason. Nothing is
+skipped. Python's search has two parts, and the reader covers each: the standard `PathFinder`, whose
+`find_distributions` searches the `sys.path` entries themselves (directories and zip files; it
+delegates to `importlib.metadata.MetadataPathFinder` and consults no path hook and no
+`sys.path_importer_cache` entry, CPython `importlib/_bootstrap_external.py`, `PathFinder.find_distributions`),
+which steps 1-3 reproduce as data; and every other `sys.meta_path` entry, which step 4 classifies.
+Path hooks are therefore not a metadata source: they take part only in imports, which discovery
+does not perform, and a non-standard path hook (setuptools' editable installs add one) does not
+make anything unavailable.
+
+1. **Roots.** `sys.path` and `sys.meta_path` are read once when discovery starts (the interpreter
+   has already run site processing); either one not exactly a `list` is an unknown source. Each
+   `sys.path` entry is classified, by its exact type (`type(entry)`, never `isinstance`):
+   - exactly `str`: its path (the empty entry is the current directory);
+   - exactly the standard library's concrete `pathlib` path class (`PosixPath`, `WindowsPath`):
+     its path, from the standard library's own string conversion, because Python's metadata search
+     honours such entries though imports ignore them (Python 3.11 documentation, *Distribution
+     Discovery*);
+   - anything else (`bytes`, a `str` or `pathlib` subclass, any other object): an unknown source,
+     "unsupported `sys.path` entry", naming its index and type; its methods are not called.
+
+   A path that does not exist, or names a regular file that is not a zip archive, contributes
+   nothing (as in Python's own search). A directory is a **directory root**; a regular file that is
+   a zip archive is a **zip root**; a path that exists but cannot be listed or read is an unknown
+   source, "unreadable root". The same physical directory reached twice (equal device and inode, or
+   the same resolved path) is one root, not two installations.
+2. **Metadata entries.** In each directory root, every direct child whose name ends, ignoring case,
+   in `.dist-info` or `.egg-info` is classified (these are the children Python's search indexes);
+   in a root whose own name ends in `.egg`, so is its `EGG-INFO` child. In a zip root, the same
+   names among its members, listed with the standard library's `zipfile` as bytes:
+   - a `*.dist-info` directory, not a symbolic link (`lstat`), with a regular `METADATA` and, when
+     present, a regular `entry_points.txt`: **read**. Name and version come from `METADATA` (the
+     reader's own header parser) and must agree with the directory name after normalization, else
+     "ambiguous distribution"; entry points from `entry_points.txt` (the reader's own parser:
+     sections, then `name = value`); the installed-file inventory from the regular file `RECORD`,
+     parsed as CSV, each path resolved against the root (what a path distribution's `locate_file`
+     computes; computed here, not called);
+   - anything else (a `*.dist-info` that is a symbolic link or has a symbolic-link
+     `entry_points.txt`, a `*.egg-info` directory or file, an `EGG-INFO`, any entry in a zip root):
+     **not read as a distribution**. Its `entry_points.txt` (for an `*.egg-info` file: none, so it
+     declares nothing) is read once as bytes, following a link only to read those bytes, to decide
+     **relevance** only.
+
+   A **relevant declaration** is a `morphobricks.consumers` entry point (relevant to the ID it
+   names) or an entry point in a group that some found `[snapshot]` names. A not-read entry whose
+   bytes declare nothing relevant is irrelevant and named in the discovery details. One that
+   declares something relevant is `E_CONSUMER_SOURCE_UNSAFE`, "unsupported metadata source",
+   naming the path: a candidate of each consumer ID it declares (so that ID is invalid or a
+   conflict, never available and never won by a bundle, O2), and a stale member of each snapshot
+   naming its group. An entry whose relevance cannot be decided from bytes (unreadable, not UTF-8,
+   not parseable by the reader's entry-points parser), and a read `*.dist-info` with an unreadable
+   or malformed `METADATA` or `entry_points.txt`, is an unknown source, "unreadable metadata",
+   naming the path.
+3. **Ambiguity.** Two read `*.dist-info` with the same normalized name in different roots, one of
+   them declaring something relevant, are `E_CONSUMER_SOURCE_UNSAFE`, "ambiguous distribution",
+   naming both (Python's first-on-`sys.path` choice is not copied: nothing is chosen by order); so
+   are two in one root. Aliases of one physical root (step 1) are not two distributions.
+4. **Other `sys.meta_path` entries.** The standard library's own finder objects
+   (`importlib.machinery.BuiltinImporter`, `FrozenImporter`, `PathFinder`, and on Windows
+   `WindowsRegistryFinder`), compared by identity (`is`), are standard: the first two and the
+   registry finder have no metadata search, `PathFinder`'s is steps 1-3. Every other entry is
+   **provably without metadata capability** only when all of the following hold, each established by
+   identity comparisons, `type()` and reading class namespaces through `type`'s own descriptors
+   (no `getattr`, no `hasattr`, no `inspect.getattr_static` result alone):
+   - the **lookup classes** are the method resolution order of `type(entry)`, and also of the entry
+     itself when it is a class; every lookup class whose attribute lookup applies (that of
+     `type(entry)`) is a class defined in Python source, or `object` or `type`;
+   - no lookup class has `find_distributions`, `__getattr__` or `__getattribute__` in its own
+     namespace, except `object`'s and `type`'s own `__getattribute__`;
+   - for an instance: no lookup class defines `__dict__` other than the interpreter's own
+     `__dict__` slot descriptor, and the instance dictionary, read through that descriptor, has no
+     key that is exactly the `str` `find_distributions` (keys that are not exactly `str` make the
+     finder unknown).
+
+   Then Python's attribute lookup provably finds no `find_distributions` on it, and it is ignored
+   (setuptools' editable finders and `_distutils_hack`'s finder, which define `find_spec` only,
+   qualify; so does the P55 (d) trap). Any other entry, whatever it defines (a `find_distributions`
+   on its class or instance, a `__getattr__`, a C-implemented type, an opaque namespace), is an
+   unknown source, "a finder discovery does not run", naming its index, module and qualified class
+   name. It is never called and its attributes are never looked up.
+
+**What an unknown source does.** An unknown source can hide any distribution, so the reader's result
+is **incomplete**, and an incomplete result is never used as if complete:
+
+- every consumer is unavailable: an ID with candidates is `R_CONSUMER_MANIFEST_INVALID` with
+  `E_CONSUMER_SOURCE_UNSAFE` ("candidate completeness unknown") naming every unknown source and its
+  reason, unless its known candidates are already a conflict, which takes precedence; an ID with no
+  candidate is `R_CONSUMER_NOT_FOUND`, naming the unknown sources in its detail. A bundle is never
+  accepted while a package declaration of its ID could be hidden (O2), and a snapshot never
+  verifies while a member could be hidden (O4);
+- the generator refuses to write a snapshot, naming the same sources;
+- a run with no consumer named is unaffected (O1): nothing is checked, and the report lists the
+  consumers as unavailable with that reason.
+
+**Stated limits.** The reader reproduces Python's documented metadata search for the Python versions
+preprocessing supports; a change to that search in a later Python is a change to this reader,
+re-verified by P55 on each supported version. It does not detect replacement of standard-library
+objects themselves (a patched `PathFinder.find_distributions`, a patched `importlib.metadata`), nor
+code that `.pth` files or `sitecustomize` already ran at start-up; these are outside what a
+filesystem reader can observe, and discovery does not call them either. Only wheel-layout
+`*.dist-info` directories are supported as consumer or member sources; everything else is refused
+by name or makes the result incomplete. The rules are conservative by design: an unusual
+environment (a symbolic-link `site-packages` layout, a custom metadata finder) makes consumers
+unavailable with a named reason rather than checked against a possibly incomplete set; *No consumer
+check* remains.
 
 The reader is the one MorphoFeature's generator uses too (same roots, same limits, same reasons), so
 a member set the verifier accepts is the one the generator hashed.
@@ -410,9 +486,10 @@ order; the three outcomes are mutually exclusive:
    source, SHA-256 and, if any, its own `E_*` reasons.
 2. **Invalid** (`R_CONSUMER_MANIFEST_INVALID`): not a conflict, and the one byte content, or any of its
    sources, fails a rule (file rules, `E_CONSUMER_SOURCE_UNSAFE`, `E_CONSUMER_ENTRY_POINT`,
-   `E_CONSUMER_SNAPSHOT_STALE`). Every reason of every candidate is listed. A valid copy from another
-   source does not hide an invalid one.
-3. **Available:** one byte content, valid, every source sound. Identical copies (package and bundle,
+   `E_CONSUMER_SNAPSHOT_STALE`), or the candidates are incomplete (the
+   [metadata reader](#the-metadata-reader-no-finder-runs) recorded an unknown source). Every reason
+   of every candidate is listed. A valid copy from another source does not hide an invalid one.
+3. **Available:** one byte content, valid, every source sound, the candidates complete. Identical copies (package and bundle,
    or two bundles) are **one** consumer whose record lists every source.
 
 An ID with no candidate at all is **not found** (`R_CONSUMER_NOT_FOUND`) and only then. Nothing is
@@ -473,8 +550,11 @@ evidence, never the type (ADR 0001 AQ6, RH1). So the check runs in two phases, b
 
 A phase-2 rule that is pending is neither a pass nor a refusal: nothing is counted as channels before
 the type is confirmed, and the image-type controls stay reachable after phase 1 so that the user can
-reach the declaration the rules depend on. One `R_CONSUMER_DIMENSIONS_NOT_ALLOWED` is reported per
-phase that finds offenders, each listing every offending image with every kind that phase found.
+reach the declaration the rules depend on. In the notebook, each phase that finds offenders shows
+them at once (interactive, phase-local reporting: every offending image with every kind that phase
+found). At a publication (`describe`, `run`) there is **one** `R_CONSUMER_DIMENSIONS_NOT_ALLOWED`
+combining every offence of both phases for the confirmed state, every image with every kind (the
+refusal table; ADR 0001 AQ2), never one per phase.
 Naming, tagging and publication open only when both phases passed. Deciding the channel rules from
 the header at axis time was rejected: it would guess a user declaration (an RH1 override unit says
 the opposite of its header; under `cv08`, counting a three-sample MINISBLACK scanner TIFF as `C = 3`
@@ -499,7 +579,8 @@ consumer" in general:
   description step) publishes a description, and immediately before `run` (notebook step 7, CLI
   `run`) reads any pixel and again before it publishes the run manifest, preprocessing re-discovers
   the ID, re-reads its bytes once and recomputes the fingerprint from the state it is about to
-  commit. It publishes only when the ID is available, its SHA-256 and sources equal the pinned ones,
+  commit. It publishes only when the ID is available (its bytes **and every source** valid, the candidates
+  complete), its SHA-256 and sources equal the pinned ones,
   the fingerprint equals the checked one, and the rules of those bytes pass; the record then names
   those bytes. Otherwise exactly **one** class applies, decided in this order (review *aw* B4; the
   same order as [classifying one ID](#discovery-cm1), so the two rules never disagree):
@@ -509,14 +590,19 @@ consumer" in general:
      with source and SHA-256, and listing `E_CONSUMER_CHANGED_SINCE_CHECK` (pinned and current
      SHA-256) among its reasons;
   3. otherwise, the candidates are not a conflict and the **pin no longer holds** for any of these
-     reasons, all of which are listed: the current byte content fails a rule of the classification;
-     its SHA-256 differs from the pinned one; its source list differs from the pinned one; or the
-     recomputed fingerprint differs from the checked one, **also when** the bytes and sources are
-     identical and valid and the changed state would pass the rules (for example a changed `T` size
-     or exclusion list): `R_CONSUMER_MANIFEST_INVALID` with `E_CONSUMER_CHANGED_SINCE_CHECK` (naming
-     the pinned and current SHA-256, the pinned and current sources, or the fingerprint inputs that
-     changed) beside every other reason found. The rules are not re-applied to the changed state to
-     let it pass: a pin is valid only for the state it was checked for.
+     reasons, all of which are listed: the current candidate classification is **invalid** (any
+     failure of the byte content **or of any source**, for example a source whose inventory hash no
+     longer matches the unchanged bytes, whose file is no longer in its distribution's inventory, or
+     an unknown source making the candidates incomplete, review *az* B3; every reason of every
+     candidate listed); its SHA-256 differs from the pinned one; its source list differs from the
+     pinned one; or the recomputed fingerprint differs from the checked one, **also when** the
+     bytes and sources are identical and valid and the changed state would pass the rules (for
+     example a changed `T` size or exclusion list): `R_CONSUMER_MANIFEST_INVALID` with
+     `E_CONSUMER_CHANGED_SINCE_CHECK` (naming the pinned and current SHA-256, the pinned and current
+     sources, the fingerprint inputs that changed, or, when the SHA-256 and source descriptors are
+     unchanged, that the source verified at the check no longer validates) beside every other
+     reason found. The rules are not re-applied to the changed state to let it pass: a pin is valid
+     only for the state it was checked for.
 
   Nothing is published in any of the three; the fix is to check again, which in the notebook is a
   visible step the user confirms. A changed file is never silently adopted and the record never
@@ -532,7 +618,7 @@ four (O8); every other distinction is an `E_*` reason or a message detail.
 
 | Code | Meaning |
 |---|---|
-| `R_CONSUMER_MANIFEST_INVALID` | The named consumer has candidates, is not a conflict, and either its bytes or a source fail, or, at a pinned re-check, its pinned check no longer holds: the current SHA-256, source list or candidate-state fingerprint differs from the pinned one, also when the current bytes and sources are valid (review *ax* B3). Reasons: the experiment-v1 §2/§6 codes reused with their meaning (`E_FILE_ENCODING`, `E_TOML_SYNTAX`, `E_DUPLICATE_KEY`, `E_TYPE`, `E_UNKNOWN_FIELD`, `E_MISSING_FIELD`, `E_SCHEMA_ID`, `E_SCHEMA_VERSION_MISSING`, `E_SCHEMA_VERSION_UNSUPPORTED`, `E_ID_SYNTAX`, `E_TEXT_EMPTY`, `E_VALUE_RANGE`) and new ones: `E_CONSUMER_ID_MISMATCH` (the entry point's or the bundle declaration's ID is not the file's `consumer`), `E_CONSUMER_RULE_CONTRADICTION` (a rule set that admits no image, or a self-withdrawn mixed permission; the two cases of [`[dimensions]`](#the-file-morphobricks_consumertoml)), `E_CONSUMER_ENTRY_POINT` (a consumer entry-point value that is not one top-level package name, or a snapshot member's value that is not `MODULE:ATTRIBUTE`), `E_CONSUMER_SOURCE_UNSAFE` (not in the declaring distribution's inventory, outside its package, a symbolic link on the way, not a regular file, a hash differing from the inventory, a namespace or ambiguous package, an unsupported metadata source or ambiguous distribution, a metadata finder that discovery does not run), `E_CONSUMER_SNAPSHOT_STALE` (the `[snapshot]` does not match the installed members), `E_CONSUMER_CHANGED_SINCE_CHECK` (the bytes, sources or candidate state differ from what was checked; also listed under a conflict found at a re-check). Makes that consumer unavailable; blocks only when it is named |
+| `R_CONSUMER_MANIFEST_INVALID` | The named consumer has candidates, is not a conflict, and either its bytes or a source fail (also when the bytes are valid and unchanged; at a re-check this is case 3, review *az* B3), or its candidates are incomplete because the metadata reader recorded an unknown source, or, at a pinned re-check, its pinned check no longer holds: the current SHA-256, source list or candidate-state fingerprint differs from the pinned one, also when the current bytes and sources are valid (review *ax* B3). Reasons: the experiment-v1 §2/§6 codes reused with their meaning (`E_FILE_ENCODING`, `E_TOML_SYNTAX`, `E_DUPLICATE_KEY`, `E_TYPE`, `E_UNKNOWN_FIELD`, `E_MISSING_FIELD`, `E_SCHEMA_ID`, `E_SCHEMA_VERSION_MISSING`, `E_SCHEMA_VERSION_UNSUPPORTED`, `E_ID_SYNTAX`, `E_TEXT_EMPTY`, `E_VALUE_RANGE`) and new ones: `E_CONSUMER_ID_MISMATCH` (the entry point's or the bundle declaration's ID is not the file's `consumer`), `E_CONSUMER_RULE_CONTRADICTION` (a rule set that admits no image, or a self-withdrawn mixed permission; the two cases of [`[dimensions]`](#the-file-morphobricks_consumertoml)), `E_CONSUMER_ENTRY_POINT` (a consumer entry-point value that is not one top-level package name, or a snapshot member's value that is not `MODULE:ATTRIBUTE`), `E_CONSUMER_SOURCE_UNSAFE` (not in the declaring distribution's inventory, outside its package, a symbolic link on the way, not a regular file, a hash differing from the inventory, a namespace or ambiguous package, an unsupported metadata source or ambiguous distribution, candidate completeness unknown: an unsupported `sys.path` entry, an unreadable root or metadata, or a finder discovery does not run), `E_CONSUMER_SNAPSHOT_STALE` (the `[snapshot]` does not match the installed members), `E_CONSUMER_CHANGED_SINCE_CHECK` (the bytes, sources or candidate state differ from what was checked; also listed under a conflict found at a re-check). Makes that consumer unavailable; blocks only when it is named |
 | `R_CONSUMER_MANIFEST_CONFLICT` | The named ID collides by case with another, is declared by two distributions, or its candidates hold more than one SHA-256 (package and bundle, O2; two bundles), also when found at a pinned re-check. Names every candidate with source, SHA-256 and its own reasons |
 | `R_CONSUMER_NOT_FOUND` | The consumer named (`--consumer`, or a reopened experiment's saved pick) has **no** candidate; names the available IDs, any case-folded near match, and the unavailable ones with their refusal |
 | `R_CONSUMER_DIMENSIONS_NOT_ALLOWED` | Included images break the chosen consumer's `[dimensions]`. **One** refusal lists **every** offending image (FOV key, path) with **every** per-image kind found in it (`multichannel`, `channel_count`, `rgb`, `time`, `volume`; expected and found, for example `T = 40, consumer allows T = 1`); then, for the run-level kind `mixed_volumes`, **both groups in full**: every included image with `Z` > 1 (FOV key, path, `Z` size) and every included image with `Z` = 1 or no `Z` (FOV key, path), then the two counts (B7). Lists are sorted by FOV key, then path, in code-point order. It names the consumer, the manifest's SHA-256 and the fixes below. Nothing is dropped, sliced, projected or converted |
@@ -805,25 +891,25 @@ with P1-P40):
 |---|---|---|
 | P41 | No manifest installed or bundled | Run as today; `consumer_check = {"consumer": null, "available": []}` |
 | P42 | A T = 5 time-lapse; consumer with `time_support = false` | `R_CONSUMER_DIMENSIONS_NOT_ALLOWED` at axis confirmation, every image listed with kind `time`; tagging does not open; excluding them or picking another consumer passes; no projection offered |
-| P43 | (a) A unit confirmed `rgb`; consumer with `rgb_support = false`. (b) Review *ax* B2: an RH1 override unit (a three-sample MINISBLACK scanner TIFF) under `cv08` and under `cv09`, confirmed `rgb`; (c) the same images confirmed `channel`; (d) a reopened experiment with the type already confirmed; (e) the type changed after a pass | (a) Refused at image-type confirmation, before tagging, kind `rgb`; an RH1 override unit is judged by its confirmed type, not its header. (b) No channel rule is decided at axis confirmation, the image-type controls stay reachable, and at type confirmation the check passes. (c) Refused at type confirmation with the applicable `multichannel` or `channel_count` kinds. (d) Phase 2 runs right after phase 1. (e) The pass is voided and phase 2 runs again. In every case no channel-count decision is made before the type is confirmed |
+| P43 | (a) A unit confirmed `rgb`; consumer with `rgb_support = false`. (b) Review *ax* B2: an RH1 override unit (a three-sample MINISBLACK scanner TIFF) under `cv08` and under `cv09`, confirmed `rgb`; (c) the same images confirmed `channel`; (d) a reopened experiment with the type already confirmed; (e) the type changed after a pass; (f) review *az* FILE: a consumer with `time_support = false` and `max_channels = 2`, one unit with a `T` = 5 image and another unit with a three-channel image, both types confirmed, then `describe` | (a) Refused at image-type confirmation, before tagging, kind `rgb`; an RH1 override unit is judged by its confirmed type, not its header. (b) No channel rule is decided at axis confirmation, the image-type controls stay reachable, and at type confirmation the check passes. (c) Refused at type confirmation with the applicable `multichannel` or `channel_count` kinds. (d) Phase 2 runs right after phase 1. (e) The pass is voided and phase 2 runs again. (f) The notebook shows the `time` offence at phase 1 and the `channel_count` offence at phase 2; `describe` reports **one** `R_CONSUMER_DIMENSIONS_NOT_ALLOWED` listing both images with their kinds. In every case no channel-count decision is made before the type is confirmed |
 | P44 | Three-channel images; `max_channels = 2` | Kind `channel_count`, `found 3, allowed ≤ 2`, at image-type confirmation (phase 2); nothing dropped |
 | P45 | (after P-1, P-2, #438) Z-stacks; `volume_support = false` | (a) TIFF stacks the planner accepts: kind `volume`, projection offered; after the projection copy the check passes and the record holds the manifest SHA-256; (b) OME-Zarr stacks, or masks with Z: projection **not** offered, the planner's refusal quoted, exclusion and another consumer only |
 | P46 | (after P-1, P-2, #438) Mixed Z and 2-D images | `mixed_volume_support = false` (with `volume_support = true`): `mixed_volumes`, the refusal lists every volume (FOV key, path, Z) and every plane (FOV key, path) in order, then both counts; both exclusion actions offered, neither preselected; the projection, when offered, names every included image; #438's warning still recorded. `mixed_volume_support = true`: warning only. No consumer: warning only |
 | P47 | One consumer ID from several sources | Package and bundle, equal SHA-256: one entry, both sources recorded; different (also CRLF-only): `R_CONSUMER_MANIFEST_CONFLICT` naming both, other consumers still selectable; two bundles, equal: one entry; different: conflict (F1); two distributions with one ID: conflict for both; IDs `MF` and `mf`: conflict for both (F3) |
-| P48 | Each at `describe`, at the run's first re-check and between it and publication (review *aw* B4, *ax* B3): (a) a sole candidate's bytes changed; (b) package and bundle byte-identical at the check, then only the bundle changed; (c) the last candidate removed; (d) for a permissive `T`-capable consumer, an included FOV's confirmed `T` size or the exclusion list changed (still passing the rules), consumer bytes, sources and provider members unchanged; (e) an experiment reopened with the same consumer bytes but a changed source list (an identical bundle added, or the package upgraded with identical bytes) | Exactly one class each: (a) `R_CONSUMER_MANIFEST_INVALID` with `E_CONSUMER_CHANGED_SINCE_CHECK` naming both SHA-256; (b) `R_CONSUMER_MANIFEST_CONFLICT` naming both sources and SHA-256, with `E_CONSUMER_CHANGED_SINCE_CHECK` among its reasons; (c) `R_CONSUMER_NOT_FOUND`; (d) `R_CONSUMER_MANIFEST_INVALID` with `E_CONSUMER_CHANGED_SINCE_CHECK` naming the changed fingerprint inputs, never a pass; (e) the saved source list detects the change: `R_CONSUMER_MANIFEST_INVALID` with `E_CONSUMER_CHANGED_SINCE_CHECK` naming pinned and current sources, until checked again; nothing published in any case; in (a) and (d), checking again and confirming passes and records the new SHA-256 or fingerprint |
+| P48 | Each at `describe`, at the run's first re-check and between it and publication (review *aw* B4, *ax* B3): (a) a sole candidate's bytes changed; (b) package and bundle byte-identical at the check, then only the bundle changed; (c) the last candidate removed; (d) for a permissive `T`-capable consumer, an included FOV's confirmed `T` size or the exclusion list changed (still passing the rules), consumer bytes, sources and provider members unchanged; (e) an experiment reopened with the same consumer bytes but a changed source list (an identical bundle added, or the package upgraded with identical bytes); (f) review *az* B3: for a non-snapshot installed consumer, only its distribution's `RECORD` changed (a wrong hash for `morphobricks_consumer.toml`, or the entry removed), the file, its bytes, the distribution name and version, the source list and the image state unchanged | Exactly one class each: (a) `R_CONSUMER_MANIFEST_INVALID` with `E_CONSUMER_CHANGED_SINCE_CHECK` naming both SHA-256; (b) `R_CONSUMER_MANIFEST_CONFLICT` naming both sources and SHA-256, with `E_CONSUMER_CHANGED_SINCE_CHECK` among its reasons; (c) `R_CONSUMER_NOT_FOUND`; (d) `R_CONSUMER_MANIFEST_INVALID` with `E_CONSUMER_CHANGED_SINCE_CHECK` naming the changed fingerprint inputs, never a pass; (e) the saved source list detects the change: `R_CONSUMER_MANIFEST_INVALID` with `E_CONSUMER_CHANGED_SINCE_CHECK` naming pinned and current sources, until checked again; (f) exactly one `R_CONSUMER_MANIFEST_INVALID` with `E_CONSUMER_SOURCE_UNSAFE` (the inventory reason) and `E_CONSUMER_CHANGED_SINCE_CHECK` naming the source that no longer validates; nothing published in any case; in (a) and (d), checking again and confirming passes and records the new SHA-256 or fingerprint |
 | P49 | (after P-2) Z runs made with *No consumer check*, MorphoFeature's manifest still `volume_support = false`, requesting (a) no provider claiming volume capability, (b) one test provider claiming it by any means beside one that does not, (c) only such providers; also (d) a wrong bundled-style manifest claiming `volume_support = true` | MorphoFeature refuses every one by its P-2 guard on every route, before any provider runs; no claim of a provider is consulted (review *aw* B1); a T-only run still passes. Before P-2 this scenario is not valid and is not run |
 | P50 | Skipped early check against each restricted dimension: for each consumer and each restriction its manifest declares, a run with *No consumer check* | The consumer refuses it on every route it offers (B2); MorphoFeature: `rgb` by MF-6, and (after P-2) Z and mixed, whatever providers the run requests (P49) |
 | P51 | CLI: no `--consumer` while two consumers are installed and one is invalid (O1) | No check, no refusal; `available` lists the valid ID only; `--consumer unknown` is `R_CONSUMER_NOT_FOUND` naming the available and unavailable ones |
 | P52 | Notebook with exactly one available consumer (O3) | Nothing preselected; tagging stays closed until the user clicks the consumer or *No consumer check* |
 | P53 | `describe --consumer ID` on images the consumer refuses; then `describe --no-consumer` (O7) | The first publishes nothing (`R_CONSUMER_DIMENSIONS_NOT_ALLOWED`); the second publishes |
 | P54 | MorphoFeature's snapshot (B3, O4; review *aw* B2): (a) the release provider set, two providers with real dotted factory values (`pkg.module:factory`); (b) an RGB-capable add-on provider installed; (c) a provider removed; (d) a regenerated bundle beside the stale package copy; (e) the generator run over a set with exactly one RGB-capable provider, over one with none, over one whose only provider omits `rgb_support`, and over one with a provider whose `rgb_support` is `"true"` | (a) generated and verified snapshot match: available, `rgb_support` as written; (b), (c) `R_CONSUMER_MANIFEST_INVALID`, `E_CONSUMER_SNAPSHOT_STALE` naming the member; (d) `R_CONSUMER_MANIFEST_CONFLICT`; (e) `rgb_support = true`, then `false`, then `false` (absent is false), then an explicit manifest error naming the member and no file written (never coerced or omitted), with every located member listed; no provider module imported and no finder run in any case |
-| P55 | Hostile discovery (B6; review *aw* B2): consumer entry points (a) a value `os:system` or `pkg.sub`; (b) the package's manifest a symbolic link to a file outside the package; (c) the top-level name a namespace package spread over two paths; (d) an import trap: a `sys.meta_path` finder defining only `find_spec`, the consumer package's `__init__.py`, and recording wrappers around `importlib.metadata.distributions`, `entry_points` and `version`, all recording any call, around an otherwise valid consumer and MorphoFeature with an ordinary wheel-installed provider with a dotted factory, for both the verifier and the generator; (h) review *ax* B1: the same with a finder that defines `find_distributions` (recording any call and returning nothing); (i) a provider whose metadata is an `*.egg-info` or in a zip root, and the same distribution name under two roots; (e) a distribution listing another distribution's package file; snapshot members (f) a provider value `foo:bar:baz`, one without `:`, and `os:system`; (g) a provider's `morphofeature_provider.json` a symbolic link out of its package, or its package a namespace package | (a) `E_CONSUMER_ENTRY_POINT`; (b), (c), (e) `E_CONSUMER_SOURCE_UNSAFE`; each of (a), (b), (c), (e) refuses that consumer alone, the others still listed. (d) discovery and generation **succeed without running any trap**: nothing is recorded, no consumer or provider module enters `sys.modules`, the generated snapshot lists every member and verifies, and both consumers are available (a `find_spec` finder's presence is not a reason to refuse). (h) The `find_distributions` method records nothing; MorphoFeature (a `[snapshot]` consumer) is `R_CONSUMER_MANIFEST_INVALID`, `E_CONSUMER_SOURCE_UNSAFE` naming the finder's class, and the generator refuses; a consumer without `[snapshot]` stays available. (i) `E_CONSUMER_SOURCE_UNSAFE` ("unsupported metadata source" or "ambiguous distribution") naming the paths, MorphoFeature unavailable, the provider never silently omitted. (f) `E_CONSUMER_ENTRY_POINT` for the malformed values and `E_CONSUMER_SOURCE_UNSAFE` for `os:system`, naming the member; (g) `E_CONSUMER_SOURCE_UNSAFE`; in (f) and (g) MorphoFeature is unavailable, nothing imported |
+| P55 | Hostile discovery (B6; review *aw* B2): consumer entry points (a) a value `os:system` or `pkg.sub`; (b) the package's manifest a symbolic link to a file outside the package; (c) the top-level name a namespace package spread over two paths; (d) an import trap: a `sys.meta_path` finder defining only `find_spec`, the consumer package's `__init__.py`, and recording wrappers around `importlib.metadata.distributions`, `entry_points` and `version`, all recording any call, around an otherwise valid consumer and MorphoFeature with an ordinary wheel-installed provider with a dotted factory, for both the verifier and the generator; (h) review *ax* B1, *az* B2: the same with a finder exposing `find_distributions` (recording any call and returning nothing) in each of three shapes: defined on its class, assigned to the instance by its constructor, and supplied dynamically by a class `__getattr__` (recording any call); also a named non-snapshot consumer given only as a bundle while such a finder is present; (i) a provider whose metadata is an `*.egg-info` or in a zip root, and the same distribution name under two roots; (j) review *az* B1: starting from a valid pinned snapshot and a checked pick, each of: an RGB-capable provider, and separately a consumer package of the picked ID with other bytes, in a wheel-layout root given as a concrete `pathlib.Path` `sys.path` entry; a relevant `*.dist-info` that is a symbolic link to a valid metadata directory; an unreadable relevant `entry_points.txt`; a `sys.path` entry that is a `str` subclass and one that is an `os.PathLike` object, each recording any method call; the same root listed twice; and an ordinary wheel-installed consumer and provider with none of these; (e) a distribution listing another distribution's package file; snapshot members (f) a provider value `foo:bar:baz`, one without `:`, and `os:system`; (g) a provider's `morphofeature_provider.json` a symbolic link out of its package, or its package a namespace package | (a) `E_CONSUMER_ENTRY_POINT`; (b), (c), (e) `E_CONSUMER_SOURCE_UNSAFE`; each of (a), (b), (c), (e) refuses that consumer alone, the others still listed. (d) discovery and generation **succeed without running any trap**: nothing is recorded, no consumer or provider module enters `sys.modules`, the generated snapshot lists every member and verifies, and both consumers are available (a `find_spec` finder's presence is not a reason to refuse). (h) In each shape nothing is recorded (no hook, no `__getattr__` call); the finder is an unknown source naming its class; every consumer is unavailable (`R_CONSUMER_MANIFEST_INVALID`, `E_CONSUMER_SOURCE_UNSAFE`, "candidate completeness unknown"), the bundle-only pick included, and the generator refuses; a run with no consumer named runs as today. (i) `E_CONSUMER_SOURCE_UNSAFE` ("unsupported metadata source" or "ambiguous distribution") naming the paths, MorphoFeature unavailable, the provider never silently omitted. (j) The `Path` root is read: the added provider makes the snapshot `E_CONSUMER_SNAPSHOT_STALE` naming it, the differing package copy makes the pick `R_CONSUMER_MANIFEST_CONFLICT`; the symbolic-link `*.dist-info` is "unsupported metadata source" for the ID or group it declares; the unreadable file and both unsupported entries are unknown sources (every consumer unavailable, no method of the entries called); the duplicate root is one root, not an ambiguous distribution; the ordinary case is available. The old snapshot or pick is never accepted by omission. (f) `E_CONSUMER_ENTRY_POINT` for the malformed values and `E_CONSUMER_SOURCE_UNSAFE` for `os:system`, naming the member; (g) `E_CONSUMER_SOURCE_UNSAFE`; in (f) and (g) MorphoFeature is unavailable, nothing imported |
 | P56 | Refusal classes (B5): (a) a named ID whose only copy has a TOML error; (b) a named ID with a valid package copy and an invalid bundled copy; (c) a named ID with no candidate but an unrelated invalid file; (d) the P48 (b) state reached at a re-check instead of at the first check | (a) `R_CONSUMER_MANIFEST_INVALID` only; (b) `R_CONSUMER_MANIFEST_CONFLICT` only, listing the bundle's reasons; (c) `R_CONSUMER_NOT_FOUND` only; (d) the same single class as at a first check (`R_CONSUMER_MANIFEST_CONFLICT`), plus the change reason |
 | P57 | Invalidation (B8): after a passed check, the user changes the axis roles, an exclusion, the image type or the pick, or reopens an experiment whose saved pick is gone | Tagging and publication close until the check passes again; the gone pick is `R_CONSUMER_NOT_FOUND`, a saved pick whose package and bundle now differ is `R_CONSUMER_MANIFEST_CONFLICT`, never *No consumer check* |
 | P58 | Run-manifest version (B9): (a) a new-version manifest without `consumer_check` or with an unknown field in it; (b) a version-5 manifest; (c) a brick output reused after the same run folder is re-run with another pick; (d) checked records of `cv03` and `cv01`, and one with `"min_channels": null` | (a) refused by the reader; (b) refused with "run preprocessing again"; (c) `ENTRY_OUTPUT_EXISTS` (ADR 0007), never a silent reuse; (d) a checked record of `cv03` holds `min_channels` and `max_channels`, one of `cv01` holds neither key, and a record with `"min_channels": null` is refused |
 
 The §2 row also checks that discovery imports no consumer module (a `sys.modules` scan **and** the
-P55 (d) and (h) traps, since a module scan alone does not prove that no finder ran).
+P55 (d), (h) and (j) traps, since a module scan alone does not prove that no finder ran).
 
 ## Modelling choices for the owner's review
 
@@ -864,8 +950,16 @@ with the finding; **changed after review *aw*** and **changed after review *ax**
    *ax*** (B1): distributions are enumerated by a filesystem-only metadata reader (`*.dist-info` in
    `sys.path` directory roots), not `importlib.metadata`; unsupported or ambiguous metadata sources
    and custom `find_distributions` finders are reported (snapshot consumers unavailable), never run
-   and never silently skipped. Alternative not chosen: running `importlib.metadata` and accepting
-   that a custom finder executes during discovery.
+   and never silently skipped. **Changed after review *az*** (B1, B2): every `sys.path` entry and
+   every metadata entry Python's search indexes is accounted for (concrete `pathlib` paths read;
+   other entry types, unreadable roots or metadata recorded as unknown sources; link and legacy
+   metadata read as bytes for relevance only), and every `sys.meta_path` entry other than the
+   standard finders is an unknown source unless provably without metadata capability by class
+   namespaces; any unknown source makes every consumer unavailable, not only `[snapshot]` ones.
+   Alternatives not chosen: running `importlib.metadata` and accepting that a custom finder executes
+   during discovery; refusing every non-standard finder and path hook outright, which would make
+   consumers unavailable wherever setuptools' `_distutils_hack` finder (inserted at start-up by its
+   `distutils-precedence.pth`) or an editable install is present.
 6. **Precedence:** identical SHA-256 or refuse (`R_CONSUMER_MANIFEST_CONFLICT`); duplicate IDs across
    distributions refused for both. (Package versus bundle: now owner answer O2.) **Changed after
    review *at*** (B5, F1): the same rule covers two bundles and invalid copies; conflict, invalid and
@@ -883,7 +977,8 @@ with the finding; **changed after review *aw*** and **changed after review *ax**
    **Changed after review *ax*** (B3): availability and pin validity are separate questions; an
    available ID whose pin no longer holds (fingerprint-only change included) is
    `R_CONSUMER_MANIFEST_INVALID`, and the refusal table says so; the saved pick carries its source
-   list.
+   list. **Changed after review *az*** (B3): re-check case 3 names an invalid source as well as
+   invalid bytes; the notebook reports offences per phase, a publication one combined refusal.
 8. **Codes:** four `R_CONSUMER_*` codes (O8); the §2/§6 `E_*` codes reused as reasons, plus
    `E_CONSUMER_ID_MISMATCH` and `E_CONSUMER_RULE_CONTRADICTION`; one dimensions refusal with kinds as
    detail. **Changed after review *at*** (B5-B8, B3): new reasons `E_CONSUMER_ENTRY_POINT`,
@@ -979,3 +1074,19 @@ installed provider: one the reader cannot see is reported, never left out.
 | Derived-value integrity | Absent and non-boolean `rgb_support` not covered | Generator reads the key as MorphoFeature does (absent false; non-boolean an error, no file written); P54 (e) |
 | Citation | `factory` is at `providers.py:192-193` (field `:235`), not `:190-191` | Corrected in the locator text and the *aw* table |
 | "RGB ... alone" | Shorthand could read as exempting RGB from `T`/`Z`/mixed rules | Stated as applying to the channel and image-type rules only |
+
+## Review *az* — responses
+
+Review *az* (24 November 2026) read this ADR at `f4cfdab7925c6b43829b26f9afc8a725f8f0dff1`. Each
+remaining blocker was checked before any change, against the ADR text and the Python standard
+library (CPython 3.13 source and local runs; the 3.11 documentation the review cites); all three
+hold. No owner decision (CM1-CM5, O1-O8) and no accepted modelling choice (14, 16) is reopened; O2
+and O4 are kept by making an incomplete reader result unusable, not by narrowing them.
+
+| Finding | Checked | Change |
+|---|---|---|
+| B1 (root and unsafe-metadata coverage) | Holds: a wheel-layout root added to `sys.path` as a `pathlib.Path` makes its `morphofeature.providers` entry point visible to `importlib.metadata.entry_points(group=...)` (reproduced locally), while the reader accepted `str` roots only; a symbolic-link `*.dist-info` or unreadable metadata was excluded without being classified, so a bundle could become the sole candidate (O2) and an old snapshot could still match (O4) | Completeness paragraph and reader steps 1-3: every `sys.path` entry classified by exact type (concrete `pathlib` paths read; anything else an unknown source, no method called); unreadable roots and metadata unknown sources; every `*.dist-info`/`*.egg-info`/`EGG-INFO` Python's search indexes either read or read as bytes for relevance (relevant ones `E_CONSUMER_SOURCE_UNSAFE` candidates of their ID or stale members); aliases of one root are one root. Any unknown source makes every consumer unavailable (INVALID, or NOT_FOUND when no candidate; a known conflict first) and the generator refuse; O1 runs unaffected. P55 (j) |
+| B2 (class-only finder detection) | Holds: Python's metadata search looks the hook up with `getattr(finder, 'find_distributions', None)` on each `sys.meta_path` entry (`importlib.metadata.Distribution._discover_resolvers`); a constructor-assigned instance attribute is found and called (reproduced locally), and a class `__getattr__` would be too; the ADR's class-only `getattr_static` missed both, and kept non-snapshot consumers available | Reader step 4: the standard finders by identity; any other entry is an unknown source unless provably without metadata capability from class namespaces read through `type`'s own descriptors (no `find_distributions`, `__getattr__` or custom `__getattribute__` in any lookup class, no non-standard `__dict__`, no such key in the instance dictionary, Python-defined classes only). The rule is complete for Python's generic attribute lookup; its limits are stated (a patched standard library, start-up code). The suggested blanket rule (every non-standard finder **and path hook** unknown) was checked and not adopted: path hooks take no part in metadata search (`PathFinder.find_distributions` delegates to `MetadataPathFinder`, which reads the `sys.path` entries directly), and setuptools' `_distutils_hack` and editable finders, both `find_spec`-only and provably so under this rule, would otherwise make consumers unavailable in ordinary environments. An unknown finder now makes **every** consumer unavailable, bundle-only picks included. P55 (h) extended to class, instance and `__getattr__` shapes and a bundle-only pick; P55 (d) positive control kept |
+| B3 (source-only-invalid pin) | Holds: re-check case 3 listed "the current byte content fails a rule", while the classification and the INVALID row also cover a failing source with valid bytes (a changed `RECORD` hash leaves bytes and source descriptors unchanged) | Case 3 now says the current classification is invalid for any byte **or source** failure (or incompleteness) and names a source that no longer validates; the publish condition, the INVALID row and the classification say the same; P48 (f). No fifth code |
+| FILE: phase-local reporting | `:476-477` could read as one refusal per phase at publication | The notebook shows offences per phase; a publication carries one combined `R_CONSUMER_DIMENSIONS_NOT_ALLOWED`; P43 (f) |
+| FILE: F2 | Class-only trap incomplete | P55 (h) three shapes |
