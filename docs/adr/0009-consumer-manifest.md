@@ -1,18 +1,21 @@
 # ADR 0009: consumer manifest (early dimension checks in preprocessing)
 
-- **Status:** **Proposed** (owner decisions of 24 November 2026, CM1-CM5 below, final and not to be
-  reopened by the review). Not implemented. What this ADR adds is their encoding: the file, its
-  fields, how preprocessing finds it, where the check sits in the preprocessing flow, the refusal
-  codes, the fixes offered, the record in the run manifest, and the interactions with RC1, ADR 0002
-  AR3, ADR 0005, ADR 0006 and morphobricks-preprocessing#438. Those choices are listed under
-  [modelling choices](#modelling-choices-for-the-owners-review); the questions still open are
-  [at the end](#open-questions-for-the-owner). Tracking: Spec #54.
+- **Status:** **Proposed** (owner decisions of 24 November 2026, CM1-CM5 and the owner answers O1-O8
+  below, final and not to be reopened by the review). Not implemented. What this ADR adds is their
+  encoding: the file, its fields, how preprocessing finds it, where the check sits in the
+  preprocessing flow, the refusal codes, the fixes offered, the record in the run manifest, and the
+  interactions with RC1, ADR 0002 AR3, ADR 0005, ADR 0006 and morphobricks-preprocessing#438. The
+  choices those decisions do not cover are listed under
+  [modelling choices](#modelling-choices-for-the-owners-review), for the owner's review. No question
+  is open: O1-O8 were answered on 24 November 2026. Tracking: Spec #54.
 - **Absorbs** morphobricks-preprocessing#438 ("Move the Z-stack gate from the description step to
   the hand-off"): its owner decisions of 23 November 2026 are CM5 here, and this ADR states how a
   chosen consumer's manifest interacts with #438's mixed-run warning.
-- **Amends, on acceptance:** experiment-v1 §8 (four `R_*` rows and their precedence, below). The
-  file format itself is normative text of its own (proposed: `docs/consumer-manifest-v1.md`, written
-  on acceptance from the [file section](#the-file-morphobricks_consumertoml)). Nothing of
+- **Amends, on acceptance:** the refusal table of experiment-v1 §8 (four `R_*` rows and their
+  precedence, below). The file format itself is normative text of its own, in a new
+  `docs/consumer-manifest-v1.md`, written on acceptance from the
+  [file section](#the-file-morphobricks_consumertoml); it is not a section of experiment-v1 (owner
+  answer O8). Nothing of
   `morphobricks.toml` changes: no field is added, and the consumer is never written into the
   description (experiment-v1 §1 excludes brick names and routing; ADR 0001 decision 10, "no brick
   routing"). No fixture, golden or validator changes in this PR; the fixtures and conformance rows
@@ -71,6 +74,22 @@ manifest, if any: problems must be resolved; (4) tag channels; (5) 2-D images ge
 | CM3 | **Mismatch.** The run is blocked, and preprocessing offers the fixes it has: exclude the offending images, choose another consumer; Z projection only where preprocessing actually has it |
 | CM4 | **v1 rules: dimensions only.** Which axes may be present: multichannel, multi-Z, multi-T, RGB; channel count limits; mixed 2-D/3-D within one run. Pixel types, calibration, channel IDs and masks are **out of v1** |
 | CM5 | **Earlier 3-D decisions folded in** (preprocessing#438, owner comments of 23 November 2026): histograms, normalization and QC metrics are **disabled** for volumes at first (recorded as not computed, never empty or zero); a Z run goes only to volume-capable bricks (`volume_support`); a run mixing 2-D and 3-D images is refused by MorphoFeature and only **warned** about in preprocessing, the warning recorded in the run's checks |
+
+### Owner answers of 24 November 2026 (O1-O8; recorded, accepted; not reopened by this ADR)
+
+These answer the eight questions this draft put to the owner. Each is encoded where it applies below
+and is marked there by its ID.
+
+| # | Question | Owner answer |
+|---|---|---|
+| O1 | No pick while consumers are installed (CLI, scripts) | The check is skipped; the run records the available consumers. No refusal for omission |
+| O2 | The same consumer from a package and from a LabConstrictor bundle | The two copies must be byte-identical (same SHA-256), else refused (`R_CONSUMER_MANIFEST_CONFLICT`). The bundled file never wins |
+| O3 | One available consumer | Never preselected, even with one consumer: the user still clicks. *No consumer check* stays an explicit entry |
+| O4 | MorphoFeature's `rgb_support` | `true` if **any** installed provider declares it; each provider still refuses at run time |
+| O5 | Should consumers read `consumer_check`? | Not in v1: it is provenance only |
+| O6 | Mask matching order | Keep today's notebook order: masks are paired before the run |
+| O7 | `describe` and publication | The check also blocks `describe --consumer` publishing; *No consumer check* can still publish |
+| O8 | Where the normative text lives on acceptance | A new `docs/consumer-manifest-v1.md` plus four rows in the refusal table; not a section of experiment-v1 |
 
 ### The principle: a manifest narrows, it never widens
 
@@ -164,7 +183,7 @@ reported under `R_CONSUMER_MANIFEST_INVALID`).
 
 **The same consumer from both sources (precedence).** When a package-shipped and a bundled manifest
 name the same `consumer`: if their SHA-256 are equal, they are one consumer and the record lists both
-sources; if they differ, that consumer is refused (`R_CONSUMER_MANIFEST_CONFLICT`, naming both paths
+sources; if they differ (owner answer O2: byte-identical or refused; the bundled file never wins), that consumer is refused (`R_CONSUMER_MANIFEST_CONFLICT`, naming both paths
 and both SHA-256) and cannot be picked until one source is removed or they are made identical. Other
 consumers stay available. Nothing is chosen by source order.
 
@@ -177,10 +196,12 @@ nothing unless the user, or the CLI, names it.
 - The notebook shows one picker, *Next app (consumer)*, listing every available consumer by
   `display_name` with its ID and source, every unavailable one with its reason, and the entry
   *No consumer check*. Nothing is preselected, also when one consumer is available: picking is the
-  user's answer. With no manifest found, the picker says so in one line and the run behaves as
+  user's answer (owner answer O3). With no manifest found, the picker says so in one line and the run behaves as
   today.
 - The CLI takes `--consumer ID` or `--no-consumer`. Without either, no consumer is checked and the
-  run's report lists the consumers that were available (see [open question O1](#open-questions-for-the-owner)).
+  run's report lists the consumers that were available (owner answer O1); omission is never a
+  refusal, so existing scripts behave as today. `describe` takes the same two options
+  (`describe --consumer ID`, owner answer O7).
   An ID that is not available is `R_CONSUMER_NOT_FOUND`, naming the available IDs.
 - The notebook keeps the pick with its other run settings, as it keeps the exclusions and the
   histogram settings for a reopened experiment (`notebook_prefill.py`); it is never written into
@@ -197,7 +218,7 @@ Mapped on the shipped notebook's seven steps (`notebook_steps.py:1-22`, `:149-17
 | (3) Check the manifest | (none) | **New.** The `Z`, `T`, `C` and mixed rules are checked as soon as the axis roles are confirmed; the `rgb` rule as soon as the image type is confirmed |
 | (4) Tag channels | Step 3 *Channels*: confirm the image type, then name the stains and tag | Naming and tagging open only when the check passed (or no consumer is checked) |
 | (5) Histograms and QC for 2-D; skipped for 3-D | Step 7 *Run* | Unchanged by this ADR; volumes skip them under #438 (CM5) |
-| (6) Match images to mask classes | Step 4 *Masks* pairs masks before the run; the mask step reads them after it | Unchanged (see [open question O6](#open-questions-for-the-owner)) |
+| (6) Match images to mask classes | Step 4 *Masks* pairs masks before the run; the mask step reads them after it | Unchanged: today's order is kept (owner answer O6) |
 
 **One refinement of the owner's step order, with its evidence.** The owner placed the check after the
 axes and before channel tagging. All rules but one can be decided there. `rgb` cannot: the image type
@@ -267,7 +288,9 @@ The run manifest (`run_manifest.json`) records the check under `consumer_check`:
 
 With no consumer checked: `{"consumer": null, "available": ["<ID>", ...]}` (`[]` when none was
 found). A run is published only with `outcome = "passed"` or no consumer; a refused check publishes
-nothing. It is **not** in `morphobricks.toml` (experiment-v1 §1: no brick names or routing; ADR 0001
+nothing. The same holds for `describe --consumer ID` (the check also blocks publishing a description;
+owner answer O7); a description or run published with *No consumer check* is not blocked. The record
+is provenance only: no consumer reads it in v1 (owner answer O5). It is **not** in `morphobricks.toml` (experiment-v1 §1: no brick names or routing; ADR 0001
 decision 10), and it is in no output's cache or reuse key: it changes no pixel, histogram or QC
 value, only whether the run may proceed. A run that reuses outputs records the check it made itself.
 Adding the key follows preprocessing's run-manifest versioning (`manifest_versions.py`,
@@ -279,7 +302,7 @@ Adding the key follows preprocessing's run-manifest versioning (`manifest_versio
 
 A consumer still declares its `Capabilities` when it opens `RunInputs`, and is refused there as today
 (`A_RGB_NOT_SUPPORTED`, `A_VOLUME_NOT_SUPPORTED`; MorphoFeature's provider checks). It does not read
-`consumer_check` to skip a check: a run checked for another consumer, a manifest that disagrees with
+`consumer_check` in v1, to skip a check or for any other purpose (owner answer O5): a run checked for another consumer, a manifest that disagrees with
 the consumer's code, or a run made with *No consumer check* is caught there. The manifest is an early
 error, not a contract that consumers trust. Conformance proves both: the same run is refused early by
 the manifest and, with the manifest check skipped, by the consumer.
@@ -318,10 +341,11 @@ compares each image with the experiment's list.
 
 #### ADR 0007 (run-folder entry)
 
-A brick started on a validated run folder (`<brick>.run_folder`) is unaffected. Whether a brick's
-entry should name the consumer a run was checked for is [open question O5](#open-questions-for-the-owner).
+A brick started on a validated run folder (`<brick>.run_folder`) is unaffected. A brick's
+entry does not name the consumer a run was checked for and does not read `consumer_check` (owner
+answer O5).
 
-### MorphoFeature's manifest (an option for the owner)
+### MorphoFeature's manifest (the shipping option is still the owner's)
 
 From the code read: MorphoFeature runs time series (`run_config._planes`, `:440-445`, iterates `T`;
 `attach_tracks`), takes several channels, expands every `Z` slice into a separate 2-D FOV today
@@ -331,8 +355,11 @@ provider of a run (MF-6, `mask_selection.py:335-336`). Two ways to ship it:
 1. **A static file** `src/morphofeature/morphobricks_consumer.toml` with the entry point
    `[project.entry-points."morphobricks.consumers"] morphofeature = "morphofeature"`:
    `multichannel_support = true`, `time_support = true`, `volume_support = false`,
-   `mixed_volume_support = false`, no channel limits, and `rgb_support` by the rule the owner picks
-   ([O4](#open-questions-for-the-owner)). Fixed bytes, one SHA-256 per release.
+   `mixed_volume_support = false`, no channel limits, and `rgb_support` by the owner's rule (O4): `true` if **any** installed provider declares it (the app
+   can do something with RGB; each provider still refuses at run time, MF-6 for a run whose chosen
+   providers do not all declare it). In a static file, "installed" can only mean the providers the
+   MorphoFeature release itself ships, so the value is fixed when the release is made; option 2
+   below follows the providers installed in a given app. Fixed bytes, one SHA-256 per release.
 2. **Generated from the installed providers**, by a command such as
    `morphofeature consumer-manifest --write PATH`, for a LabConstrictor app to bundle at build time:
    `rgb_support` and, later, `volume_support` (#438, MorphoFeature#157: providers declaring a volume
@@ -398,7 +425,9 @@ P41-P49 in §3:
 
 ## Modelling choices for the owner's review
 
-Not owner decisions; each may be amended.
+Not owner decisions, except where marked "now owner answer": choices 6, 11 and 12 are the encoding
+of O2, O3 and O1 and stay listed so the list is complete. The others are not covered by the owner's
+answers; each may be amended.
 
 1. **Names:** the file `morphobricks_consumer.toml` (underscore, like MorphoFeature's
    `morphofeature_provider.json`); `schema = "morphobricks-consumer"`; the keys `consumer`,
@@ -413,7 +442,8 @@ Not owner decisions; each may be amended.
    top-level package; the file found with `find_spec`, never imported. Bundled files only by explicit
    path (`consumer_manifests=[...]`, `--consumer-manifest`), no folder scan; symlinks refused.
 6. **Precedence:** identical SHA-256 or refuse (`R_CONSUMER_MANIFEST_CONFLICT`); duplicate IDs across
-   distributions refused for both.
+   distributions refused for both. (Package versus bundle: now owner answer O2; the duplicate-ID rule
+   across distributions is this ADR's.)
 7. **The check in two moments**, axis rules at axis confirmation and `rgb` at image-type
    confirmation, both before tagging; repeated at the run.
 8. **Codes:** four `R_CONSUMER_*` codes; the §2/§6 `E_*` codes reused as reasons, plus
@@ -425,34 +455,8 @@ Not owner decisions; each may be amended.
     SHA-256, sources, the rules as read, outcome), `{"consumer": null, "available": [...]}` when
     none; never in the description; in no cache or reuse key.
 11. **No preselection** in the picker, even with one consumer; *No consumer check* is an explicit
-    entry.
-12. **CLI default without `--consumer`:** no check, the available consumers listed in the report
-    (see O1).
+    entry. (Now owner answer O3.)
+12. **CLI default without `--consumer`:** no check, the available consumers listed in the report.
+    (Now owner answer O1.)
 13. **The fixes:** exclusion (existing list, a new action for this code), another consumer, and
     projection for the volume kinds only; nothing invented for T, channels or RGB.
-
-## Open questions for the owner
-
-- **O1. No pick while consumers are installed (CLI and scripts).** Recommendation: no check, the
-  report lists what was available (today's behaviour for every existing script, and "no manifest,
-  everything allowed" stays literal). Alternative: refuse until `--consumer` or `--no-consumer` is
-  given, so the early check is never skipped by omission.
-- **O2. Precedence.** Recommendation: identical SHA-256 or refuse. Alternative: the bundled file wins
-  (the LabConstrictor app pins its consumer), recorded with both hashes.
-- **O3. One available consumer.** Recommendation: still the user's click. Alternative: preselect it,
-  shown and recorded as preselected.
-- **O4. MorphoFeature's `rgb_support`.** Recommendation: `true` when **any** installed provider
-  declares it (the app can do something with RGB; MF-6 still refuses a run whose chosen providers do
-  not all declare it). Alternative: `true` only when every provider does, which refuses RGB early for
-  apps that bundle one non-RGB provider.
-- **O5. Should consumers read `consumer_check`?** Recommendation: not in v1 (the runtime guard is
-  enough). Alternative: a consumer shows a notice when the run was checked for another consumer, or
-  for none.
-- **O6. Mask matching order.** The owner's flow lists mask matching (6) after histograms (5). Today
-  masks are paired in step 4, before the run, and read by the mask step after it. Recommendation:
-  keep today's order; the check is unaffected. Confirm whether a reorder was meant.
-- **O7. `describe` and publication.** Recommendation: the check blocks tagging in the notebook, `run`,
-  and `describe --consumer ID`; a description can still be published with *No consumer check*.
-- **O8. Where the normative text lives on acceptance.** Recommendation: `docs/consumer-manifest-v1.md`
-  for the file and the four `R_*` rows in experiment-v1 §8. Alternative: a new section of
-  experiment-v1.
