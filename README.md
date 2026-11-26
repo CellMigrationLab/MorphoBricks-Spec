@@ -233,6 +233,7 @@ writer or a brick that consumes the description.
   bin indices and their counts), absent = null and measured-empty = `[]`, identity by a content
   digest of the decoded table; `pyarrow>=18` required, with a release gate across `pyarrow` versions; golden tables in
   [`tools/plane_histograms_v6/`](tools/plane_histograms_v6/README.md).
+- [ADR 0010](docs/adr/0010-experiment-v1-volumes.md) (**proposed**, owner decisions of 23, 24 and 26 November 2026, preprocessing#438): the experiment-v1 amendment that lets Z-stacks (volumes) be described and handed off without projection; volume masks accepted, a mix of volumes and planes warned, an unknown calibration of any axis recorded as `W_AXIS_UNCALIBRATED` (never guessed, never blocking preprocessing; a consumer that declares the need refuses), and plane requests on a volume served only for explicitly named Z indices; prerequisite P-1 of ADR 0009, offered for acceptance after it.
 
 ### Fixtures and goldens
 

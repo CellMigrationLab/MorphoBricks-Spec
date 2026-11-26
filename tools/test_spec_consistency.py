@@ -29,6 +29,13 @@ RETIRED_CODES = {
 #: Resolver-contract codes (ADR 0002), not experiment-v1 section 8 codes.
 RESOLVER_CODES = ("A_VOLUME_NOT_SUPPORTED", "A_DESCRIPTION_REQUIRED", "A_FOV_NOT_IN_RUN")
 
+#: `A_*` codes proposed by an ADR that is not yet accepted, and the only files that may name them.
+#: On acceptance a code moves to RESOLVER_CODES (or section 8); on rejection it moves to RETIRED_CODES.
+PROPOSED_CODES = {
+    # ADR 0010 (proposed): an explicit `z_indices` entry an image does not have (owner decision VZ11).
+    "A_Z_INDEX_NOT_IN_IMAGE": ("docs/adr/0010-experiment-v1-volumes.md",),
+}
+
 A_CODE = re.compile(r"\bA_[A-Z_]*[A-Z]\b")
 
 
@@ -218,11 +225,15 @@ class AnalysisCodes(unittest.TestCase):
         defined |= set(RESOLVER_CODES)
         for retired in RETIRED_CODES:
             self.assertNotIn(retired, defined, f"{retired} is retired but defined in section 8")
+        for proposed in PROPOSED_CODES:
+            self.assertNotIn(proposed, defined, f"{proposed} is defined; remove it from PROPOSED_CODES")
         for path in _normative_files():
             rel = path.relative_to(ROOT).as_posix()
             for code in sorted(set(A_CODE.findall(path.read_bytes().decode("utf-8", "replace")))):
                 if code in RETIRED_CODES:
                     self.assertIn(rel, RETIRED_CODES[code], f"{rel} names the retired {code}")
+                elif code in PROPOSED_CODES:
+                    self.assertIn(rel, PROPOSED_CODES[code], f"{rel} names the proposed {code}")
                 else:
                     self.assertIn(code, defined, f"{rel} names {code}, defined nowhere")
 
