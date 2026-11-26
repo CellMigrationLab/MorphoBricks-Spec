@@ -1,0 +1,1172 @@
+# ADR 0009: consumer manifest (early dimension checks in preprocessing)
+
+- **Status:** **Proposed** (owner decisions of 24 November 2026, CM1-CM5 and the owner answers O1-O8
+  below, final and not to be reopened by the review). Not implemented. What this ADR adds is their
+  encoding: the file, its fields, how preprocessing finds it, where the check sits in the
+  preprocessing flow, the refusal codes, the fixes offered, the record in the run manifest, and the
+  interactions with RC1, ADR 0002 AR3, ADR 0005, ADR 0006, ADR 0007 and
+  morphobricks-preprocessing#438. The choices those decisions do not cover are listed under
+  [modelling choices](#modelling-choices-for-the-owners-review), for the owner's review. No question
+  is open: O1-O8 were answered on 24 November 2026. Tracking: Spec #54. **Revised** after review
+  *at* (24 November 2026, verdict "do not accept", blockers B1-B10, file items F1-F4): every finding
+  was checked against the cited sources and holds; the encoding is repaired, no owner decision is
+  reopened ([responses](#review-at--responses)). **Revised again** after review *aw* (24 November
+  2026, verdict "do not accept", four remaining blockers and file items): each was checked against
+  the ADR text and the cited code and holds; the encoding is repaired, no owner decision is reopened
+  ([responses](#review-aw--responses)). **Revised a third time** after review *ax* (24 November
+  2026, verdict "do not accept", three remaining blockers on encoding only and file items): each was
+  checked against the ADR text and the cited code and holds; the encoding is repaired, no owner
+  decision is reopened ([responses](#review-ax--responses)). **Revised a fourth time** after review
+  *az* (24 November 2026, verdict "do not accept", three remaining blockers on encoding only and file
+  items): each was checked against the ADR text and the Python standard library and holds; the
+  metadata reader now accounts for every source Python's metadata search could use, and the
+  re-check names invalid sources; no owner decision is reopened ([responses](#review-az--responses)).
+  **Amended** with the owner answers of 26 November 2026 (O9, O10; asked through ADR 0010, Spec
+  PR #57): `volume_support` takes three values, `none`, `planes` and `volumes`, and CM5 routes Z runs
+  by them (O9); consumer-manifest v1 gains the calibration requirement `requires_calibration`,
+  checked at `describe` and at the run, which **revises CM4** (O10). The status stays **Proposed**.
+- **Absorbs** morphobricks-preprocessing#438 ("Move the Z-stack gate from the description step to
+  the hand-off"): its owner decisions of 23 November 2026 are CM5 here, and this ADR states how a
+  chosen consumer's manifest interacts with #438's mixed-run warning. It does **not** write #438's
+  own normative change of experiment-v1 §1; that is a separate prerequisite
+  ([prerequisites](#prerequisites-of-the-volume-rules)).
+- **Amends, on acceptance:** the refusal table of experiment-v1 §8 (four `R_*` rows and their
+  precedence, below). The file format itself is normative text of its own, in a new
+  `docs/consumer-manifest-v1.md`, written on acceptance from the
+  [file section](#the-file-morphobricks_consumertoml); it is not a section of experiment-v1 (owner
+  answer O8). Nothing of `morphobricks.toml` changes: no field is added, and the consumer is never
+  written into the description (experiment-v1 §1 excludes brick names and routing; ADR 0001
+  decision 10, "no brick routing"). It changes no other experiment-v1 rule: in particular §1's
+  "v1 analyses 2-D planes only" stays until the separate #438 amendment (prerequisite P-1) is
+  accepted. It amends **no** rule of ADR 0007: the reuse consequence of the new run-manifest field is
+  stated under [the record](#the-record-where-it-lives). No fixture, golden or validator changes in
+  this PR; the fixtures and conformance rows below are proposed.
+- **Base:** MorphoBricks-Spec `main` `232fb38880cc487510532d99dc71d46a27005f23`. Evidence read at
+  morphobricks-preprocessing `main` `abacc4007cb13ec08728da8befd79e0111971a63` and MorphoFeature
+  `main` `58aa19b849946426961e5c9be495b4ab41a366e2`.
+- **Why a new ADR file.** Like ADR 0006 and ADR 0007: a new policy with its own decision set, its own
+  file format, refusal codes and a place in the preprocessing workflow. It changes no rule of
+  ADR 0001 or ADR 0002.
+
+## Context
+
+Today a run whose images the next app cannot take is refused late. Preprocessing refuses one thing
+early, for everyone: an image with more than one depth slice (`z_stack_not_supported`,
+`metadata.check_metadata(files, allow_z=False)`, preprocessing `metadata.py:391-431`, with the
+projection card of `notebook_projection.py` as the fix). Everything else that depends on the next
+app is refused only when that app opens `RunInputs` or later:
+
+- `A_RGB_NOT_SUPPORTED` for a consumer whose `Capabilities.rgb_support` is false, and
+  `A_VOLUME_NOT_SUPPORTED` for a `volume` request without `Capabilities.volume_support`
+  (preprocessing `run_inputs_request.py:120-140`, `volume_refusals` at `:557-598`; ADR 0001 RC1,
+  ADR 0002 AR3, ADR 0005 BM5). AR3's flag guards a **requested Z-volume selection** only: a `plane`
+  request (the default, `run_inputs_request.py:169-193`) on Z-stacks is not refused for lack of
+  `volume_support`;
+- MorphoFeature's own provider checks, after the run (`morphofeature/provider_lookup.py`
+  `declared_rgb_support`; `providers.py`, the static provider manifest `morphofeature_provider.json`).
+  MorphoFeature today expands every Z slice of an image into a 2-D plane
+  (`run_config._planes`, `:440-445`): it has no Z refusal of its own.
+
+By then the user has confirmed axes, tagged every channel, built the design, saved the description
+and run preprocessing. A tool that takes one channel only, or no time-lapse, or that needs Z-stacks,
+has no way to say so before that work is done. The owner decided on 24 November 2026 that the next
+app (the **consumer**: MorphoFeature, OpticalFlow3D and others) declares what it allows in an
+external **consumer manifest**, and that preprocessing checks it early. With no manifest, everything
+is allowed, as today.
+
+The rules this must keep: nothing guessed (axes are user-confirmed roles, the image type is a
+user-confirmed declaration, ADR 0001 AQ6); no silent drop, slice, projection or conversion; every
+refusal names what is wrong and how to fix it; core discovery stays inert (no consumer module is
+imported, and no import machinery runs, to find its manifest); the consumer's own runtime refusal
+stays, and must exist for every restriction it declares (a manifest is an early error, never the
+only guard).
+
+## Decisions
+
+### Owner decisions of 24 November 2026 (recorded, accepted; not reopened by this ADR)
+
+**Purpose.** An external manifest that declares what the next app (the consumer, for example
+MorphoFeature or OpticalFlow3D) allows, so that preprocessing errors early, before MorphoFeature or
+the bricks. With **no** manifest, everything is allowed (today's behaviour).
+
+**Intended preprocessing flow.** (1) Scan headers and folder layout; (2) validate axes; (3) check the
+manifest, if any: problems must be resolved; (4) tag channels; (5) 2-D images get histograms and QC,
+3-D images skip them for now; (6) match images to mask classes.
+
+| # | Decision |
+|---|---|
+| CM1 | **Source.** A manifest is shipped by the consumer package (discoverable when the package is installed) **and** may be bundled by LabConstrictor apps |
+| CM2 | **Several consumers available.** The user picks one; that one is checked and recorded |
+| CM3 | **Mismatch.** The run is blocked, and preprocessing offers the fixes it has: exclude the offending images, choose another consumer; Z projection only where preprocessing actually has it |
+| CM4 | **v1 rules: dimensions only.** Which axes may be present: multichannel, multi-Z, multi-T, RGB; channel count limits; mixed 2-D/3-D within one run. Pixel types, calibration, channel IDs and masks are **out of v1**. *Revised by O10 (26 November 2026): calibration requirements (which space axes must have a step in a length unit) are **in** v1; pixel types, channel IDs and masks stay out* |
+| CM5 | **Earlier 3-D decisions folded in** (preprocessing#438, owner comments of 23 November 2026): histograms, normalization and QC metrics are **disabled** for volumes at first (recorded as not computed, never empty or zero); a Z run goes only to volume-capable bricks (`volume_support`; *routed by O9's three values, 26 November 2026*); a run mixing 2-D and 3-D images is refused by MorphoFeature and only **warned** about in preprocessing, the warning recorded in the run's checks |
+
+### Owner answers of 24 November 2026 (O1-O8; recorded, accepted; not reopened by this ADR)
+
+These answer the eight questions this draft put to the owner. Each is encoded where it applies below
+and is marked there by its ID.
+
+| # | Question | Owner answer |
+|---|---|---|
+| O1 | No pick while consumers are installed (CLI, scripts) | The check is skipped; the run records the available consumers. No refusal for omission |
+| O2 | The same consumer from a package and from a LabConstrictor bundle | The two copies must be byte-identical (same SHA-256), else refused (`R_CONSUMER_MANIFEST_CONFLICT`). The bundled file never wins |
+| O3 | One available consumer | Never preselected, even with one consumer: the user still clicks. *No consumer check* stays an explicit entry |
+| O4 | MorphoFeature's `rgb_support` | `true` if **any** installed provider declares it; each provider still refuses at run time |
+| O5 | Should consumers read `consumer_check`? | Not in v1: it is provenance only |
+| O6 | Mask matching order | Keep today's notebook order: masks are paired before the run |
+| O7 | `describe` and publication | The check also blocks `describe --consumer` publishing; *No consumer check* can still publish |
+| O8 | Where the normative text lives on acceptance | A new `docs/consumer-manifest-v1.md` plus four rows in the refusal table; not a section of experiment-v1 |
+
+### Owner answers of 26 November 2026 (O9, O10; recorded, accepted; not reopened by this ADR)
+
+Asked through ADR 0010 (experiment-v1 volumes, Spec PR #57), whose owner decision VZ11 allows a
+consumer to request explicit planes of a volume (`z_indices`), and VZ12, under which an unknown Z
+step is recorded, never refused by preprocessing's own rules, and refused only by a consumer that
+declares it needs one.
+
+| # | Question | Owner answer |
+|---|---|---|
+| O9 | A consumer that takes explicit planes of a volume but not whole volumes has no `volume_support` value (the boolean's `false` meant "no `Z` > 1 image in any form") | `volume_support` takes **three values**: `none` (no image with `Z` > 1, in any form), `planes` (volumes accepted, read only as the explicit `z_indices` planes the consumer requests, ADR 0010), `volumes` (whole volumes). **CM5 routes accordingly:** a Z run goes only to a consumer declaring `planes` or `volumes`, and to a `planes` consumer only as explicitly requested planes |
+| O10 | A consumer that needs a Z (or X, Y) step cannot declare it: CM4 kept calibration out of v1 | **Calibration needs are added to consumer-manifest v1** (`requires_calibration`, the space axes that must have a step in a length unit). Preprocessing checks them at `describe` and at the hand-off (the run) and refuses early, naming the consumer. **This revises CM4** |
+
+### Prerequisites of the volume rules
+
+The `volume` and `mixed_volumes` rules, and the `z` entry of `requires_calibration` (O10), are
+specified now so that manifests are written once, but they take effect only when **both**
+prerequisites below are accepted and implemented (review *at* B1, B2). The `x` and `y` entries of
+`requires_calibration` apply from the start: preprocessing records X and Y sizes of plane images
+today (`calibration.py`).
+Until then preprocessing refuses every Z-stack for everyone (`z_stack_not_supported`), so neither
+kind can occur, and preprocessing's #438 step that lifts that refusal MUST NOT land before them.
+
+- **P-1, the #438 normative amendment of experiment-v1 §1 (separate, not written here).**
+  experiment-v1 §1 says "v1 analyses 2-D planes only. A Z stack is projected by a recorded
+  preprocessing step before it is described". Accepting unprojected volumes (CM5) changes that
+  sentence, and it is #438's change, in its own reviewed Spec amendment: which volumes may be
+  described, how §8's homogeneity reads `Z`, and that histograms, normalization and QC are recorded
+  as not computed for them. This ADR does not write it, adds no Z, axes or shared-plane field to
+  `morphobricks.toml`, and does not put the consumer format into experiment-v1 (O8).
+- **P-2, MorphoFeature's Z and mixed runtime guard (#438's MorphoFeature step).** MorphoFeature
+  refuses, on every route it opens a run (notebook, command line, run file), **every** run with any
+  image whose `Z` > 1, and every run mixing `Z` > 1 and `Z` = 1 images (CM5), from the `Fov` sizes
+  `RunInputs` gives, before any provider runs and whatever `consumer_check` says (O5). The guard is
+  **unconditional** while MorphoFeature's published consumer manifest declares
+  `volume_support = "none"` (review *aw* B1; O9): it does not depend on which providers the run requests,
+  and no provider's capability is consulted. There is no provider volume capability to consult:
+  `ProviderInfo` declares none (MorphoFeature `providers.py:180-248` has `rgb_support` and
+  `parent_labels_support`, no volume field) and ADR 0002 AR3 keeps MorphoFeature 2-D. MorphoFeature
+  taking volumes later is a reviewed change of the provider API (a declared provider capability)
+  **and** of MorphoFeature's consumer manifest together, never inferred from an installed provider
+  ([modelling choice 16](#modelling-choices-for-the-owners-review)). Today it expands the slices into
+  planes (`run_config._planes`, `:440-445`), which this guard replaces for such runs. P49 below is
+  valid only once P-2 is implemented.
+
+### The principle: a manifest narrows, it never widens
+
+A consumer manifest can only **add** refusals to what preprocessing already refuses for everyone. It
+never lifts one: a manifest with `volume_support = "volumes"` (or `"planes"`) does not make preprocessing accept a Z-stack
+while `z_stack_not_supported` is still in force, and a manifest that allows something preprocessing
+cannot record (a pixel type, an axis role outside `X Y Z C T`, `axes.py:39`) changes nothing. And it
+never replaces the consumer's runtime refusal
+([Interactions](#the-consumers-own-runtime-guards-every-declared-restriction-every-route)).
+
+### The file `morphobricks_consumer.toml`
+
+A small TOML file with a schema identifier and a version, parsed with the strict rules of
+experiment-v1 §2 items 2-4 (UTF-8 without BOM, TOML 1.0, duplicate keys refused, no type conversion,
+closed field sets, no extension namespace). Example (illustrative values, not a statement about the
+real tool): a single-channel time-lapse tool that takes whole Z-stacks and needs all three steps.
+
+```toml
+schema = "morphobricks-consumer"
+schema_version = 1
+consumer = "opticalflow3d"
+display_name = "OpticalFlow3D Profiler"
+
+[dimensions]
+multichannel_support = false
+rgb_support = false
+time_support = true
+volume_support = "volumes"
+mixed_volume_support = false
+requires_calibration = ["x", "y", "z"]
+```
+
+| Key | Type | Required | Meaning |
+|---|---|---|---|
+| `schema` | text | yes | Exactly `morphobricks-consumer` |
+| `schema_version` | integer | yes | `1`. A reader refuses a version it does not know |
+| `consumer` | text, a Token (experiment-v1 §3.2) | yes | The consumer's ID: what the user picks, what the run records, what the discovery entry point (or the bundle declaration) is named |
+| `display_name` | text, non-empty | yes | What the picker shows |
+| `dimensions` | table | yes | The v1 rules below; closed field set |
+| `snapshot` | table | no | The installed plug-ins a derived rule was computed from ([below](#derived-rules-the-snapshot-table)); closed field set |
+
+**Consumer IDs (F3).** IDs are compared exactly (NFC, case-sensitive). Two discovered IDs that differ
+but whose `str.casefold()` forms are equal are a collision (`E_ID_CASE_COLLISION`, experiment-v1
+§3.3's rule applied to the scope "consumer IDs of one environment and its bundles"): both are
+refused as `R_CONSUMER_MANIFEST_CONFLICT`. `--consumer` matches exactly; a request that matches a
+discovered ID only after case folding is `R_CONSUMER_NOT_FOUND`, naming the near match.
+
+`[dimensions]`, every rule decided from **confirmed** axis roles, the **confirmed** image type and
+the **recorded** calibration of each included image, never from pixels and never from header letters
+alone, in two phases ([where the check sits](#where-the-check-sits-in-the-flow)): the `time`,
+`volume`, mixed and calibration rules once the axis roles are confirmed; the `rgb`, `multichannel`
+and channel-count rules together once the image type is confirmed:
+
+| Key | Type | Required | An included image is refused for this consumer when |
+|---|---|---|---|
+| `multichannel_support` | boolean | yes | `false` and the image is a channel image whose confirmed `C` role has size > 1 |
+| `rgb_support` | boolean | yes | `false` and the image belongs to a unit whose confirmed image type is `rgb` (ADR 0001 AQ6; the meaning of RC1's provider key) |
+| `time_support` | boolean | yes | `false` and the image's confirmed `T` role has size > 1 |
+| `volume_support` | text: `none`, `planes` or `volumes` (`E_ENUM`: exact, lower case) | yes | `none` and the image's confirmed `Z` role has size > 1 (a one-slice `Z` is a plane). `planes` and `volumes` both admit such an image; they differ at the hand-off (*Vocabulary*, O9) |
+| `mixed_volume_support` | boolean | yes | `false`, `volume_support` is `planes` or `volumes`, and the included images are not all of one kind: some have `Z` > 1 and some do not (a run-level rule, CM5) |
+| `requires_calibration` | array of `x`, `y`, `z` (`E_ENUM`: exact, lower case), no duplicates (`E_DUPLICATE_VALUE`), order not semantic; may be empty | yes | A listed axis has no step in a length unit on the image: its recorded calibration source (ADR 0010's per-image `calibration`) is `unknown` or `pixels`. `x` and `y` apply to every image; `z` applies to an image whose confirmed `Z` role has size > 1 only (a plane has no Z step to need). The step is never guessed to make an image pass (O10) |
+| `min_channels` | integer ≥ 1 | no | The image is a channel image with fewer channels (absent: no lower limit beyond 1) |
+| `max_channels` | integer ≥ 1 | no | The image is a channel image with more channels (absent: no upper limit) |
+
+- A channel image without a `C` role has one channel; so has one whose `C` has size 1. Among the
+  channel and image-type rules, an RGB image is governed by `rgb_support` alone: its three samples
+  are not stains, and the channel rules do not count them (an RGB image never fails
+  `max_channels = 1` or `multichannel_support = false`). The `time`, `volume`, mixed and calibration
+  rules apply to RGB images exactly as to channel images.
+- A singleton `T` or `Z` (size 1) is no time-lapse and no volume.
+- **Contradictions (`E_CONSUMER_RULE_CONTRADICTION`) are exactly two cases (B4; review *aw* B3):**
+  1. *Unsatisfiable:* the rules admit **no image of any type**. That is the case only when
+     `rgb_support = false` **and** the channel rules admit no channel image:
+     `min_channels > max_channels`, or `multichannel_support = false` with `min_channels > 1`. Among
+     the channel and image-type rules, RGB images are judged by `rgb_support` alone (the `T`, `Z`
+     and mixed rules still apply to them), so with `rgb_support = true` channel rules that admit
+     no channel image are **valid**: they declare an RGB-only consumer (every channel image is
+     refused, kind `multichannel` or `channel_count`; an RGB image passes). There is no other way to
+     write "RGB only" in v1, and RGB samples are never counted as channels to force a contradiction.
+  2. *Self-withdrawn permission (a stated consistency policy, not a satisfiability claim):*
+     `mixed_volume_support = true` with `volume_support = "none"`. Such a set admits 2-D images, so
+     it is satisfiable; it is refused because it declares a permission (a mixed run) that its own
+     `volume_support = "none"` withdraws, and a manifest never states a permission it cannot grant.
+  `requires_calibration` containing `z` with `volume_support = "none"` is **valid** (the `z` entry
+  then applies to no image); it is not a contradiction.
+  `multichannel_support = false` with `max_channels` above 1 is **valid**: a one-channel image
+  satisfies both, and the effective upper limit is 1.
+- A non-boolean value of a boolean rule is `E_TYPE`, never read as `true` or `false` (the RC1
+  modelling rule). `volume_support` is text: a boolean there (the form of the drafts before O9) is
+  `E_TYPE`, never mapped to `none` or `volumes`; another text is `E_ENUM`.
+- Pixel types, channel IDs and masks (CM4) are not fields: a `pixel_types`, `channels` or `masks`
+  key is `E_UNKNOWN_FIELD`. Calibration is the one rule O10 adds, by `requires_calibration` only: a
+  `calibration` key, or a requirement on a size value, unit or source, is still `E_UNKNOWN_FIELD`.
+
+**Vocabulary.** `rgb_support` keeps RC1's meaning. `volume_support` keeps the **word** of AR3 and of
+provider manifests, with three values in a consumer manifest (O9):
+
+- `none`: the consumer takes **no image with `Z` > 1 in any form** (as planes or as a volume). Its
+  own guard refuses every such image (P-2 for MorphoFeature).
+- `planes`: the consumer takes volumes **only as the planes it names** in an explicit `z_indices`
+  request (ADR 0010, VZ11). It opens `RunInputs` with `Capabilities.volume_support = false`, so a
+  whole-`volume` request is refused by the resolver (`A_VOLUME_NOT_SUPPORTED`, AR3), and a `plane`
+  request without `z_indices` on a volume is refused too (ADR 0010 rule (b)).
+- `volumes`: the consumer takes whole volumes (`Capabilities.volume_support = true`, AR3) and may
+  also request explicit planes.
+
+AR3's boolean `Capabilities.volume_support` stays a boolean: `volumes` maps to `true`, `none` and
+`planes` to `false`. The two are not claimed equivalent at run time: the guard for `none` is the
+consumer's own ([Interactions](#the-consumers-own-runtime-guards-every-declared-restriction-every-route)).
+The other new boolean keys follow the same `<axis>_support` pattern. In a provider manifest an absent capability
+means `false` (RC1); in a consumer manifest every boolean rule, `volume_support` and
+`requires_calibration` are **required**: a consumer manifest exists only to state the rules, and an absent rule would otherwise be a silent refusal (or a silent
+permission) that the author never wrote.
+
+#### Derived rules: the `[snapshot]` table
+
+A consumer whose rule depends on the plug-ins installed beside it (MorphoFeature's `rgb_support`, O4:
+true if **any** installed provider declares it) states that dependency, so that preprocessing can
+verify the value is current without importing or interpreting the plug-ins (B3):
+
+```toml
+[snapshot]
+entry_point_group = "morphofeature.providers"
+member_file = "morphofeature_provider.json"
+derives = ["rgb_support"]
+
+[[snapshot.members]]
+name = "morphoobjects"
+distribution = "morphoobjects"
+version = "0.9.1"
+file_sha256 = "<SHA-256 of that distribution's member_file bytes>"
+```
+
+| Key | Type | Required | Meaning |
+|---|---|---|---|
+| `entry_point_group` | text, non-empty | yes | The entry-point group whose members the derived rules were computed from |
+| `member_file` | text, a file name without a path separator | yes | The file each member ships beside its top-level package |
+| `derives` | array of the boolean `[dimensions]` keys, non-empty, no duplicates | yes | The rules computed from the members; the others are fixed |
+| `members` | array of tables `name`, `distribution`, `version`, `file_sha256`, sorted by `name`, then normalized `distribution`; may be empty | yes | Every member installed when the file was written |
+
+The consumer's own tool writes it (MorphoFeature: [below](#morphofeatures-manifest)); preprocessing
+**verifies** it, every time the consumer is discovered: it lists the group's installed entry points
+with the [metadata reader](#the-metadata-reader-no-finder-runs) only, locates each member's `member_file` by the **member locator**
+below, hashes the bytes and compares the set of `(name, normalized distribution, version,
+file_sha256)` with `members`, both ways. Any difference is `E_CONSUMER_SNAPSHOT_STALE` naming every
+added, removed and changed member; a member the locator refuses is reported with the locator's own
+reason (`E_CONSUMER_ENTRY_POINT` or `E_CONSUMER_SOURCE_UNSAFE`, naming the member); either way the
+consumer is then unavailable from that source (`R_CONSUMER_MANIFEST_INVALID`). Preprocessing never
+parses a member file and never recomputes a derived value: it proves only that the inputs are the
+ones the consumer derived from. A stale file is never read as if its value were current.
+
+**The member locator (review *aw* B2).** A snapshot member is a **plug-in factory entry point**, not
+a consumer entry point, and has its own grammar. MorphoFeature's provider entry points name a
+factory, `module:attribute` with a possibly dotted module (`ProviderInfo.factory`, MorphoFeature
+`providers.py:192-193`, field at `:235`; for example `morphoobjects.provider:create_provider`), and MorphoFeature's own
+discovery takes the package from the module's first component (`_manifest_path`,
+`providers.py:264-277`, `entry_point.module.split(".")[0]`). The locator, without `EntryPoint.load`,
+`import` or `find_spec`:
+
+1. Reads the entry point from its **declaring distribution's** metadata through the
+   [metadata reader](#the-metadata-reader-no-finder-runs) (as consumer discovery does) and parses the metadata **string** only: it must be `MODULE:ATTRIBUTE`, `MODULE` one or more
+   Python identifiers joined by `.`, `ATTRIBUTE` one or more identifiers joined by `.`, exactly one
+   `:`, no `[extras]`, no spaces. Anything else (`foo:bar:baz`, a value without `:`, extras) is
+   `E_CONSUMER_ENTRY_POINT` naming the member. The value is never resolved: `os:system` parses, and
+   then fails step 2 because no installed distribution other than the interpreter's own declares the
+   file `os/morphofeature_provider.json`.
+2. Takes the **first component** of `MODULE` as the top-level package `P` and binds
+   `P/<member_file>` and `P/__init__.py` to the declaring distribution's installed-file inventory,
+   with every check of consumer-discovery steps 2 and 3 (listed in that distribution's `RECORD`, a
+   regular package, not listed by another distribution, contained, no symbolic link on the way, a
+   regular file, the inventory hash matched when present). Each failure is
+   `E_CONSUMER_SOURCE_UNSAFE` naming the member.
+3. Hashes the bytes read once; the member's identity is `(entry-point name, normalized name of the
+   declaring distribution, its version, that SHA-256)`.
+
+The consumer-entry-point grammar (one bare package name, [discovery](#discovery-cm1) step 1) is not
+applied to snapshot members. The **generator** of the snapshot (MorphoFeature's tool, below) MUST use
+this same metadata reader, the same locator and the same identity, not `importlib.metadata` and not
+MorphoFeature's `_manifest_path`: that helper calls
+`importlib.util.find_spec`, which imports no provider module but consults `sys.meta_path` finders,
+so it is "without importing the provider", not inert against executable import finders. With one
+locator, a member the verifier accepts is a member the generator hashed, and vice versa. A provider
+whose package the locator refuses (for example a namespace package, which MorphoFeature's own
+discovery accepts) makes MorphoFeature unavailable as a checked consumer; this fails closed.
+
+### Discovery (CM1)
+
+Both sources yield **candidates**: a source, the ID it is declared for, its bytes (read once), their
+SHA-256 and the validation result of **those** bytes. No candidate is found by executing code: no
+`EntryPoint.load`, no `import`, no `importlib.util.find_spec` (it consults `sys.meta_path` finders and
+path hooks, which may run code), no `importlib.metadata.distributions()`, `entry_points()` or
+`Distribution` object (they call the `find_distributions` method of every `sys.meta_path` finder that
+has one, and a custom distribution object's accessors are code), no `.pth` evaluation beyond what the
+interpreter already did. Distributions are enumerated by the metadata reader below.
+
+#### The metadata reader (no finder runs)
+
+Review *ax* B1. `importlib.metadata.distributions()` consults `sys.meta_path` and calls a finder's
+optional `find_distributions(context)` (Python's documented "extending the search algorithm"), so it
+is not inert even when no module is imported. Consumer discovery, the snapshot verifier and the
+snapshot generator therefore share one filesystem-only **metadata reader**. It calls no finder, path
+hook, loader, `EntryPoint` or `Distribution` method, and no `__hash__`, `__eq__`, `__str__`,
+`__fspath__` or `__getattr__` of an object it did not create; it reads files as data.
+
+**Completeness (review *az* B1, B2).** Every place Python's own metadata search could find a
+distribution is **accounted for**: it is read, or it is found irrelevant by reading it as data, or it
+is recorded as an **unknown source** with its path (or finder) and a named reason. Nothing is
+skipped. Python's search has two parts, and the reader covers each: the standard `PathFinder`, whose
+`find_distributions` searches the `sys.path` entries themselves (directories and zip files; it
+delegates to `importlib.metadata.MetadataPathFinder` and consults no path hook and no
+`sys.path_importer_cache` entry, CPython `importlib/_bootstrap_external.py`, `PathFinder.find_distributions`),
+which steps 1-3 reproduce as data; and every other `sys.meta_path` entry, which step 4 classifies.
+Path hooks are therefore not a metadata source: they take part only in imports, which discovery
+does not perform, and a non-standard path hook (setuptools' editable installs add one) does not
+make anything unavailable.
+
+1. **Roots.** `sys.path` and `sys.meta_path` are read once when discovery starts (the interpreter
+   has already run site processing); either one not exactly a `list` is an unknown source. Each
+   `sys.path` entry is classified, by its exact type (`type(entry)`, never `isinstance`):
+   - exactly `str`: its path (the empty entry is the current directory);
+   - exactly the standard library's concrete `pathlib` path class (`PosixPath`, `WindowsPath`):
+     its path, from the standard library's own string conversion, because Python's metadata search
+     honours such entries though imports ignore them (Python 3.11 documentation, *Distribution
+     Discovery*);
+   - anything else (`bytes`, a `str` or `pathlib` subclass, any other object): an unknown source,
+     "unsupported `sys.path` entry", naming its index and type; its methods are not called.
+
+   A path that does not exist, or names a regular file that is not a zip archive, contributes
+   nothing (as in Python's own search). A directory is a **directory root**; a regular file that is
+   a zip archive is a **zip root**; a path that exists but cannot be listed or read is an unknown
+   source, "unreadable root". The same physical directory reached twice (equal device and inode, or
+   the same resolved path) is one root, not two installations.
+2. **Metadata entries.** In each directory root, every direct child whose name ends, ignoring case,
+   in `.dist-info` or `.egg-info` is classified (these are the children Python's search indexes);
+   in a root whose own name ends in `.egg`, so is its `EGG-INFO` child. In a zip root, the same
+   names among its members, listed with the standard library's `zipfile` as bytes:
+   - a `*.dist-info` directory, not a symbolic link (`lstat`), with a regular `METADATA` and, when
+     present, a regular `entry_points.txt`: **read**. Name and version come from `METADATA` (the
+     reader's own header parser) and must agree with the directory name after normalization, else
+     "ambiguous distribution"; entry points from `entry_points.txt` (the reader's own parser:
+     sections, then `name = value`); the installed-file inventory from the regular file `RECORD`,
+     parsed as CSV, each path resolved against the root (what a path distribution's `locate_file`
+     computes; computed here, not called);
+   - anything else (a `*.dist-info` that is a symbolic link or has a symbolic-link
+     `entry_points.txt`, a `*.egg-info` directory or file, an `EGG-INFO`, any entry in a zip root):
+     **not read as a distribution**. Its `entry_points.txt` (for an `*.egg-info` file: none, so it
+     declares nothing) is read once as bytes, following a link only to read those bytes, to decide
+     **relevance** only.
+
+   A **relevant declaration** is a `morphobricks.consumers` entry point (relevant to the ID it
+   names) or an entry point in a group that some found `[snapshot]` names. A not-read entry whose
+   bytes declare nothing relevant is irrelevant and named in the discovery details. One that
+   declares something relevant is `E_CONSUMER_SOURCE_UNSAFE`, "unsupported metadata source",
+   naming the path: a candidate of each consumer ID it declares (so that ID is invalid or a
+   conflict, never available and never won by a bundle, O2), and a stale member of each snapshot
+   naming its group. An entry whose relevance cannot be decided from bytes (unreadable, not UTF-8,
+   not parseable by the reader's entry-points parser), and a read `*.dist-info` with an unreadable
+   or malformed `METADATA` or `entry_points.txt`, is an unknown source, "unreadable metadata",
+   naming the path.
+3. **Ambiguity.** Two read `*.dist-info` with the same normalized name in different roots, one of
+   them declaring something relevant, are `E_CONSUMER_SOURCE_UNSAFE`, "ambiguous distribution",
+   naming both (Python's first-on-`sys.path` choice is not copied: nothing is chosen by order); so
+   are two in one root. Aliases of one physical root (step 1) are not two distributions.
+4. **Other `sys.meta_path` entries.** The standard library's own finder objects
+   (`importlib.machinery.BuiltinImporter`, `FrozenImporter`, `PathFinder`, and on Windows
+   `WindowsRegistryFinder`), compared by identity (`is`), are standard: the first two and the
+   registry finder have no metadata search, `PathFinder`'s is steps 1-3. Every other entry is
+   **provably without metadata capability** only when all of the following hold, each established by
+   identity comparisons, `type()` and reading class namespaces through `type`'s own descriptors
+   (no `getattr`, no `hasattr`, no `inspect.getattr_static` result alone):
+   - the **lookup classes** are the method resolution order of `type(entry)`, and also of the entry
+     itself when it is a class; every lookup class whose attribute lookup applies (that of
+     `type(entry)`) is a class defined in Python source, or `object` or `type`;
+   - no lookup class has `find_distributions`, `__getattr__` or `__getattribute__` in its own
+     namespace, except `object`'s and `type`'s own `__getattribute__`;
+   - for an instance: no lookup class defines `__dict__` other than the interpreter's own
+     `__dict__` slot descriptor, and the instance dictionary, read through that descriptor, has no
+     key that is exactly the `str` `find_distributions` (keys that are not exactly `str` make the
+     finder unknown).
+
+   Then Python's attribute lookup provably finds no `find_distributions` on it, and it is ignored
+   (setuptools' editable finders and `_distutils_hack`'s finder, which define `find_spec` only,
+   qualify; so does the P55 (d) trap). Any other entry, whatever it defines (a `find_distributions`
+   on its class or instance, a `__getattr__`, a C-implemented type, an opaque namespace), is an
+   unknown source, "a finder discovery does not run", naming its index, module and qualified class
+   name. It is never called and its attributes are never looked up.
+
+**What an unknown source does.** An unknown source can hide any distribution, so the reader's result
+is **incomplete**, and an incomplete result is never used as if complete:
+
+- every consumer is unavailable: an ID with candidates is `R_CONSUMER_MANIFEST_INVALID` with
+  `E_CONSUMER_SOURCE_UNSAFE` ("candidate completeness unknown") naming every unknown source and its
+  reason, unless its known candidates are already a conflict, which takes precedence; an ID with no
+  candidate is `R_CONSUMER_NOT_FOUND`, naming the unknown sources in its detail. A bundle is never
+  accepted while a package declaration of its ID could be hidden (O2), and a snapshot never
+  verifies while a member could be hidden (O4);
+- the generator refuses to write a snapshot, naming the same sources;
+- a run with no consumer named is unaffected (O1): nothing is checked, and the report lists the
+  consumers as unavailable with that reason.
+
+**Stated limits.** The reader reproduces Python's documented metadata search for the Python versions
+preprocessing supports; a change to that search in a later Python is a change to this reader,
+re-verified by P55 on each supported version. It does not detect replacement of standard-library
+objects themselves (a patched `PathFinder.find_distributions`, a patched `importlib.metadata`), nor
+code that `.pth` files or `sitecustomize` already ran at start-up; these are outside what a
+filesystem reader can observe, and discovery does not call them either. Only wheel-layout
+`*.dist-info` directories are supported as consumer or member sources; everything else is refused
+by name or makes the result incomplete. The rules are conservative by design: an unusual
+environment (a symbolic-link `site-packages` layout, a custom metadata finder) makes consumers
+unavailable with a named reason rather than checked against a possibly incomplete set; *No consumer
+check* remains.
+
+The reader is the one MorphoFeature's generator uses too (same roots, same limits, same reasons), so
+a member set the verifier accepts is the one the generator hashed.
+
+**Shipped by the consumer package (B6).** A distribution declares an entry point in the group
+`morphobricks.consumers`, named by its consumer ID, whose value is its top-level package (for
+MorphoFeature: `morphofeature = "morphofeature"`). Preprocessing reads the group from each
+installed distribution's `entry_points.txt` through the
+[metadata reader](#the-metadata-reader-no-finder-runs), so every entry point is attributed to its
+**declaring distribution**, and then:
+
+1. The name must be a Token (`E_ID_SYNTAX`); the value must be one top-level package name, an
+   identifier without `.`, `:`, `[extras]` or spaces (`E_CONSUMER_ENTRY_POINT`).
+2. The file is located through the **declaring distribution's installed-file inventory**
+   (its `RECORD`, read by the metadata reader): it must list exactly
+   `<value>/morphobricks_consumer.toml` and `<value>/__init__.py` (a regular package: a namespace or
+   multi-location package is refused), and the path is that entry resolved against the
+   distribution's root. A distribution without an inventory
+   (some editable installs), an entry not listed, or the same relative path listed by another
+   installed distribution is `E_CONSUMER_SOURCE_UNSAFE`. A consumer in development is given as a
+   bundle (below).
+3. The file must be contained and plain: its resolved path lies under the distribution's install
+   root and under `<value>/`; no component from that root down is a symbolic link (`lstat`); the
+   file is a regular file; and when the inventory records a hash for it, the bytes match it. Each
+   failure is `E_CONSUMER_SOURCE_UNSAFE`, naming the path and the reason.
+4. The entry point's name must equal the file's `consumer` (`E_CONSUMER_ID_MISMATCH`).
+
+MorphoFeature's provider discovery (`providers.py:266-277`, `find_spec` and `is_file`, which follows
+symbolic links) is **not** the model for this: it was the draft's model and is not safe enough (B6).
+
+**Bundled by a LabConstrictor app.** The app names each manifest **with the ID it is for**: the
+notebook API takes `consumer_manifests={"<ID>": path, ...}`, which an app sets in the notebook's
+hidden setup cell (where LabConstrictor already reads `current_version` and `notebook_name`,
+preprocessing `README.md:122`), and the CLI takes `--consumer-manifest ID=PATH` (repeatable). No
+folder is scanned. The declared ID must be a Token and equal the file's `consumer`
+(`E_CONSUMER_ID_MISMATCH`), so a bundle that does not parse is still attributed to an ID (B5). The
+path's last component must not be a symbolic link and must be a regular file (opened without
+following a link where the platform allows), as `morphobricks.toml` is (`R_FILE_SYMLINK`'s rule,
+reported as `E_CONSUMER_SOURCE_UNSAFE`).
+
+**Classifying one ID (B5, F1, O2).** For each ID, over **all** its candidates, valid or not, in this
+order; the three outcomes are mutually exclusive:
+
+1. **Conflict** (`R_CONSUMER_MANIFEST_CONFLICT`): the ID collides by case with another (F3); or it is
+   declared by two distributions (MorphoFeature's provider rule, `providers.py:549-552`); or its
+   candidates hold two or more different SHA-256 (package versus bundle, O2: the bundled file never
+   wins; two bundles, F1; an invalid copy counts with its bytes). Every candidate is named with its
+   source, SHA-256 and, if any, its own `E_*` reasons.
+2. **Invalid** (`R_CONSUMER_MANIFEST_INVALID`): not a conflict, and the one byte content, or any of its
+   sources, fails a rule (file rules, `E_CONSUMER_SOURCE_UNSAFE`, `E_CONSUMER_ENTRY_POINT`,
+   `E_CONSUMER_SNAPSHOT_STALE`), or the candidates are incomplete (the
+   [metadata reader](#the-metadata-reader-no-finder-runs) recorded an unknown source). Every reason
+   of every candidate is listed. A valid copy from another source does not hide an invalid one.
+3. **Available:** one byte content, valid, every source sound, the candidates complete. Identical copies (package and bundle,
+   or two bundles) are **one** consumer whose record lists every source.
+
+An ID with no candidate at all is **not found** (`R_CONSUMER_NOT_FOUND`) and only then. Nothing is
+chosen by source or enumeration order: candidates are listed sorted by source kind (`package` before
+`bundled`), then normalized distribution name or path, in code-point order. An unavailable consumer
+blocks nothing unless the user, or the CLI, names it.
+
+### The choice (CM2)
+
+- The notebook shows one picker, *Next app (consumer)*, listing every available consumer by
+  `display_name` with its ID and sources, then every unavailable one with its refusal and reasons,
+  and the entry *No consumer check*. Available entries are sorted by `display_name` after NFC and
+  case folding, then by ID, independent of entry-point enumeration (F3); unavailable ones by ID.
+  Nothing is preselected, also when one consumer is available: picking is the user's answer (owner
+  answer O3). With no manifest found, the picker says so in one line and the run behaves as today.
+- The CLI takes `--consumer ID` or `--no-consumer`. Without either, no consumer is checked and the
+  run's report lists the consumers that were available (owner answer O1); omission is never a
+  refusal, so existing scripts behave as today. `describe` takes the same two options
+  (`describe --consumer ID`, owner answer O7). An ID with no candidate is `R_CONSUMER_NOT_FOUND`,
+  naming the available IDs and the unavailable ones with their refusal; an ID that has candidates is
+  refused with its own class (conflict or invalid), never as not found.
+- The notebook keeps the pick (ID, pinned SHA-256 and pinned source list: each source's kind and
+  normalized distribution and version, or path) with its other run settings, as it keeps the
+  exclusions and the histogram settings for a reopened experiment (`notebook_prefill.py`); it is
+  never written into `morphobricks.toml`. A reopened experiment whose saved pick has no candidate any
+  more is `R_CONSUMER_NOT_FOUND`; one whose saved pick now has other bytes or sources (compared with
+  the saved SHA-256 and source list; a source added, removed or upgraded with identical bytes counts)
+  is refused by the re-check precedence below (conflict, or invalid with
+  `E_CONSUMER_CHANGED_SINCE_CHECK`) until the user checks again. Neither falls back to *No consumer check* or to another consumer.
+
+### Where the check sits in the flow
+
+Mapped on the shipped notebook's seven steps (`notebook_steps.py:1-22`, `:149-178`):
+
+| Owner flow | Notebook today | With this ADR |
+|---|---|---|
+| (1) Scan headers and folder layout | Step 1 *Images* (quick scan, then every header on a click; `run/preflight.py:169-260`) | Unchanged. The consumer can be picked here already |
+| (2) Validate axes | Step 2 *Axes* (roles, pixel size; projection card) | Unchanged |
+| (3) Check the manifest | (none) | **New.** Phase 1, as soon as the axis roles are confirmed: the `T`, `Z`, mixed and calibration rules (calibration from the Axes step's calibration card and `calibration.csv`). Phase 2, as soon as the image type is confirmed and before any naming or tagging: the `rgb`, `multichannel` and channel-count rules together |
+| (4) Tag channels | Step 3 *Channels*: confirm the image type, then name the stains and tag | The image-type controls stay reachable after phase 1; naming and tagging open only when both phases passed for the current state (or no consumer is checked) |
+| (5) Histograms and QC for 2-D; skipped for 3-D | Step 7 *Run* | Unchanged by this ADR; volumes skip them under #438 (CM5) |
+| (6) Match images to mask classes | Step 4 *Masks* pairs masks before the run; the mask step reads them after it | Unchanged: today's order is kept (owner answer O6) |
+
+**One refinement of the owner's step order, with its evidence (review *ax* B2).** The owner placed
+the check after the axes and before channel tagging. Only the type-independent rules can be decided
+at axis confirmation: `T`, `Z` and the mixed rule. The channel rules cannot, because whether they
+apply at all depends on the image type (an RGB image is judged by `rgb_support`, a channel image by
+`multichannel_support` and the limits), and the image type is a user-confirmed declaration that the
+notebook proposes at the quick scan and confirms at the start of step 3, *before* the stains are
+named and tagged (`notebook_steps.py:7-11`, `CHANNELS_INTRO`); a header saying RGB, or not, is
+evidence, never the type (ADR 0001 AQ6, RH1). So the check runs in two phases, both before tagging:
+
+- **Phase 1** (axis confirmation): `time`, `volume`, `mixed_volumes` and `calibration`, for every
+  included image. A calibration stated later (`calibration.csv`) changes the fingerprint and runs
+  phase 1 again; at `describe --consumer` and at the run the pinned re-check applies it (O10).
+- **Phase 2** (each unit's image type confirmed): `rgb`, `multichannel` and `channel_count`
+  together, for every included image of that unit. When the type is already confirmed (a reopened
+  experiment), phase 2 runs right after phase 1; a type changed after a pass voids the result
+  (*Invalidation* below) and phase 2 runs again.
+
+A phase-2 rule that is pending is neither a pass nor a refusal: nothing is counted as channels before
+the type is confirmed, and the image-type controls stay reachable after phase 1 so that the user can
+reach the declaration the rules depend on. In the notebook, each phase that finds offenders shows
+them at once (interactive, phase-local reporting: every offending image with every kind that phase
+found). At a publication (`describe`, `run`) there is **one** `R_CONSUMER_DIMENSIONS_NOT_ALLOWED`
+combining every offence of both phases for the confirmed state, every image with every kind (the
+refusal table; ADR 0001 AQ2), never one per phase.
+Naming, tagging and publication open only when both phases passed. Deciding the channel rules from
+the header at axis time was rejected: it would guess a user declaration (an RH1 override unit says
+the opposite of its header; under `cv08`, counting a three-sample MINISBLACK scanner TIFF as `C = 3`
+or as one channel would refuse an image the user then confirms as RGB).
+
+**What a check is bound to (B8).** A check result is valid for one exact state, never for "the
+consumer" in general:
+
+- **Pinned bytes.** Picking a consumer discovers it (all candidates, classified as above), reads its
+  bytes once, parses and validates **those** bytes and pins their SHA-256 and source list. The rules
+  applied are always the rules of the pinned bytes; a file is never re-read to apply them.
+- **Candidate-state fingerprint.** The SHA-256 of the canonical JSON (experiment-v1 §9 form) of:
+  the pinned SHA-256 and sources; the snapshot verification result (the verified `members`, or
+  none); every included image (FOV key, relative path, the header fingerprint the scan bound, its
+  confirmed roles and their sizes, and the recorded source of each space axis, O10); the exclusion list; and every unit's confirmed image type
+  (RH1 override included). The check records the fingerprint with its outcome.
+- **Invalidation.** Any change to an input of the fingerprint (another pick, a reopened saved pick,
+  the axis roles, the image type, an exclusion, a rescan, an added or removed image, the app's bundle
+  list) voids the result: tagging and publication close again until the check passes for the new
+  fingerprint. Tags already entered are kept, not re-confirmed by the check.
+- **Pinned re-check at both commit boundaries.** Immediately before `describe` (or the notebook's
+  description step) publishes a description, and immediately before `run` (notebook step 7, CLI
+  `run`) reads any pixel and again before it publishes the run manifest, preprocessing re-discovers
+  the ID, re-reads its bytes once and recomputes the fingerprint from the state it is about to
+  commit. It publishes only when the ID is available (its bytes **and every source** valid, the candidates
+  complete), its SHA-256 and sources equal the pinned ones,
+  the fingerprint equals the checked one, and the rules of those bytes pass; the record then names
+  those bytes. Otherwise exactly **one** class applies, decided in this order (review *aw* B4; the
+  same order as [classifying one ID](#discovery-cm1), so the two rules never disagree):
+  1. the re-discovered ID has **no** candidate: `R_CONSUMER_NOT_FOUND` (naming the pinned SHA-256);
+  2. its current candidates are a **conflict** (for example a package copy still at the pinned bytes
+     beside a bundled copy that changed, O2): `R_CONSUMER_MANIFEST_CONFLICT`, naming every candidate
+     with source and SHA-256, and listing `E_CONSUMER_CHANGED_SINCE_CHECK` (pinned and current
+     SHA-256) among its reasons;
+  3. otherwise, the candidates are not a conflict and the **pin no longer holds** for any of these
+     reasons, all of which are listed: the current candidate classification is **invalid** (any
+     failure of the byte content **or of any source**, for example a source whose inventory hash no
+     longer matches the unchanged bytes, whose file is no longer in its distribution's inventory, or
+     an unknown source making the candidates incomplete, review *az* B3; every reason of every
+     candidate listed); its SHA-256 differs from the pinned one; its source list differs from the
+     pinned one; or the recomputed fingerprint differs from the checked one, **also when** the
+     bytes and sources are identical and valid and the changed state would pass the rules (for
+     example a changed `T` size or exclusion list): `R_CONSUMER_MANIFEST_INVALID` with
+     `E_CONSUMER_CHANGED_SINCE_CHECK` (naming the pinned and current SHA-256, the pinned and current
+     sources, the fingerprint inputs that changed, or, when the SHA-256 and source descriptors are
+     unchanged, that the source verified at the check no longer validates) beside every other
+     reason found. The rules are not re-applied to the changed state to let it pass: a pin is valid
+     only for the state it was checked for.
+
+  Nothing is published in any of the three; the fix is to check again, which in the notebook is a
+  visible step the user confirms. A changed file is never silently adopted and the record never
+  names bytes that were not checked.
+
+The check reads no pixel: confirmed roles, the sizes the headers give for them (`TiffMetadata`), and
+the confirmed image type.
+
+### Refusal codes
+
+New `R_*` codes (preprocessing layer, experiment-v1 §8), proposed for §8 on acceptance. They are
+four (O8); every other distinction is an `E_*` reason or a message detail.
+
+| Code | Meaning |
+|---|---|
+| `R_CONSUMER_MANIFEST_INVALID` | The named consumer has candidates, is not a conflict, and either its bytes or a source fail (also when the bytes are valid and unchanged; at a re-check this is case 3, review *az* B3), or its candidates are incomplete because the metadata reader recorded an unknown source, or, at a pinned re-check, its pinned check no longer holds: the current SHA-256, source list or candidate-state fingerprint differs from the pinned one, also when the current bytes and sources are valid (review *ax* B3). Reasons: the experiment-v1 §2/§6 codes reused with their meaning (`E_FILE_ENCODING`, `E_TOML_SYNTAX`, `E_DUPLICATE_KEY`, `E_TYPE`, `E_ENUM`, `E_DUPLICATE_VALUE`, `E_UNKNOWN_FIELD`, `E_MISSING_FIELD`, `E_SCHEMA_ID`, `E_SCHEMA_VERSION_MISSING`, `E_SCHEMA_VERSION_UNSUPPORTED`, `E_ID_SYNTAX`, `E_TEXT_EMPTY`, `E_VALUE_RANGE`) and new ones: `E_CONSUMER_ID_MISMATCH` (the entry point's or the bundle declaration's ID is not the file's `consumer`), `E_CONSUMER_RULE_CONTRADICTION` (a rule set that admits no image, or a self-withdrawn mixed permission; the two cases of [`[dimensions]`](#the-file-morphobricks_consumertoml)), `E_CONSUMER_ENTRY_POINT` (a consumer entry-point value that is not one top-level package name, or a snapshot member's value that is not `MODULE:ATTRIBUTE`), `E_CONSUMER_SOURCE_UNSAFE` (not in the declaring distribution's inventory, outside its package, a symbolic link on the way, not a regular file, a hash differing from the inventory, a namespace or ambiguous package, an unsupported metadata source or ambiguous distribution, candidate completeness unknown: an unsupported `sys.path` entry, an unreadable root or metadata, or a finder discovery does not run), `E_CONSUMER_SNAPSHOT_STALE` (the `[snapshot]` does not match the installed members), `E_CONSUMER_CHANGED_SINCE_CHECK` (the bytes, sources or candidate state differ from what was checked; also listed under a conflict found at a re-check). Makes that consumer unavailable; blocks only when it is named |
+| `R_CONSUMER_MANIFEST_CONFLICT` | The named ID collides by case with another, is declared by two distributions, or its candidates hold more than one SHA-256 (package and bundle, O2; two bundles), also when found at a pinned re-check. Names every candidate with source, SHA-256 and its own reasons |
+| `R_CONSUMER_NOT_FOUND` | The consumer named (`--consumer`, or a reopened experiment's saved pick) has **no** candidate; names the available IDs, any case-folded near match, and the unavailable ones with their refusal |
+| `R_CONSUMER_DIMENSIONS_NOT_ALLOWED` | Included images break the chosen consumer's `[dimensions]`. **One** refusal lists **every** offending image (FOV key, path) with **every** per-image kind found in it (`multichannel`, `channel_count`, `rgb`, `time`, `volume`, `calibration`; expected and found, for example `T = 40, consumer allows T = 1`, or `z step unknown (W_AXIS_UNCALIBRATED, axis z), consumer requires x, y, z`); then, for the run-level kind `mixed_volumes`, **both groups in full**: every included image with `Z` > 1 (FOV key, path, `Z` size) and every included image with `Z` = 1 or no `Z` (FOV key, path), then the two counts (B7). Lists are sorted by FOV key, then path, in code-point order. It names the consumer, the manifest's SHA-256 and the fixes below. Nothing is dropped, sliced, projected or converted |
+
+The kinds are message detail, not separate codes, as in `R_FAST_LAYOUT_CONTRADICTION` (ADR 0006,
+modelling choice 7): one code, one complete list, one set of fixes.
+
+**Precedence.** Preprocessing's own refusals come first: the check needs confirmed axes, so
+`z_stack_not_supported` and the axis errors are resolved before it runs. For the named consumer,
+exactly one of `R_CONSUMER_MANIFEST_CONFLICT`, `R_CONSUMER_MANIFEST_INVALID` and
+`R_CONSUMER_NOT_FOUND` applies, decided by the classification above (conflict, then invalid; not
+found only with no candidate), at the first check and at every pinned re-check alike. Two questions
+are kept apart: **candidate availability** (the classification, the same at both moments) and, at a
+pinned re-check only, **pin validity**. An ID the classification calls available whose pin no longer
+holds (SHA-256, sources or fingerprint changed) is `R_CONSUMER_MANIFEST_INVALID` with
+`E_CONSUMER_CHANGED_SINCE_CHECK`, never a pass and never a fifth class.
+`R_CONSUMER_DIMENSIONS_NOT_ALLOWED` is computed only for an available consumer with a valid pin (at
+a first check, the pin just made). In the notebook, the consumer refusals are reported before any channel-tagging code (they
+are decided before tagging opens). At a publication or a run they are reported beside every other
+applicable `R_*` code (ADR 0001 AQ2); one run carries each at most once.
+
+### Fixes offered (CM3)
+
+What preprocessing has today (checked, not invented):
+
+| Kind | Fixes |
+|---|---|
+| every kind | **Exclude the offending images.** The exclusion list exists in the notebook (the *exclude* field and the *exclude the blocking images* action, `notebook_folder.py:483-489`, `EXCLUDABLE_CODES` in `notebook_options.py:35`) and the CLI (`--exclude PATH`, `cli.py:189-195`); the action gains this code. Exclusion is the user's click and is recorded as every exclusion is |
+| every kind | **Choose another consumer**, or *No consumer check* |
+| `volume`, `mixed_volumes` | **Project the stacks**, offered **only after preprocessing's existing planner has accepted it for the actual input** (B10): `conversion_plan` with a projection (`_plan_projected`, `:251-285`), which calls `projection_plan.plan_projection` (`:40-128`), is run as a plan (nothing written) on the current included images, mapping, masks folder and the projection settings shown. It refuses OME-Zarr inputs, masks with a Z axis, a slice range that does not fit every stack, a pixel type or sum it cannot project exactly, and a projection over the memory limit. When it returns any refusal, the fix is **not** offered: the message says it is unavailable and quotes each planner refusal with the images it names, and only exclusion and another consumer remain. When it is offered, it is the recorded projection copy (`notebook_projection.py`, `conversion.convert_experiment`; methods `max`, `mean`, `sum` and a slice range, `projection.py:39`), the originals kept. For `mixed_volumes` the copy covers **every** included image, the one-plane ones included, each as an explicit entry of the recorded conversion (`_planned` for every header, `projection_plan.py:84-87`); the message says so. Nothing is silently dropped. Instead the user may exclude all volumes or all planes (two explicit actions; neither is preselected) |
+| `calibration` | **State the step** in `calibration.csv` (the Axes step's calibration card; `calibration.py`), the user's entry, then check again. Never offered as a guess, a copy from another axis or image, or a default |
+| `time`, `channel_count`, `multichannel`, `rgb` | None beyond exclusion and another consumer. Preprocessing has no time-point selection or projection, no channel subset copy and no RGB-to-grey conversion (ADR 0001 RC1 forbids a silent one; ADR 0006 forbids dropping channels). The message says so instead of suggesting a tool that does not exist |
+
+### The record (where it lives)
+
+The run manifest (`run_manifest.json`) records the check under `consumer_check`:
+
+```json
+"consumer_check": {
+  "consumer": "morphofeature",
+  "display_name": "MorphoFeature",
+  "schema_version": 1,
+  "manifest_sha256": "<SHA-256 of the exact bytes checked>",
+  "sources": [{"kind": "package", "distribution": "morphofeature", "version": "<installed version>"},
+              {"kind": "bundled", "path": "<path as given>"}],
+  "dimensions": {"multichannel_support": true, "rgb_support": false, "time_support": true,
+                 "volume_support": "none", "mixed_volume_support": false,
+                 "requires_calibration": []},
+  "snapshot_members_sha256": "<SHA-256 of the canonical JSON of the verified members, or null>",
+  "state_sha256": "<the candidate-state fingerprint checked>",
+  "outcome": "passed"
+}
+```
+
+`dimensions` copies the checked file's `[dimensions]` table exactly: the four booleans,
+`volume_support` (text) and `requires_calibration` (array, as written) always, and `min_channels`
+and `max_channels` as integers **when the file declares them**, omitted when it does not (never
+written as `null` or a default); the strict reader accepts exactly those eight keys with those types. With no consumer checked: `{"consumer": null, "available": ["<ID>", ...]}` (`[]` when none was
+found; sorted by ID; available ones only, as O1 says). A run is published only with
+`outcome = "passed"` or no consumer; a refused check publishes nothing. The same holds for
+`describe --consumer ID` (the check also blocks publishing a description; owner answer O7); a
+description or run published with *No consumer check* is not blocked. The record is provenance only:
+no consumer reads it in v1 (owner answer O5). It is **not** in `morphobricks.toml` (experiment-v1 §1:
+no brick names or routing; ADR 0001 decision 10).
+
+**Run-manifest version and reader (B9).** Adding the key is a new run-manifest version:
+**the next integer after the version current when it lands** (`MANIFEST_VERSION = "5"` at the
+evidence commit, `manifest_versions.py:27`; ADR 0008 also takes a new version, and whichever lands
+second takes the following number; the implementing PR states the number). Under preprocessing's
+one-version rule (`READ_VERSIONS`, ADR 0002 AR11 (7)) the new reader reads that version only and
+refuses every other one, so a version-5 reader never meets the field, and a version-5 manifest is
+refused by the new reader with today's message (run preprocessing again). In the new version
+`consumer_check` is **required** and read strictly: a closed field set per form (the checked form
+above, or the `{"consumer": null, "available": [...]}` form), every field typed, an unknown or
+missing field refused (`ManifestFormatError`), never dropped. Today's `RunManifest.from_dict` ignores
+keys it does not know (`manifest.py:287-342`); the new field is parsed by it, not passed through.
+
+**Reuse identity (B9; ADR 0007 not amended).** ADR 0007 puts the SHA-256 of the whole
+`run_manifest.json` into an entry's `run_folder` identity (`0007:337-355`). So a changed
+`consumer_check` **does** change the identity of every downstream output computed from that run
+folder: a brick entry finds `ENTRY_OUTPUT_EXISTS` and computes nothing silently. This ADR keeps
+that, and corrects the draft's claim that the record is "in no reuse key". Chosen: **the full
+manifest SHA-256 stays in the identity** (option a of the review), rejected: a second, "scientific"
+manifest digest that excludes `consumer_check` (option b). Reasons: it changes no accepted ADR and no
+implemented key; it fails closed (a re-run with another pick never reuses an output silently); a
+re-checked run is a re-run of preprocessing, which already rewrites `written_at` and so already
+changes the SHA-256, so option b would gain no reuse in practice while adding a second digest
+definition that every reader must implement identically. Listed as modelling choice 10.
+
+### Interactions
+
+#### The consumer's own runtime guards: every declared restriction, every route
+
+A consumer still declares its `Capabilities` when it opens `RunInputs`, and is refused there as today
+(`A_RGB_NOT_SUPPORTED`, `A_VOLUME_NOT_SUPPORTED`; MorphoFeature's provider checks). It does not read
+`consumer_check` in v1, to skip a check or for any other purpose (owner answer O5). That alone does
+**not** guard every manifest rule (B2): AR3 refuses a requested volume, not a `plane` request on
+Z-stacks, and no resolver code exists for `T`, `C` counts or a mix. So, normatively:
+
+- A consumer that publishes a manifest with a restriction (a boolean rule `false`, or a channel
+  limit) MUST refuse, itself, a run that breaks it, on **every** route it opens a run, from the
+  confirmed roles, sizes and image type `RunInputs` gives, before any computation, whatever
+  `consumer_check` says or whether it is present (O1, O5). The refusal code is its own (the resolver
+  codes where they apply).
+- A restriction declared without that guard is a defect of the consumer, found by its conformance
+  row: for each restricted dimension, a run made with *No consumer check* is refused by the consumer.
+- The guard's condition is the **declared rule alone**. It is never narrowed by a capability a
+  plug-in claims at run time: a consumer whose manifest says `volume_support = "none"` refuses every
+  `Z` > 1 image even when a requested plug-in could take volumes (review *aw* B1). A consumer that
+  wants plug-in-dependent permission declares it as a derived rule with a verified `[snapshot]`
+  (as MorphoFeature does for `rgb_support`), so the manifest and the guard say the same thing.
+- For MorphoFeature: `rgb_support` is guarded per provider (MF-6, `mask_selection.py:335-336`),
+  consistent with its derived value (true if any installed provider declares it, O4; the run
+  refuses a provider that does not); `volume_support = "none"` and `mixed_volume_support = false`
+  are guarded, unconditionally, only once P-2 exists. MorphoFeature restricts neither `T` nor `C`.
+- A consumer that lists an axis in `requires_calibration` refuses, itself, on every route, an image
+  whose recorded calibration has no length for that axis (ADR 0010's `calibration` record), with its
+  own code, naming the image and axis; it never reads an unknown step as 1, as another axis's size,
+  or as zero (O10).
+
+The manifest is an early error, not a contract that consumers trust. Conformance proves both: the
+same run is refused early by the manifest and, with the manifest check skipped, by the consumer.
+
+#### ADR 0001 RC1 and ADR 0002 AR3
+
+`rgb_support` means the same thing in the three places; `volume_support` shares the word, with the
+three consumer-manifest values of *Vocabulary* above (O9) and the mapping `volumes` = AR3 `true`,
+`none` and `planes` = AR3 `false`. The consumer manifest is not a provider manifest:
+MorphoFeature keeps reading `rgb_support` per provider from `morphofeature_provider.json` and passing
+it as `Capabilities` (ADR 0002 AR7: MorphoFeature decides provider capability). The consumer
+manifest describes the app as a whole for preprocessing's early check only.
+
+#### #438 and ADR 0005 (volumes)
+
+- Until prerequisites P-1 and P-2 are accepted and implemented, and #438's first step lands after
+  them, preprocessing refuses every Z-stack for everyone (`z_stack_not_supported`), so the `volume`
+  and `mixed_volumes` kinds cannot occur.
+- After it, a Z-stack passes preprocessing's own checks; `volume_support = "none"` in the chosen
+  manifest refuses it at step 3, with projection named as a fix only where the planner accepts it.
+  `planes` and `volumes` admit it (CM5 routing, O9); a `planes` consumer then reads it only through
+  explicit `z_indices` requests (ADR 0010).
+- **The mixed-run warning (CM5).** Preprocessing warns, for every run, when some included images have
+  `Z` > 1 and others do not, and records the warning in the run's checks (#438, owner comment of
+  23 November 2026). With a chosen consumer: `volume_support = "none"` refuses each volume as `volume`
+  (the mix is not reported again); `volume_support` `planes` or `volumes` with `mixed_volume_support = false` turns
+  the mix into the blocking kind `mixed_volumes`, listing both groups, and the recorded warning
+  stays; `mixed_volume_support = true` leaves only the warning. With no consumer the warning is all,
+  as #438 decided, and MorphoFeature's P-2 guard still refuses a mixed run. The manifest never makes
+  the warning disappear.
+- **Calibration (O10; ADR 0010 VZ12).** An unknown step never blocks anything by preprocessing's own
+  rules (ADR 0010 records it with `W_AXIS_UNCALIBRATED` and the axis). Only a chosen consumer whose
+  `requires_calibration` lists the axis refuses, early (phase 1, `describe --consumer`, the run's
+  pinned re-check), as kind `calibration` naming the consumer; with *No consumer check*, its own
+  runtime guard refuses at the hand-off.
+- Histograms, normalization and QC for volumes (step 5) are #438's rule and are untouched here. A
+  `volume` run never reaches `binary_mask_policy` (ADR 0005 BM5) through this check: that refusal
+  stays at `RunInputs`; the early manifest does not replace it.
+
+#### ADR 0006 (fast-mode channel layout)
+
+The check runs before tagging, so before `R_FAST_LAYOUT_CONTRADICTION` can be computed. The two
+never report the same thing: the manifest counts channels against the consumer's limits; fast mode
+compares each image with the experiment's list.
+
+#### ADR 0007 (run-folder entry)
+
+A brick started on a validated run folder (`<brick>.run_folder`) is otherwise unaffected. A brick's
+entry does not name the consumer a run was checked for and does not read `consumer_check` (owner
+answer O5); the field changes its run-folder identity only through the manifest SHA-256 (above).
+
+### MorphoFeature's manifest
+
+From the code read: MorphoFeature runs time series (`run_config._planes`, `:440-445`, iterates `T`;
+`attach_tracks`), takes several channels, expands every `Z` slice into a separate 2-D FOV today
+(P-2 replaces that with a refusal), and requires `rgb_support` from every provider of a run (MF-6,
+`mask_selection.py:335-336`). Its own distribution declares **no** provider: providers are other
+distributions in the `morphofeature.providers` group (MorphoFeature `pyproject.toml` at the evidence
+commit). So the draft's "the providers the release itself ships" is the empty set, and a fixed
+`rgb_support` would contradict O4 in any real installation (B3).
+
+The encoding of O4 (recommended):
+
+- MorphoFeature ships `src/morphofeature/morphobricks_consumer.toml` with the entry point
+  `[project.entry-points."morphobricks.consumers"] morphofeature = "morphofeature"`:
+  `multichannel_support = true`, `time_support = true`, `volume_support = "none"` (fixed, not
+  derived: no provider declares a volume capability, AR3 keeps MorphoFeature 2-D, and P-2 refuses
+  every Z run unconditionally; modelling choice 16; MorphoFeature may later take volumes as
+  explicit `z_indices` planes, `planes`, only by its own reviewed change, owner answer of 26
+  November 2026), `mixed_volume_support = false`, no channel limits, `requires_calibration` as
+  MorphoFeature's own PR states it (this ADR does not guess which axes its providers need; `[]` if
+  none), and `rgb_support` with a `[snapshot]`
+  (`entry_point_group = "morphofeature.providers"`, `member_file = "morphofeature_provider.json"`,
+  `derives = ["rgb_support"]`).
+- The file is written by MorphoFeature's own command (for example
+  `morphofeature consumer-manifest --write PATH`), which lists the installed providers with the
+  [member locator](#derived-rules-the-snapshot-table) (the verifier's own locator and identity; not
+  `_manifest_path`, which calls `find_spec`), reads each located `morphofeature_provider.json` from
+  the bytes it hashed, applies O4 (`true` if **any** installed provider declares `rgb_support`, with
+  MorphoFeature's own reading of that key: absent is `false`, a non-boolean is a manifest error
+  naming the member and no file is written, never coerced or skipped; conformance P24,
+  `providers.py:415-432`) and writes the members with their SHA-256. The release writes the shipped file for the provider set it
+  is released with (its documented install set). Hashing proves the inputs, not the arithmetic: that
+  the generator computes O4 over **all** located members is its own conformance assertion (P54(e)),
+  not something preprocessing's verification shows.
+- Preprocessing verifies the snapshot at every discovery. In an environment whose installed providers
+  differ (an add-on installed, one removed or upgraded), MorphoFeature is **unavailable** as a
+  consumer (`E_CONSUMER_SNAPSHOT_STALE`, naming each difference), never checked against a value that
+  may be wrong. The user's fixes: install the release's provider set, or *No consumer check* (the
+  runtime guards still apply). A bundled regenerated copy does **not** override a stale package copy
+  (O2: the bundled file never wins; differing bytes are a conflict).
+
+Consequence for the owner's review (modelling choice 14): with this encoding MorphoFeature is
+checkable only in environments matching its release's provider set. The alternative that would
+follow every installation, MorphoFeature shipping no package manifest and LabConstrictor apps
+bundling a generated one, reads CM1 as permitting a consumer to use the bundle source alone; it is
+not chosen here because CM1 says the consumer package ships the manifest.
+
+## Rejected alternatives
+
+- **Fields in `morphobricks.toml`.** The description says what the experiment is; which app runs next
+  is routing (experiment-v1 §1, ADR 0001 decision 10), and one experiment can feed several consumers.
+- **Reading the provider manifests directly.** Preprocessing would interpret MorphoFeature's
+  provider format, and a non-MorphoFeature consumer (OpticalFlow3D) has none. The `[snapshot]` hashes
+  member files without parsing them.
+- **A Python hook in the consumer package** (`check(dimensions) -> refusals`). Discovery would import
+  consumer code; a declarative file can be hashed, recorded and audited.
+- **`find_spec` and `is_file` to locate the package file** (the draft, after MorphoFeature's provider
+  discovery). `find_spec` runs import finders; `is_file` follows symbolic links; neither binds the
+  file to the declaring distribution (B6).
+- **Checking at the header scan (step 1).** Header letters are not confirmed roles; a plain stack's
+  axes are open (`axis_names.py`), so the check would guess.
+- **Replacing the consumer's runtime refusal.** A stale or wrong manifest would then let a run through.
+- **Re-checking a changed manifest at the run and recording the new bytes** (the draft's P48). The
+  user confirmed one manifest; a run under other bytes would be checked against rules nobody saw
+  (B8).
+- **Absent boolean rules defaulting to `false` (RC1's provider rule).** See *Vocabulary* above.
+
+## Proposed fixtures and conformance
+
+Fixtures (proposed, not created): a new tree `fixtures/consumer/`, checked by a reference validator
+`tools/audit/refconsumer.py` on acceptance.
+
+| Fixture | Expected | Shows |
+|---|---|---|
+| `cv01_morphofeature_like` | pass | All four booleans, `volume_support = "none"`, `requires_calibration = []`, no channel limits |
+| `cv02_single_channel_volume_timelapse` | pass | The OpticalFlow3D-like example above |
+| `cv03_channel_limits` | pass | `min_channels = 2`, `max_channels = 4` |
+| `cv04_single_channel_with_max_3` | pass | `multichannel_support = false`, `max_channels = 3`: satisfiable by one channel (was `ci07`, B4) |
+| `cv05_only_max_channels` | pass | `max_channels = 2`, `min_channels` omitted (F4) |
+| `cv06_snapshot` | pass | A `[snapshot]` with two members, `derives = ["rgb_support"]` |
+| `cv07_snapshot_no_members` | pass | A `[snapshot]` with `members = []` |
+| `cv08_rgb_only` | pass | `rgb_support = true`, `multichannel_support = false`, `min_channels = 2`: an RGB-only consumer; satisfiable by an RGB image, every channel image refused (review *aw* B3, F4) |
+| `cv09_rgb_only_min_above_max` | pass | `rgb_support = true`, `min_channels = 3`, `max_channels = 2`: likewise RGB-only |
+| `cv10_volume_planes` | pass | `volume_support = "planes"`, `mixed_volume_support = false` (O9) |
+| `cv11_requires_xyz` | pass | `requires_calibration = ["z", "x", "y"]`: order not semantic (O10) |
+| `cv12_requires_z_without_volumes` | pass | `requires_calibration = ["z"]` with `volume_support = "none"`: valid, applies to no image |
+| `ci01_missing_volume_support` | `E_MISSING_FIELD` | Every boolean rule is required |
+| `ci02_rgb_support_string` | `E_TYPE` | `"true"` is not support |
+| `ci03_pixel_types_field` | `E_UNKNOWN_FIELD` | CM4: pixel types are out of v1 |
+| `ci04_schema_version_2` | `E_SCHEMA_VERSION_UNSUPPORTED` | Unknown versions refused |
+| `ci05_mixed_without_volume` | `E_CONSUMER_RULE_CONTRADICTION` | `mixed_volume_support = true` with `volume_support = "none"`: a self-withdrawn permission (case 2), not an unsatisfiable set |
+| `ci06_min_above_max` | `E_CONSUMER_RULE_CONTRADICTION` | `rgb_support = false`, `min_channels = 3`, `max_channels = 2`: no image passes |
+| `ci07` | retired, never reused | Was a wrong contradiction; now `cv04` |
+| `ci08_max_channels_zero` | `E_VALUE_RANGE` | Limits are ≥ 1 |
+| `ci09_consumer_not_token` | `E_ID_SYNTAX` | The ID follows the Token rule |
+| `ci10_bom` | `E_FILE_ENCODING` | §2 item 2 |
+| `ci11_duplicate_key` | `E_DUPLICATE_KEY` | §2 item 2 |
+| `ci12_schema_wrong` | `E_SCHEMA_ID` | `schema = "morphobricks-experiment"` |
+| `ci13_single_channel_min_2` | `E_CONSUMER_RULE_CONTRADICTION` | `rgb_support = false`, `multichannel_support = false`, `min_channels = 2`: no image can pass (B4; with `rgb_support = true` it is `cv08`) |
+| `ci14_snapshot_derives_unknown_key` | `E_VALUE_RANGE` | `derives = ["min_channels"]`: only boolean rules derive |
+| `ci15_snapshot_member_file_with_path` | `E_VALUE_RANGE` | `member_file = "../x.json"` |
+| `ci16_volume_support_boolean` | `E_TYPE` | `volume_support = true`: the pre-O9 boolean form is never mapped to a value |
+| `ci17_volume_support_unknown` | `E_ENUM` | `volume_support = "slices"` (also `"Planes"`: exact, lower case) |
+| `ci18_requires_calibration_missing` | `E_MISSING_FIELD` | The calibration rule is required (`[]` for none) |
+| `ci19_requires_calibration_axis_t` | `E_ENUM` | `requires_calibration = ["t"]` (also `"X"`): only `x`, `y`, `z` |
+| `ci20_requires_calibration_duplicate` | `E_DUPLICATE_VALUE` | `requires_calibration = ["x", "x"]` |
+| `ci21_calibration_table` | `E_UNKNOWN_FIELD` | A `[calibration]` table or `z_step_min` key: O10 adds `requires_calibration` only |
+
+Rule cases (F4), checked with `cv01`/`cv03`/`cv04` against described inputs: an image without `C`
+passes `max_channels = 1` and `multichannel_support = false`; `C` of size 1 likewise; `Z` = 1 and
+`T` = 1 pass `volume_support = "none"` and `time_support = false`; an RGB unit of three samples passes
+`max_channels = 1` and is refused only by `rgb_support = false`; `cv03` refuses a one-channel image
+as `channel_count` (`found 1, required ≥ 2`). With `cv08` (RGB-only): a confirmed RGB-only run passes;
+a one-channel image is refused as `channel_count` (`found 1, required ≥ 2`); a two-channel image as
+`multichannel` (`C = 2, consumer allows C = 1`); a described input with RGB and channel units lists
+only the channel images. That last case is a consumer-rule test only: experiment-v1 (`:389-392` at
+the evidence commit) still forbids running mixed image types, and this ADR does not lift that. RGB
+samples are never counted to make a channel image pass or fail. All channel rule cases are decided in
+phase 2, after the image type is confirmed.
+
+Conformance plan, proposed rows on acceptance: a §2 row *Consumer manifest* (preprocessing runs every
+`cv*`/`ci*` fixture with the exact reasons) and physical scenarios P41-P58 and P71-P72 in §3 (they do
+not collide with P1-P40, nor with ADR 0010's P59-P70):
+
+| # | Setup | Required outcome |
+|---|---|---|
+| P41 | No manifest installed or bundled | Run as today; `consumer_check = {"consumer": null, "available": []}` |
+| P42 | A T = 5 time-lapse; consumer with `time_support = false` | `R_CONSUMER_DIMENSIONS_NOT_ALLOWED` at axis confirmation, every image listed with kind `time`; tagging does not open; excluding them or picking another consumer passes; no projection offered |
+| P43 | (a) A unit confirmed `rgb`; consumer with `rgb_support = false`. (b) Review *ax* B2: an RH1 override unit (a three-sample MINISBLACK scanner TIFF) under `cv08` and under `cv09`, confirmed `rgb`; (c) the same images confirmed `channel`; (d) a reopened experiment with the type already confirmed; (e) the type changed after a pass; (f) review *az* FILE: a consumer with `time_support = false` and `max_channels = 2`, one unit with a `T` = 5 image and another unit with a three-channel image, both types confirmed, then `describe` | (a) Refused at image-type confirmation, before tagging, kind `rgb`; an RH1 override unit is judged by its confirmed type, not its header. (b) No channel rule is decided at axis confirmation, the image-type controls stay reachable, and at type confirmation the check passes. (c) Refused at type confirmation with the applicable `multichannel` or `channel_count` kinds. (d) Phase 2 runs right after phase 1. (e) The pass is voided and phase 2 runs again. (f) The notebook shows the `time` offence at phase 1 and the `channel_count` offence at phase 2; `describe` reports **one** `R_CONSUMER_DIMENSIONS_NOT_ALLOWED` listing both images with their kinds. In every case no channel-count decision is made before the type is confirmed |
+| P44 | Three-channel images; `max_channels = 2` | Kind `channel_count`, `found 3, allowed ≤ 2`, at image-type confirmation (phase 2); nothing dropped |
+| P45 | (after P-1, P-2, #438) Z-stacks; `volume_support = "none"` | (a) TIFF stacks the planner accepts: kind `volume`, projection offered; after the projection copy the check passes and the record holds the manifest SHA-256; (b) OME-Zarr stacks, or masks with Z: projection **not** offered, the planner's refusal quoted, exclusion and another consumer only |
+| P46 | (after P-1, P-2, #438) Mixed Z and 2-D images | `mixed_volume_support = false` (with `volume_support` `planes` or `volumes`): `mixed_volumes`, the refusal lists every volume (FOV key, path, Z) and every plane (FOV key, path) in order, then both counts; both exclusion actions offered, neither preselected; the projection, when offered, names every included image; #438's warning still recorded. `mixed_volume_support = true`: warning only. No consumer: warning only |
+| P47 | One consumer ID from several sources | Package and bundle, equal SHA-256: one entry, both sources recorded; different (also CRLF-only): `R_CONSUMER_MANIFEST_CONFLICT` naming both, other consumers still selectable; two bundles, equal: one entry; different: conflict (F1); two distributions with one ID: conflict for both; IDs `MF` and `mf`: conflict for both (F3) |
+| P48 | Each at `describe`, at the run's first re-check and between it and publication (review *aw* B4, *ax* B3): (a) a sole candidate's bytes changed; (b) package and bundle byte-identical at the check, then only the bundle changed; (c) the last candidate removed; (d) for a permissive `T`-capable consumer, an included FOV's confirmed `T` size or the exclusion list changed (still passing the rules), consumer bytes, sources and provider members unchanged; (e) an experiment reopened with the same consumer bytes but a changed source list (an identical bundle added, or the package upgraded with identical bytes); (f) review *az* B3: for a non-snapshot installed consumer, only its distribution's `RECORD` changed (a wrong hash for `morphobricks_consumer.toml`, or the entry removed), the file, its bytes, the distribution name and version, the source list and the image state unchanged | Exactly one class each: (a) `R_CONSUMER_MANIFEST_INVALID` with `E_CONSUMER_CHANGED_SINCE_CHECK` naming both SHA-256; (b) `R_CONSUMER_MANIFEST_CONFLICT` naming both sources and SHA-256, with `E_CONSUMER_CHANGED_SINCE_CHECK` among its reasons; (c) `R_CONSUMER_NOT_FOUND`; (d) `R_CONSUMER_MANIFEST_INVALID` with `E_CONSUMER_CHANGED_SINCE_CHECK` naming the changed fingerprint inputs, never a pass; (e) the saved source list detects the change: `R_CONSUMER_MANIFEST_INVALID` with `E_CONSUMER_CHANGED_SINCE_CHECK` naming pinned and current sources, until checked again; (f) exactly one `R_CONSUMER_MANIFEST_INVALID` with `E_CONSUMER_SOURCE_UNSAFE` (the inventory reason) and `E_CONSUMER_CHANGED_SINCE_CHECK` naming the source that no longer validates; nothing published in any case; in (a) and (d), checking again and confirming passes and records the new SHA-256 or fingerprint |
+| P49 | (after P-2) Z runs made with *No consumer check*, MorphoFeature's manifest still `volume_support = "none"`, requesting (a) no provider claiming volume capability, (b) one test provider claiming it by any means beside one that does not, (c) only such providers; also (d) a wrong bundled-style manifest claiming `volume_support = "volumes"` | MorphoFeature refuses every one by its P-2 guard on every route, before any provider runs; no claim of a provider is consulted (review *aw* B1); a T-only run still passes. Before P-2 this scenario is not valid and is not run |
+| P50 | Skipped early check against each restricted dimension: for each consumer and each restriction its manifest declares, a run with *No consumer check* | The consumer refuses it on every route it offers (B2); MorphoFeature: `rgb` by MF-6, and (after P-2) Z and mixed, whatever providers the run requests (P49) |
+| P51 | CLI: no `--consumer` while two consumers are installed and one is invalid (O1) | No check, no refusal; `available` lists the valid ID only; `--consumer unknown` is `R_CONSUMER_NOT_FOUND` naming the available and unavailable ones |
+| P52 | Notebook with exactly one available consumer (O3) | Nothing preselected; tagging stays closed until the user clicks the consumer or *No consumer check* |
+| P53 | `describe --consumer ID` on images the consumer refuses; then `describe --no-consumer` (O7) | The first publishes nothing (`R_CONSUMER_DIMENSIONS_NOT_ALLOWED`); the second publishes |
+| P54 | MorphoFeature's snapshot (B3, O4; review *aw* B2): (a) the release provider set, two providers with real dotted factory values (`pkg.module:factory`); (b) an RGB-capable add-on provider installed; (c) a provider removed; (d) a regenerated bundle beside the stale package copy; (e) the generator run over a set with exactly one RGB-capable provider, over one with none, over one whose only provider omits `rgb_support`, and over one with a provider whose `rgb_support` is `"true"` | (a) generated and verified snapshot match: available, `rgb_support` as written; (b), (c) `R_CONSUMER_MANIFEST_INVALID`, `E_CONSUMER_SNAPSHOT_STALE` naming the member; (d) `R_CONSUMER_MANIFEST_CONFLICT`; (e) `rgb_support = true`, then `false`, then `false` (absent is false), then an explicit manifest error naming the member and no file written (never coerced or omitted), with every located member listed; no provider module imported and no finder run in any case |
+| P55 | Hostile discovery (B6; review *aw* B2): consumer entry points (a) a value `os:system` or `pkg.sub`; (b) the package's manifest a symbolic link to a file outside the package; (c) the top-level name a namespace package spread over two paths; (d) an import trap: a `sys.meta_path` finder defining only `find_spec`, the consumer package's `__init__.py`, and recording wrappers around `importlib.metadata.distributions`, `entry_points` and `version`, all recording any call, around an otherwise valid consumer and MorphoFeature with an ordinary wheel-installed provider with a dotted factory, for both the verifier and the generator; (h) review *ax* B1, *az* B2: the same with a finder exposing `find_distributions` (recording any call and returning nothing) in each of three shapes: defined on its class, assigned to the instance by its constructor, and supplied dynamically by a class `__getattr__` (recording any call); also a named non-snapshot consumer given only as a bundle while such a finder is present; (i) a provider whose metadata is an `*.egg-info` or in a zip root, and the same distribution name under two roots; (j) review *az* B1: starting from a valid pinned snapshot and a checked pick, each of: an RGB-capable provider, and separately a consumer package of the picked ID with other bytes, in a wheel-layout root given as a concrete `pathlib.Path` `sys.path` entry; a relevant `*.dist-info` that is a symbolic link to a valid metadata directory; an unreadable relevant `entry_points.txt`; a `sys.path` entry that is a `str` subclass and one that is an `os.PathLike` object, each recording any method call; the same root listed twice; and an ordinary wheel-installed consumer and provider with none of these; (e) a distribution listing another distribution's package file; snapshot members (f) a provider value `foo:bar:baz`, one without `:`, and `os:system`; (g) a provider's `morphofeature_provider.json` a symbolic link out of its package, or its package a namespace package | (a) `E_CONSUMER_ENTRY_POINT`; (b), (c), (e) `E_CONSUMER_SOURCE_UNSAFE`; each of (a), (b), (c), (e) refuses that consumer alone, the others still listed. (d) discovery and generation **succeed without running any trap**: nothing is recorded, no consumer or provider module enters `sys.modules`, the generated snapshot lists every member and verifies, and both consumers are available (a `find_spec` finder's presence is not a reason to refuse). (h) In each shape nothing is recorded (no hook, no `__getattr__` call); the finder is an unknown source naming its class; every consumer is unavailable (`R_CONSUMER_MANIFEST_INVALID`, `E_CONSUMER_SOURCE_UNSAFE`, "candidate completeness unknown"), the bundle-only pick included, and the generator refuses; a run with no consumer named runs as today. (i) `E_CONSUMER_SOURCE_UNSAFE` ("unsupported metadata source" or "ambiguous distribution") naming the paths, MorphoFeature unavailable, the provider never silently omitted. (j) The `Path` root is read: the added provider makes the snapshot `E_CONSUMER_SNAPSHOT_STALE` naming it, the differing package copy makes the pick `R_CONSUMER_MANIFEST_CONFLICT`; the symbolic-link `*.dist-info` is "unsupported metadata source" for the ID or group it declares; the unreadable file and both unsupported entries are unknown sources (every consumer unavailable, no method of the entries called); the duplicate root is one root, not an ambiguous distribution; the ordinary case is available. The old snapshot or pick is never accepted by omission. (f) `E_CONSUMER_ENTRY_POINT` for the malformed values and `E_CONSUMER_SOURCE_UNSAFE` for `os:system`, naming the member; (g) `E_CONSUMER_SOURCE_UNSAFE`; in (f) and (g) MorphoFeature is unavailable, nothing imported |
+| P56 | Refusal classes (B5): (a) a named ID whose only copy has a TOML error; (b) a named ID with a valid package copy and an invalid bundled copy; (c) a named ID with no candidate but an unrelated invalid file; (d) the P48 (b) state reached at a re-check instead of at the first check | (a) `R_CONSUMER_MANIFEST_INVALID` only; (b) `R_CONSUMER_MANIFEST_CONFLICT` only, listing the bundle's reasons; (c) `R_CONSUMER_NOT_FOUND` only; (d) the same single class as at a first check (`R_CONSUMER_MANIFEST_CONFLICT`), plus the change reason |
+| P57 | Invalidation (B8): after a passed check, the user changes the axis roles, an exclusion, the image type or the pick, or reopens an experiment whose saved pick is gone | Tagging and publication close until the check passes again; the gone pick is `R_CONSUMER_NOT_FOUND`, a saved pick whose package and bundle now differ is `R_CONSUMER_MANIFEST_CONFLICT`, never *No consumer check* |
+| P71 | O9 routing (after P-1, P-2, #438): Z-stacks; consumers with `volume_support` `planes` and `volumes`, each then opening `RunInputs` with (a) a `plane` request with `z_indices = (0,)`, (b) a `plane` request without `z_indices`, (c) a `volume` request | Both pass the early check. `planes`: (a) served and recorded; (b) `A_VOLUME_NOT_SUPPORTED` (ADR 0010 rule b); (c) `A_VOLUME_NOT_SUPPORTED` (rule a, `Capabilities.volume_support = false`). `volumes`: (a) and (c) served; (b) refused as for `planes` |
+| P72 | O10 (`x`, `y` from the start; `z` after P-1, P-2, #438): a consumer with `requires_calibration = ["x", "y", "z"]` on (a) plane images without X/Y sizes; (b) Z-stacks with the Z step unknown, then (c) with it stated in `calibration.csv`; (d) Z stated as `pixels`; (e) the same runs with *No consumer check* | (a), (b), (d): `R_CONSUMER_DIMENSIONS_NOT_ALLOWED` kind `calibration` at phase 1, at `describe --consumer` and at the run's re-check, naming the consumer, each image and axis and its source; nothing published; the fix *state the step* offered beside exclusion and another consumer, never a guess. (c) the statement changes the fingerprint, phase 1 runs again and passes. (e) preprocessing publishes with `W_AXIS_UNCALIBRATED` recorded; the consumer's own guard refuses at the hand-off |
+| P58 | Run-manifest version (B9): (a) a new-version manifest without `consumer_check` or with an unknown field in it; (b) a version-5 manifest; (c) a brick output reused after the same run folder is re-run with another pick; (d) checked records of `cv03` and `cv01`, one with `"min_channels": null`, and one with `"volume_support": false` | (a) refused by the reader; (b) refused with "run preprocessing again"; (c) `ENTRY_OUTPUT_EXISTS` (ADR 0007), never a silent reuse; (d) a checked record of `cv03` holds `min_channels` and `max_channels`, one of `cv01` holds neither key, and records with `"min_channels": null` or a boolean `volume_support` are refused |
+
+The §2 row also checks that discovery imports no consumer module (a `sys.modules` scan **and** the
+P55 (d), (h) and (j) traps, since a module scan alone does not prove that no finder ran).
+
+## Modelling choices for the owner's review
+
+Not owner decisions, except where marked "now owner answer": choices 6, 11 and 12 are the encoding
+of O2, O3 and O1 and stay listed so the list is complete. The others are not covered by the owner's
+answers; each may be amended. **Changed after review *at*** marks a choice revised by this revision,
+with the finding; **changed after review *aw*** and **changed after review *ax*** likewise.
+
+1. **Names:** the file `morphobricks_consumer.toml` (underscore, like MorphoFeature's
+   `morphofeature_provider.json`); `schema = "morphobricks-consumer"`; the keys `consumer`,
+   `display_name`, `[dimensions]`, `multichannel_support`, `rgb_support`, `time_support`,
+   `volume_support`, `mixed_volume_support`, `min_channels`, `max_channels`, `[snapshot]`;
+   after O9 and O10 the values `none`, `planes`, `volumes` and the key `requires_calibration`
+   (the owner's example name) with lower-case axis names `x`, `y`, `z` (the owner's examples; they
+   name the confirmed roles `X`, `Y`, `Z`).
+   **Changed after review *at*** (F3): IDs compared exactly; a case-fold collision is a conflict;
+   picker order by folded `display_name`, then ID. (B3): the `[snapshot]` table is added.
+2. **Format:** TOML with experiment-v1 §2's strict parsing rules (not JSON like the provider
+   manifests), so one parser and one set of reasons serve both MorphoBricks TOML files.
+3. **Reuse of `rgb_support` and `volume_support`**, new keys in the same `<axis>_support` pattern;
+   every boolean rule **required**. **Changed after review *at*** (B2): `volume_support` keeps the
+   word, with a stated stronger early meaning (no image with `Z` > 1 in any form), not claimed
+   equivalent to AR3 at run time. **Changed by O9** (26 November 2026): `volume_support` is text with
+   three values (`none`, `planes`, `volumes`), the key name kept; `volumes` maps to AR3's `true`.
+   Alternative not chosen: a separate boolean `volume_plane_support` beside a boolean
+   `volume_support` (two keys, with a contradiction between them to define).
+4. **Channel limits optional**, absent meaning no limit; RGB samples are not counted as channels.
+   **Changed after review *at*** (B4): only unsatisfiable sets are contradictions
+   (`min_channels > 1` with `multichannel_support = false`; `min > max`; mixed without volume).
+   **Changed after review *aw*** (B3): channel rules that admit no channel image are a
+   contradiction only with `rgb_support = false`; with `rgb_support = true` they declare an
+   RGB-only consumer (`cv08`, `cv09`). Mixed without volume stays refused, now stated as a
+   consistency policy (a self-withdrawn permission), since such a set is satisfiable by 2-D images.
+   Alternative not chosen: refusing internally impossible channel limits even for an RGB-only
+   consumer; v1 would then have no way to write "RGB only".
+5. **Discovery:** entry-point group `morphobricks.consumers`, named by consumer ID, value the
+   top-level package. **Changed after review *at*** (B6): the file is bound to the declaring
+   distribution's installed-file inventory, contained, regular and link-free; no `find_spec`, no
+   `EntryPoint.load`; namespace and ambiguous packages refused. (B5, F1): bundled files are declared
+   with their ID (`consumer_manifests={ID: path}`, `--consumer-manifest ID=PATH`), no folder scan.
+   **Changed after review *aw*** (B2): `[snapshot]` members have their own locator, the
+   `MODULE:ATTRIBUTE` factory grammar with the first module component as package, bound to the
+   declaring distribution's inventory; generator and verifier share it. **Changed after review
+   *ax*** (B1): distributions are enumerated by a filesystem-only metadata reader (`*.dist-info` in
+   `sys.path` directory roots), not `importlib.metadata`; unsupported or ambiguous metadata sources
+   and custom `find_distributions` finders are reported (snapshot consumers unavailable), never run
+   and never silently skipped. **Changed after review *az*** (B1, B2): every `sys.path` entry and
+   every metadata entry Python's search indexes is accounted for (concrete `pathlib` paths read;
+   other entry types, unreadable roots or metadata recorded as unknown sources; link and legacy
+   metadata read as bytes for relevance only), and every `sys.meta_path` entry other than the
+   standard finders is an unknown source unless provably without metadata capability by class
+   namespaces; any unknown source makes every consumer unavailable, not only `[snapshot]` ones.
+   Alternatives not chosen: running `importlib.metadata` and accepting that a custom finder executes
+   during discovery; refusing every non-standard finder and path hook outright, which would make
+   consumers unavailable wherever setuptools' `_distutils_hack` finder (inserted at start-up by its
+   `distutils-precedence.pth`) or an editable install is present.
+6. **Precedence:** identical SHA-256 or refuse (`R_CONSUMER_MANIFEST_CONFLICT`); duplicate IDs across
+   distributions refused for both. (Package versus bundle: now owner answer O2.) **Changed after
+   review *at*** (B5, F1): the same rule covers two bundles and invalid copies; conflict, invalid and
+   not found are mutually exclusive, in that order.
+7. **The check in two phases**, the `T`, `Z` and mixed rules at axis confirmation and the `rgb`,
+   `multichannel` and channel-count rules together at image-type confirmation, both before tagging.
+   **Changed after review *ax*** (B2): the channel rules moved from axis confirmation to phase 2,
+   since whether they apply depends on the confirmed type; a pending phase-2 rule is neither a pass
+   nor a refusal. **Changed after review *at*** (B8): bound to pinned bytes and a
+   candidate-state fingerprint, voided by any edit, re-checked pinned at the describe and run commit
+   boundaries; a changed manifest is refused, never silently adopted. **Changed after review
+   *aw*** (B4): a re-check uses the classification order (not found, conflict, invalid), so a
+   package+bundle pair that diverges after a check is one `R_CONSUMER_MANIFEST_CONFLICT` carrying
+   `E_CONSUMER_CHANGED_SINCE_CHECK`; a sole changed candidate is `R_CONSUMER_MANIFEST_INVALID`.
+   **Changed after review *ax*** (B3): availability and pin validity are separate questions; an
+   available ID whose pin no longer holds (fingerprint-only change included) is
+   `R_CONSUMER_MANIFEST_INVALID`, and the refusal table says so; the saved pick carries its source
+   list. **Changed after review *az*** (B3): re-check case 3 names an invalid source as well as
+   invalid bytes; the notebook reports offences per phase, a publication one combined refusal.
+8. **Codes:** four `R_CONSUMER_*` codes (O8); the §2/§6 `E_*` codes reused as reasons, plus
+   `E_CONSUMER_ID_MISMATCH` and `E_CONSUMER_RULE_CONTRADICTION`; one dimensions refusal with kinds as
+   detail. **Changed after review *at*** (B5-B8, B3): new reasons `E_CONSUMER_ENTRY_POINT`,
+   `E_CONSUMER_SOURCE_UNSAFE`, `E_CONSUMER_SNAPSHOT_STALE`, `E_CONSUMER_CHANGED_SINCE_CHECK`;
+   `mixed_volumes` lists both groups in full (B7).
+9. **The mixed rule is required** and only meaningful with `volume_support` `planes` or `volumes` (a
+   contradiction with `none`); the #438 warning is kept and recorded in every case. **Changed after review *at***
+   (B1, B2): the volume rules take effect only after prerequisites P-1 (the #438 experiment-v1 §1
+   amendment) and P-2 (MorphoFeature's Z and mixed guard).
+10. **The record:** `consumer_check` in `run_manifest.json`, `{"consumer": null, "available": [...]}`
+    when none; never in the description. **Changed after review *at*** (B9): a new run-manifest
+    version with a strict reader and the field required; the record adds `snapshot_members_sha256`
+    and `state_sha256`; the draft's "in no reuse key" was wrong: through ADR 0007's full-manifest
+    SHA-256 a changed record changes downstream identity, and this ADR **keeps** that (option a),
+    rather than a second digest excluding the field (option b).
+11. **No preselection** in the picker, even with one consumer; *No consumer check* is an explicit
+    entry. (Now owner answer O3.)
+12. **CLI default without `--consumer`:** no check, the available consumers listed in the report.
+    (Now owner answer O1.)
+13. **The fixes:** exclusion (existing list, a new action for this code), another consumer, and
+    projection for the volume kinds only; nothing invented for T, channels or RGB. **Changed after
+    review *at*** (B10): projection is offered only after the existing planner accepted it for the
+    actual input, otherwise its refusals are quoted; a mixed-run projection covers every included
+    image explicitly.
+14. **New after review *at*** (B3): MorphoFeature's O4 value is carried by a verified `[snapshot]` in
+    its package file; an environment with another provider set makes MorphoFeature unavailable
+    (`E_CONSUMER_SNAPSHOT_STALE`) rather than checked against a possibly wrong value. The
+    bundle-only alternative is described under [MorphoFeature's manifest](#morphofeatures-manifest).
+15. **New after review *at*** (B2): every consumer that declares a restriction guards it itself on
+    every route, independent of `consumer_check`; tested by P50. **Changed after review *aw*** (B1):
+    the guard's condition is the declared rule alone, never narrowed by a plug-in's run-time claim.
+16. **New after review *aw*** (B1): MorphoFeature's `volume_support = false` (now `"none"`, O9) is **fixed**, not
+    derived O4-style, and P-2 is unconditional while it is. Reasons: `ProviderInfo` declares no
+    volume capability (there is nothing to derive from), ADR 0002 AR3 keeps MorphoFeature 2-D, and
+    deriving it would need a new provider-manifest field, a provider API change outside this ADR.
+    Alternative not chosen: a derived `volume_support` with a `[snapshot]` and a P-2 conditioned on
+    the requested providers; it becomes possible only with that provider API change, made together
+    with a revised MorphoFeature consumer manifest.
+17. **New with O10** (26 November 2026): `requires_calibration` is a key of `[dimensions]` (so the
+    record copies it with the other rules) and is **required**, `[]` meaning no requirement, like
+    every other rule that has no natural absent meaning; a requirement is met only by a step in a
+    length unit (`header` or `stated`), so `pixels` fails it as `unknown` does; `z` applies to
+    volumes only; the check runs in phase 1 and its inputs are in the fingerprint; the refusal is a
+    kind of `R_CONSUMER_DIMENSIONS_NOT_ALLOWED`, keeping O8's four codes, though the code's name says
+    "dimensions". Alternatives not chosen: a separate `[calibration]` table (a second table to copy
+    and record); an optional key with absent meaning "none" (a silent permission the author never
+    wrote); a fifth code `R_CONSUMER_CALIBRATION_REQUIRED` (contradicts O8's four rows).
+
+## Review *at* — responses
+
+Review *at* (24 November 2026) read this ADR at `80c7dd8b9ce575b00506e7e89a09f6984bcc8c78`. Each
+finding was checked against the cited sources at the stated commits before any change; all hold.
+
+| Finding | Checked | Change |
+|---|---|---|
+| B1 | experiment-v1 §1 (`:49-50`) does say "2-D planes only"; the draft's "no other rule changes" was false | Prerequisite P-1, a separate #438 amendment; not written here (O8 kept) |
+| B2 | `Request.planes` defaults to `plane` (`run_inputs_request.py:169-193`); `volume_refusals` refuses only a `volume` request or a BM5 conversion (`:557-599`); MorphoFeature's `_planes` expands Z | Consumer-side guards required for every declared restriction (P50); MorphoFeature's guard is prerequisite P-2; P49 is a future scenario |
+| B3 | MorphoFeature's `pyproject.toml` declares no provider entry point: "providers the release ships" is empty | Verified `[snapshot]`; stale refused (choice 14) |
+| B4 | `multichannel_support = false`, `max_channels = 3` is satisfied by one channel | Contradictions are unsatisfiable sets only; `ci07` retired to `cv04`; `ci13` added |
+| B5 | An unavailable named ID met INVALID, CONFLICT and NOT_FOUND; a bundle without a readable `consumer` had no ID | Bundles declared with their ID; mutually exclusive classes in fixed order (P56) |
+| B6 | `providers.py:266-277` uses `find_spec` and `is_file` (follows links); no distribution binding | Inventory binding, containment, link-free, no finders (P55) |
+| B7 | Counts alone do not name the files to exclude | Both groups listed in full, then counts (P46) |
+| B8 | Only `run` re-read; the draft adopted changed bytes | Pinned bytes, fingerprint, invalidation, pinned re-check at describe and run (P48, P57) |
+| B9 | `manifest_versions.py` reads `"5"` only; `from_dict` ignores unknown keys; ADR 0007 puts the full manifest SHA-256 in identity | New version, strict required field; option a chosen (choice 10, P58) |
+| B10 | `plan_projection` refuses Zarr, Z masks, ranges, pixel types and memory; `_planned` covers every header | Offered only after a planner pass; mixed copy covers every image |
+| F1-F4 | Hold | Two-bundle rule; P51-P54 and fixtures; case-fold and order; `cv04`-`cv07` and rule cases |
+
+## Review *aw* — responses
+
+Review *aw* (24 November 2026) read this ADR at `946964636090ccd9e730f9ad0a09fb278c1ace8d`. Each
+remaining blocker was checked against the ADR text and against MorphoFeature
+`58aa19b849946426961e5c9be495b4ab41a366e2` and Spec ADR 0002 before any change; all four hold. No
+owner decision (CM1-CM5, O1-O8) is reopened.
+
+| Finding | Checked | Change |
+|---|---|---|
+| B1 (P-2 versus `volume_support = false`) | P-2 refused Z only "while none of the run's providers takes volumes", yet MorphoFeature's manifest fixes `volume_support = false`; `ProviderInfo` (`providers.py:180-248`) has no volume field; `_planes` (`run_config.py:440-445`) expands Z; AR3 keeps MorphoFeature 2-D | P-2 is unconditional while the manifest says false; a guard's condition is the declared rule alone; `volume_support` fixed, not derived (choice 16); P49 tests zero, one and all volume-claiming providers |
+| B2 (snapshot locator) | `ProviderInfo.factory` is `module:attribute` (`providers.py:192-193`, field at `:235`; citation corrected after review *ax*); `_manifest_path` takes `entry_point.module.split(".")[0]` (`:264-277`); the ADR applied the bare-package consumer grammar to provider values | A separate member locator: `MODULE:ATTRIBUTE` parsed from the metadata string, first module component as package, bound to the declaring distribution's inventory with the consumer checks; generator and verifier share it; `find_spec` described as not inert against finders; P54 (a), (e), P55 (f), (g) |
+| B3 (RGB-only consumer) | RGB is judged by `rgb_support` alone, so `rgb_support = true`, `multichannel_support = false`, `min_channels = 2` admits an RGB image. Checking this also showed that `mixed_volume_support = true` with `volume_support = false` admits 2-D images, so it was never "unsatisfiable" either | Channel-rule contradictions only with `rgb_support = false`; `cv08`, `cv09` valid; `ci06`, `ci13` state `rgb_support = false`; mixed-without-volume kept as a stated consistency policy (`ci05`) |
+| B4 (CONFLICT versus INVALID at a re-check) | The re-check said "any difference is INVALID", the classification said CONFLICT for the same diverged pair | The re-check uses the classification order: not found, conflict (with the change reason), invalid with `E_CONSUMER_CHANGED_SINCE_CHECK`; one class; P48, P56 (d), P57 |
+| F2 | P55 (d) read as if the trap required a refusal | P55 (d): discovery succeeds without running the trap; the consumer is available |
+| F4 | The RGB-only counterexample was missing | `cv08` and the RGB-only rule cases |
+| Record field completeness (FILE) | The example listed the booleans only | `dimensions` copies the table exactly; channel limits present only when declared; P58 (d) |
+| Derived-value integrity (FILE) | Hashing proves inputs, not the computed O4 value | Generator conformance assertion P54 (e) |
+
+## Review *ax* — responses
+
+Review *ax* (24 November 2026) read this ADR at `ec9b102e4b17b148e4d7c01eb38f0ef47c4350b9`. Each
+remaining blocker was checked against the ADR text and against MorphoFeature
+`58aa19b849946426961e5c9be495b4ab41a366e2` and the Python standard library before any change; all
+three hold. No owner decision (CM1-CM5, O1-O8) is reopened; in particular O4 keeps **every**
+installed provider: one the reader cannot see is reported, never left out.
+
+| Finding | Checked | Change |
+|---|---|---|
+| B1 (metadata finders not inert) | Holds: with a `sys.meta_path` finder defining `find_distributions`, both `importlib.metadata.distributions()` and `entry_points(group=...)` call it (reproduced locally on CPython 3.13 with a recording finder; documented for 3.11). The ADR mandated `distributions()` (`:309` at `ec9b102`) while P54/P55 required that no finder ran | A shared filesystem-only [metadata reader](#the-metadata-reader-no-finder-runs) for discovery, verifier and generator: `*.dist-info` in `sys.path` directory roots, own parsers, no finder, hook, `EntryPoint` or `Distribution` method; unsupported (egg-info, egg, zip) and ambiguous sources declaring a relevant group refused explicitly; a custom `find_distributions` finder is inspected statically, never run, and makes `[snapshot]` consumers unavailable; P55 (d) extended to wrappers around `importlib.metadata` and to the generator, new P55 (h), (i); choice 5. One difference from the review's deciding test: with a `find_distributions` finder present the review expects MorphoFeature to stay available. That would require either running the finder or assuming it contributes no provider, and the second could silently drop a provider from O4; so MorphoFeature is unavailable with a named reason in that case (P55 (h)), and available with a `find_spec`-only trap (P55 (d)) |
+| B2 (channel rules before the image type) | Holds: the C rules were scheduled at axis confirmation (`:389`, `:394-402`, choice 7) though their applicability depends on the type confirmed at step 3 (`notebook_steps.py:8-11`, `:156-159`); under `cv08` an RH1 override unit could be refused before its RGB declaration | Two phases: `T`, `Z`, mixed at axis confirmation; `rgb`, `multichannel`, `channel_count` together at type confirmation, before naming and tagging; pending is neither pass nor refusal; type controls stay reachable; P43 (b)-(e), P44; choice 7 |
+| B3 (fingerprint-only change) | Holds: the re-check made a fingerprint-only change INVALID while the table's INVALID row required failing bytes or source, and first-check classification would call the ID available; the saved pick kept only ID and SHA-256 | INVALID row extended (no fifth code, O8): an available ID whose pin no longer holds; precedence separates availability from pin validity; the saved pick carries its source list; P48 (d), (e); choice 7 |
+| F2 | P55 (d) did not name a metadata-discovery hook | P55 (d) wrappers and P55 (h) `find_distributions` trap |
+| F4 | The mixed RGB/channel rule case could read as lifting experiment-v1's mixed-type prohibition | Labelled a consumer-rule test only |
+| P58 (d) | Outcome without setup | Setup added |
+| Derived-value integrity | Absent and non-boolean `rgb_support` not covered | Generator reads the key as MorphoFeature does (absent false; non-boolean an error, no file written); P54 (e) |
+| Citation | `factory` is at `providers.py:192-193` (field `:235`), not `:190-191` | Corrected in the locator text and the *aw* table |
+| "RGB ... alone" | Shorthand could read as exempting RGB from `T`/`Z`/mixed rules | Stated as applying to the channel and image-type rules only |
+
+## Review *az* — responses
+
+Review *az* (24 November 2026) read this ADR at `f4cfdab7925c6b43829b26f9afc8a725f8f0dff1`. Each
+remaining blocker was checked before any change, against the ADR text and the Python standard
+library (CPython 3.13 source and local runs; the 3.11 documentation the review cites); all three
+hold. No owner decision (CM1-CM5, O1-O8) and no accepted modelling choice (14, 16) is reopened; O2
+and O4 are kept by making an incomplete reader result unusable, not by narrowing them.
+
+| Finding | Checked | Change |
+|---|---|---|
+| B1 (root and unsafe-metadata coverage) | Holds: a wheel-layout root added to `sys.path` as a `pathlib.Path` makes its `morphofeature.providers` entry point visible to `importlib.metadata.entry_points(group=...)` (reproduced locally), while the reader accepted `str` roots only; a symbolic-link `*.dist-info` or unreadable metadata was excluded without being classified, so a bundle could become the sole candidate (O2) and an old snapshot could still match (O4) | Completeness paragraph and reader steps 1-3: every `sys.path` entry classified by exact type (concrete `pathlib` paths read; anything else an unknown source, no method called); unreadable roots and metadata unknown sources; every `*.dist-info`/`*.egg-info`/`EGG-INFO` Python's search indexes either read or read as bytes for relevance (relevant ones `E_CONSUMER_SOURCE_UNSAFE` candidates of their ID or stale members); aliases of one root are one root. Any unknown source makes every consumer unavailable (INVALID, or NOT_FOUND when no candidate; a known conflict first) and the generator refuse; O1 runs unaffected. P55 (j) |
+| B2 (class-only finder detection) | Holds: Python's metadata search looks the hook up with `getattr(finder, 'find_distributions', None)` on each `sys.meta_path` entry (`importlib.metadata.Distribution._discover_resolvers`); a constructor-assigned instance attribute is found and called (reproduced locally), and a class `__getattr__` would be too; the ADR's class-only `getattr_static` missed both, and kept non-snapshot consumers available | Reader step 4: the standard finders by identity; any other entry is an unknown source unless provably without metadata capability from class namespaces read through `type`'s own descriptors (no `find_distributions`, `__getattr__` or custom `__getattribute__` in any lookup class, no non-standard `__dict__`, no such key in the instance dictionary, Python-defined classes only). The rule is complete for Python's generic attribute lookup; its limits are stated (a patched standard library, start-up code). The suggested blanket rule (every non-standard finder **and path hook** unknown) was checked and not adopted: path hooks take no part in metadata search (`PathFinder.find_distributions` delegates to `MetadataPathFinder`, which reads the `sys.path` entries directly), and setuptools' `_distutils_hack` and editable finders, both `find_spec`-only and provably so under this rule, would otherwise make consumers unavailable in ordinary environments. An unknown finder now makes **every** consumer unavailable, bundle-only picks included. P55 (h) extended to class, instance and `__getattr__` shapes and a bundle-only pick; P55 (d) positive control kept |
+| B3 (source-only-invalid pin) | Holds: re-check case 3 listed "the current byte content fails a rule", while the classification and the INVALID row also cover a failing source with valid bytes (a changed `RECORD` hash leaves bytes and source descriptors unchanged) | Case 3 now says the current classification is invalid for any byte **or source** failure (or incompleteness) and names a source that no longer validates; the publish condition, the INVALID row and the classification say the same; P48 (f). No fifth code |
+| FILE: phase-local reporting | `:476-477` could read as one refusal per phase at publication | The notebook shows offences per phase; a publication carries one combined `R_CONSUMER_DIMENSIONS_NOT_ALLOWED`; P43 (f) |
+| FILE: F2 | Class-only trap incomplete | P55 (h) three shapes |

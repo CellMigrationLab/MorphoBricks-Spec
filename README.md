@@ -233,6 +233,7 @@ writer or a brick that consumes the description.
   bin indices and their counts), absent = null and measured-empty = `[]`, identity by a content
   digest of the decoded table; `pyarrow>=18` required, with a release gate across `pyarrow` versions; golden tables in
   [`tools/plane_histograms_v6/`](tools/plane_histograms_v6/README.md).
+- [ADR 0009](docs/adr/0009-consumer-manifest.md) (**proposed**, owner decisions of 24 November 2026): a consumer manifest (`morphobricks_consumer.toml`) in which the next app declares the image dimensions it allows, checked by preprocessing right after the axes are confirmed; absorbs preprocessing #438.
 
 ### Fixtures and goldens
 
